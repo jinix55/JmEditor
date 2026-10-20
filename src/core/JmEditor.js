@@ -13,6 +13,7 @@ import { TableCommands, TABLE_LAYER_CLASS } from '../plugins/table/TableCommands
 import { ContextMenu } from '../ui/ContextMenu.js';
 import { GalleryCommands, GALLERY_LAYER_CLASS } from '../plugins/gallery/GalleryCommands.js';
 import { EmbedCommands, EMBED_LAYER_CLASS } from '../plugins/embed/EmbedCommands.js';
+import { ButtonsCommands, BUTTONS_LAYER_CLASS } from '../plugins/buttons/ButtonsCommands.js';
 import { History } from './History.js';
 import { BlockDrag } from './BlockDrag.js';
 import { Sanitizer } from './Sanitizer.js';
@@ -27,6 +28,7 @@ export class JmEditor {
    * @param {() => void} [options.onSelectionChange] 커서 이동 콜백 (툴바 상태 갱신용)
    * @param {(file: File) => Promise<string>} [options.uploadImage] 이미지 파일 → URL 반환. 없으면 base64 로 삽입
    * @param {string} [options.placeholder]
+   * @param {(current: string, cb: (url: string|null) => void) => void} [options.askUrl] 주소 입력 UI (버튼 그룹 등). 없으면 window.prompt
    * @param {(x: number, y: number, cb: (color: string|null) => void) => void} [options.pickColor]
    *        색상 선택 UI 를 띄우는 콜백 (표 셀/행 배경색 메뉴에서 사용). 래퍼가 주입한다.
    */
@@ -46,6 +48,7 @@ export class JmEditor {
     this.blockDrag = new BlockDrag(this); // 표·갤러리 블록 드래그 이동
     this.gallery = new GalleryCommands(this);
     this.embed = new EmbedCommands(this);
+    this.buttons = new ButtonsCommands(this);
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
 
     this.#ensureBlock();
@@ -62,6 +65,7 @@ export class JmEditor {
    *                      |format (value: 삽입할 HTML — 서식/템플릿. 내부에서 sanitize 후 블록 단위 삽입)
    *                      |gallery (value: {cols, auto} — 이미지 갤러리 블록 삽입)
    *                      |youtube (value: 유튜브 주소 또는 동영상 ID)
+   *                      |buttons (value: {align} — 버튼 그룹 블록 삽입)
    * @param {*} [value] link 의 url, image 의 {src, alt}, table 의 {rows, cols, header}
    */
   exec(name, value) {
@@ -86,6 +90,7 @@ export class JmEditor {
       format: () => c.insertBlockHTML(Sanitizer.clean(value || '')),
       gallery: () => c.insertBlockHTML(GalleryCommands.template(value?.cols, value?.auto ?? true)),
       youtube: () => this.embed.insertYouTube(value),
+      buttons: () => c.insertBlockHTML(ButtonsCommands.template(value?.align)),
       color: () => c.setStyle('color', value ?? null),
       bgColor: () => c.setStyle('background-color', value ?? null),
       undo: () => this.history.undo(),
@@ -109,6 +114,7 @@ export class JmEditor {
     html = TableCommands.unwrapHTML(html);
     html = GalleryCommands.unwrapHTML(html);
     html = EmbedCommands.unwrapHTML(html);
+    html = ButtonsCommands.unwrapHTML(html);
     return BlockDrag.cleanHTML(html);
   }
 
@@ -118,6 +124,7 @@ export class JmEditor {
     this.table.wrapAll();
     this.gallery.wrapAll();
     this.embed.wrapAll();
+    this.buttons.wrapAll();
     this.#ensureBlock();
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
     this.#emitChange();
@@ -142,6 +149,7 @@ export class JmEditor {
     this.table.wrapAll(); // 붙여넣기 등으로 들어온 표도 레이어로
     this.gallery.wrapAll();
     this.embed.wrapAll();
+    this.buttons.wrapAll();
     this.#ensureBlock();
     this.history.push();
     this.#emitChange();
@@ -307,7 +315,7 @@ export class JmEditor {
       return;
     }
     Array.from(r.childNodes).forEach((n) => {
-      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.dataset?.type === 'gallery' || n.dataset?.type === 'youtube');
+      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || ['gallery', 'youtube', 'buttons'].includes(n.dataset?.type));
       if (!isBlock) {
         const p = document.createElement('p');
         r.insertBefore(p, n);
@@ -322,6 +330,7 @@ export class JmEditor {
     this.table.wrapAll();
     this.gallery.wrapAll();
     this.embed.wrapAll();
+    this.buttons.wrapAll();
     this.#ensureBlock();
     this.sel.placeCursor(this.root.lastChild || this.root, true);
     this.#emitChange();

@@ -72,6 +72,19 @@ a[data-role="button"]{display:inline-block;padding:8px 18px;border-radius:6px;fo
 a[data-role="button"][data-style="primary"]{background:var(--accent);color:#fff!important}
 a[data-role="button"][data-style="outline"]{background:transparent;color:var(--accent)!important;border-color:var(--accent)}
 a[data-role="button"][data-style="gray"]{background:var(--line);color:var(--fg)!important}
+div[data-type="buttons"]{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
+div[data-type="buttons"][data-align="center"]{justify-content:center}div[data-type="buttons"][data-align="right"]{justify-content:flex-end}
+.jm-buttons-layer{margin:0 0 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.jm-buttons-header{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--accent-soft);border-radius:6px 6px 0 0}
+.jm-buttons-title{font-size:12px;font-weight:600}.jm-buttons-spacer{flex:1}
+.jm-buttons-btn{height:26px;padding:0 8px;font-size:12px;background:var(--panel);border-color:var(--line)}
+.jm-buttons-btn:disabled{opacity:.4;cursor:default}
+.jm-buttons-style,.jm-buttons-align{height:26px;font-size:12px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
+.jm-buttons-style:disabled{opacity:.4}
+.jm-buttons-remove{color:#d14343}
+.jm-buttons-layer div[data-type="buttons"]{padding:10px}
+.jm-buttons-layer a[data-role="button"]{outline:2px solid transparent;outline-offset:2px;cursor:text}
+.jm-buttons-layer a[data-role="button"].is-selected{outline-color:var(--accent)}
 .jm-btn[hidden]{display:none!important}
 .jm-table-layer{position:relative;margin:0 0 8px;padding:6px;border:1px dashed transparent;border-radius:4px}
 .jm-table-layer:hover,.jm-table-layer:focus-within{border-color:var(--accent);background:var(--accent-soft)}
@@ -298,6 +311,19 @@ class Sanitizer {
         if (r) g.appendChild(r);
       });
       return g;
+    }
+
+    // 버튼 그룹 블록: div[data-type=buttons] 안에는 a[data-role=button] 만
+    if (tag === 'div' && node.getAttribute('data-type') === 'buttons') {
+      const b = document.createElement('div');
+      b.setAttribute('data-type', 'buttons');
+      const al = node.getAttribute('data-align');
+      b.setAttribute('data-align', ['left', 'center', 'right'].includes(al) ? al : 'center');
+      node.querySelectorAll(':scope > a').forEach((a) => {
+        const r = Sanitizer.#cleanNode(a);
+        if (r && r.nodeType === Node.ELEMENT_NODE && r.tagName === 'A') { r.setAttribute('data-role', 'button'); if (!r.getAttribute('data-style')) r.setAttribute('data-style', 'primary'); b.appendChild(r); }
+      });
+      return b.childNodes.length ? b : null;
     }
 
     // 유튜브 블록: div[data-type=youtube] + iframe(src 는 youtube embed 주소만)
@@ -2503,6 +2529,207 @@ class EmbedCommands {
 }
 
 /**
+ * ButtonsCommands — 버튼 그룹 블록
+ * - 저장 HTML: <div data-type="buttons" data-align="left|center|right">
+ *               <a href="…" data-role="button" data-style="primary|outline|gray" target="_blank" rel="noopener noreferrer">텍스트</a> …</div>
+ *   뷰어는 CSS 만 있으면 된다.
+ * - 에디터에서는 레이어(jm-buttons-layer, contenteditable=false)로 감싸고 헤더에서 버튼 추가 / 주소 / 스타일 / 순서 / 삭제 / 정렬을 다룬다.
+ *   각 버튼은 contenteditable 로 글자를 바로 고치고, 클릭하면 선택(헤더 조작 대상)된다.
+ */
+
+const BUTTONS_LAYER_CLASS = 'jm-buttons-layer';
+const SELECTED = 'is-selected';
+const STYLES = [['primary', '채움'], ['outline', '외곽선'], ['gray', '회색']];
+
+class ButtonsCommands {
+  /**
+   * @param {import('../../core/JmEditor.js').JmEditor} editor
+   * @param {object} [options]
+   * @param {(current: string, cb: (url: string|null) => void) => void} [options.askUrl] 주소 입력 UI (래퍼가 주입). 없으면 window.prompt
+   */
+  constructor(editor) {
+    this.editor = editor;
+    this.sel = editor.sel;
+    this.root = editor.root;
+  }
+
+  static template(align = 'center') {
+    return `<div data-type="buttons" data-align="${align}">${ButtonsCommands.buttonHTML('버튼', 'https://example.com', 'primary')}</div>`;
+  }
+
+  static buttonHTML(text, href, style) {
+    return `<a href="${href}" data-role="button" data-style="${style}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+  }
+
+  // ───────────── 레이어 ─────────────
+
+  wrapAll() {
+    this.root.querySelectorAll('div[data-type="buttons"]').forEach((b) => {
+      if (b.parentNode?.classList?.contains(BUTTONS_LAYER_CLASS)) { this.#bindButtons(b); return; }
+      this.#wrap(b);
+    });
+  }
+
+  #wrap(block) {
+    const layer = document.createElement('div');
+    layer.className = BUTTONS_LAYER_CLASS;
+    layer.contentEditable = 'false';
+    block.parentNode.insertBefore(layer, block);
+    layer.append(this.#buildHeader(block), block);
+    this.#bindButtons(block);
+    this.editor.blockDrag?.makeDraggable(block._handle, layer);
+    return layer;
+  }
+
+  #buildHeader(block) {
+    const h = document.createElement('div');
+    h.className = 'jm-buttons-header';
+    const mk = (label, onClick, cls = '', tip = '') => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = `jm-btn jm-buttons-btn ${cls}`.trim(); b.textContent = label; if (tip) b.title = tip;
+      b.addEventListener('mousedown', (e) => e.preventDefault());
+      b.addEventListener('click', onClick);
+      return b;
+    };
+    const mkSelect = (cls, opts, onChange) => {
+      const s = document.createElement('select');
+      s.className = cls;
+      opts.forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; s.appendChild(o); });
+      s.addEventListener('mousedown', (e) => e.stopPropagation());
+      s.addEventListener('change', () => onChange(s.value));
+      return s;
+    };
+
+    const handle = document.createElement('span');
+    handle.className = 'jm-block-handle'; handle.title = '끌어서 이동'; handle.textContent = '⠿';
+    block._handle = handle;
+    const title = document.createElement('span');
+    title.className = 'jm-buttons-title'; title.textContent = '버튼';
+    const spacer = document.createElement('span'); spacer.className = 'jm-buttons-spacer';
+
+    const add = mk('＋ 버튼 추가', () => this.addButton(block));
+    const url = mk('주소…', () => this.editUrl(block), 'needs-sel', '선택한 버튼의 링크 주소');
+    const style = mkSelect('jm-buttons-style needs-sel', STYLES, (v) => this.setStyle(block, v));
+    style.title = '선택한 버튼의 모양';
+    const left = mk('◀', () => this.move(block, -1), 'needs-sel', '선택한 버튼을 앞으로');
+    const right = mk('▶', () => this.move(block, 1), 'needs-sel', '선택한 버튼을 뒤로');
+    const del = mk('선택 삭제', () => this.deleteSelected(block), 'needs-sel');
+    const align = mkSelect('jm-buttons-align', [['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']], (v) => { block.dataset.align = v; this.editor.commit(); });
+    align.value = block.dataset.align || 'center';
+    const remove = mk('✕', () => this.#deleteBlock(block), 'jm-buttons-remove', '블록 삭제');
+
+    h.append(handle, title, spacer, add, url, style, left, right, del, align, remove);
+    block._header = h;
+    return h;
+  }
+
+  /** 각 버튼: 글자 편집 가능, 클릭 시 선택 */
+  #bindButtons(block) {
+    block.querySelectorAll(':scope > a').forEach((a) => {
+      if (a._bound) return;
+      a._bound = true;
+      a.setAttribute('contenteditable', 'true');
+      a.addEventListener('mousedown', () => this.#select(block, a));
+      a.addEventListener('focus', () => this.#select(block, a));
+      a.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); a.blur(); } });
+      a.addEventListener('input', () => this.editor.history.pushDebounced());
+      a.addEventListener('blur', () => { if (!a.textContent.trim()) a.textContent = '버튼'; this.editor.commit(); });
+      a.addEventListener('click', (e) => e.preventDefault()); // 편집 중 이동 방지
+    });
+    this.#refreshHeader(block);
+  }
+
+  #select(block, a) {
+    block.querySelectorAll(`:scope > a.${SELECTED}`).forEach((x) => x.classList.remove(SELECTED));
+    a.classList.add(SELECTED);
+    this.#refreshHeader(block);
+  }
+
+  #selected(block) { return block.querySelector(`:scope > a.${SELECTED}`); }
+
+  #refreshHeader(block) {
+    const sel = this.#selected(block);
+    block._header?.querySelectorAll('.needs-sel').forEach((el) => { el.disabled = !sel; });
+    const style = block._header?.querySelector('.jm-buttons-style');
+    if (style && sel) style.value = sel.dataset.style || 'primary';
+  }
+
+  // ───────────── 조작 ─────────────
+
+  addButton(block) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = ButtonsCommands.buttonHTML('버튼', 'https://example.com', 'primary');
+    const a = tpl.content.firstChild;
+    block.appendChild(a);
+    this.#bindButtons(block);
+    this.#select(block, a);
+    a.focus();
+    this.editor.commit();
+  }
+
+  editUrl(block) {
+    const a = this.#selected(block);
+    if (!a) return;
+    const ask = this.editor.options.askUrl || ((cur, cb) => cb(window.prompt('링크 주소', cur)));
+    ask(a.getAttribute('href') || '', (url) => {
+      if (url == null) return;
+      a.setAttribute('href', url.trim() || '#');
+      this.editor.commit();
+    });
+  }
+
+  setStyle(block, style) {
+    const a = this.#selected(block);
+    if (!a) return;
+    a.dataset.style = style;
+    this.editor.commit();
+  }
+
+  move(block, dir) {
+    const a = this.#selected(block);
+    if (!a) return;
+    const sib = dir < 0 ? a.previousElementSibling : a.nextElementSibling;
+    if (!sib) return;
+    if (dir < 0) block.insertBefore(a, sib); else block.insertBefore(sib, a);
+    this.editor.commit();
+  }
+
+  deleteSelected(block) {
+    const a = this.#selected(block);
+    if (!a) return;
+    a.remove();
+    if (!block.querySelector(':scope > a')) { this.#deleteBlock(block); return; }
+    this.#refreshHeader(block);
+    this.editor.commit();
+  }
+
+  #deleteBlock(block) {
+    const layer = block.closest(`.${BUTTONS_LAYER_CLASS}`) || block;
+    const p = document.createElement('p');
+    p.appendChild(document.createElement('br'));
+    layer.replaceWith(p);
+    this.sel.placeCursor(p, false);
+    this.editor.commit();
+  }
+
+  // ───────────── 저장용 변환 ─────────────
+
+  static unwrapHTML(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll(`.${BUTTONS_LAYER_CLASS}`).forEach((layer) => {
+      const block = layer.querySelector('div[data-type="buttons"]');
+      if (!block) { layer.remove(); return; }
+      block.querySelectorAll('a').forEach((a) => { a.removeAttribute('contenteditable'); a.classList.remove(SELECTED); if (!a.className) a.removeAttribute('class'); });
+      layer.replaceWith(block);
+    });
+    return tpl.innerHTML;
+  }
+
+  static isBlockDrag(e) { return BlockDrag.isBlockDrag(e); }
+}
+
+/**
  * JmEditor (코어)
  * - 프레임워크 독립. contenteditable 요소 하나를 받아 편집 기능을 붙인다.
  * - 툴바/업로드 UI 는 포함하지 않는다 → Thymeleaf(바닐라)나 React 래퍼가 이 클래스를 감싼다.
@@ -2521,6 +2748,7 @@ class JmEditor {
    * @param {() => void} [options.onSelectionChange] 커서 이동 콜백 (툴바 상태 갱신용)
    * @param {(file: File) => Promise<string>} [options.uploadImage] 이미지 파일 → URL 반환. 없으면 base64 로 삽입
    * @param {string} [options.placeholder]
+   * @param {(current: string, cb: (url: string|null) => void) => void} [options.askUrl] 주소 입력 UI (버튼 그룹 등). 없으면 window.prompt
    * @param {(x: number, y: number, cb: (color: string|null) => void) => void} [options.pickColor]
    *        색상 선택 UI 를 띄우는 콜백 (표 셀/행 배경색 메뉴에서 사용). 래퍼가 주입한다.
    */
@@ -2540,6 +2768,7 @@ class JmEditor {
     this.blockDrag = new BlockDrag(this); // 표·갤러리 블록 드래그 이동
     this.gallery = new GalleryCommands(this);
     this.embed = new EmbedCommands(this);
+    this.buttons = new ButtonsCommands(this);
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
 
     this.#ensureBlock();
@@ -2556,6 +2785,7 @@ class JmEditor {
    *                      |format (value: 삽입할 HTML — 서식/템플릿. 내부에서 sanitize 후 블록 단위 삽입)
    *                      |gallery (value: {cols, auto} — 이미지 갤러리 블록 삽입)
    *                      |youtube (value: 유튜브 주소 또는 동영상 ID)
+   *                      |buttons (value: {align} — 버튼 그룹 블록 삽입)
    * @param {*} [value] link 의 url, image 의 {src, alt}, table 의 {rows, cols, header}
    */
   exec(name, value) {
@@ -2580,6 +2810,7 @@ class JmEditor {
       format: () => c.insertBlockHTML(Sanitizer.clean(value || '')),
       gallery: () => c.insertBlockHTML(GalleryCommands.template(value?.cols, value?.auto ?? true)),
       youtube: () => this.embed.insertYouTube(value),
+      buttons: () => c.insertBlockHTML(ButtonsCommands.template(value?.align)),
       color: () => c.setStyle('color', value ?? null),
       bgColor: () => c.setStyle('background-color', value ?? null),
       undo: () => this.history.undo(),
@@ -2603,6 +2834,7 @@ class JmEditor {
     html = TableCommands.unwrapHTML(html);
     html = GalleryCommands.unwrapHTML(html);
     html = EmbedCommands.unwrapHTML(html);
+    html = ButtonsCommands.unwrapHTML(html);
     return BlockDrag.cleanHTML(html);
   }
 
@@ -2612,6 +2844,7 @@ class JmEditor {
     this.table.wrapAll();
     this.gallery.wrapAll();
     this.embed.wrapAll();
+    this.buttons.wrapAll();
     this.#ensureBlock();
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
     this.#emitChange();
@@ -2636,6 +2869,7 @@ class JmEditor {
     this.table.wrapAll(); // 붙여넣기 등으로 들어온 표도 레이어로
     this.gallery.wrapAll();
     this.embed.wrapAll();
+    this.buttons.wrapAll();
     this.#ensureBlock();
     this.history.push();
     this.#emitChange();
@@ -2801,7 +3035,7 @@ class JmEditor {
       return;
     }
     Array.from(r.childNodes).forEach((n) => {
-      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.dataset?.type === 'gallery' || n.dataset?.type === 'youtube');
+      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || ['gallery', 'youtube', 'buttons'].includes(n.dataset?.type));
       if (!isBlock) {
         const p = document.createElement('p');
         r.insertBefore(p, n);
@@ -2816,6 +3050,7 @@ class JmEditor {
     this.table.wrapAll();
     this.gallery.wrapAll();
     this.embed.wrapAll();
+    this.buttons.wrapAll();
     this.#ensureBlock();
     this.sel.placeCursor(this.root.lastChild || this.root, true);
     this.#emitChange();
@@ -3433,10 +3668,10 @@ const SAMPLE_FORMATS = [
     html: `<h3>확인 사항</h3><ul><li>☐ 항목 1</li><li>☐ 항목 2</li><li>☐ 항목 3</li></ul>`,
   },
   {
-    id: 'button-link',
-    name: '버튼 링크',
-    description: '버튼 모양 링크. 글자를 고치고 「링크」로 주소를 바꾸세요',
-    html: `<p><a href="https://example.com" data-role="button" data-style="primary">자세히 보기</a> <a href="https://example.com" data-role="button" data-style="outline">신청하기</a></p>`,
+    id: 'buttons',
+    name: '버튼',
+    description: '버튼 묶음 블록. 추가·주소·모양·순서·정렬을 헤더에서 조정',
+    html: `<div data-type="buttons" data-align="center"><a href="https://example.com" data-role="button" data-style="primary">자세히 보기</a><a href="https://example.com" data-role="button" data-style="outline">신청하기</a></div>`,
   },
   {
     id: 'image-gallery',
@@ -3459,6 +3694,8 @@ const PREVIEW_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" 
 let mode='editor';
 const sourceEl=document.getElementById('source');
 const YOUTUBE_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3z" fill="currentColor"/></svg>';
+const UL_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none"/><path d="M10 6h10M10 12h10M10 18h10"/></svg>';
+const OL_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><text x="2.5" y="8" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">1</text><text x="2.5" y="14" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">2</text><text x="2.5" y="20" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">3</text></svg>';
 const BUTTONS = [
   ['modeEditor','Editor',s=>mode==='editor',false,{group:'mode',segFirst:true,row:'top'}],
   ['modeHtml','HTML',s=>mode==='html',false,{icon:CODE_ICON,group:'mode',row:'top'}],
@@ -3466,7 +3703,7 @@ const BUTTONS = [
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
   ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],null,
   ['h1','H1',s=>s.block==='h1'],['h2','H2',s=>s.block==='h2'],['h3','H3',s=>s.block==='h3'],['quote','❝ 인용',s=>s.block==='blockquote'],null,
-  ['ul','• 목록',s=>s.list==='ul',false,{tip:'비순서 목록'}],['ulType','▾',()=>false,false,{tip:'비순서 목록 유형',compact:true}],['ol','1. 목록',s=>s.list==='ol',false,{tip:'순서 목록'}],['olType','▾',()=>false,false,{tip:'순서 목록 유형',compact:true}],null,
+  ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true}],['ulType','▾',()=>false,false,{tip:'비순서 목록 유형',compact:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true}],['olType','▾',()=>false,false,{tip:'순서 목록 유형',compact:true}],null,
   ['link','링크',s=>s.a],['image','이미지',()=>false],['youtube','유튜브',()=>false,false,{icon:YOUTUBE_ICON,iconOnly:true}],['table','표',s=>s.table],null,
   ['undo','↶',()=>false],['redo','↷',()=>false]];
 const toolbar=document.getElementById('toolbar'), toolbarTop=document.getElementById('toolbarTop'), btns={};
@@ -3486,6 +3723,7 @@ const editor=new JmEditor(document.getElementById('editor'),{
   onChange:h=>{out.textContent=h; len.textContent=h.length+' chars';},
   onSelectionChange:refresh,
   pickColor:(x,y,cb)=>colorPicker.open(x,y,cb,{sampleMode:'background'}), // 표 셀/행 배경색 메뉴용
+  askUrl:(cur,cb)=>openInput('링크 주소',cur,v=>{cb(v);return true;}),
 });
 
 BUTTONS.forEach(def=>{
@@ -3562,7 +3800,7 @@ editor.setHTML(`<h2>공지사항 작성 샘플</h2>
 </tbody></table>
 <div data-type="youtube" data-width="75" data-align="center"><iframe src="https://www.youtube-nocookie.com/embed/M2lu8RiZhW0" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
 <div data-type="gallery" data-cols="3" data-layout="justify"><p data-role="title">현장 사진 — 사진은 드래그로 순서 변경, 헤더의 ⠿ 로 블록 이동</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJmNmY0ZSIvPjx0ZXh0IHg9IjQwMCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDQ6MzwvdGV4dD48L3N2Zz4=" alt="가로 4:3" width="800" height="600"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzNiNmVhNSIvPjx0ZXh0IHg9IjMwMCIgeT0iNDEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDM6NDwvdGV4dD48L3N2Zz4=" alt="세로 3:4" width="600" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjUwMCI+PHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNTAwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjAwIiB5PSIyNjIiIGZvbnQtc2l6ZT0iNjIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7tjIzrhbjrnbzrp4g8L3RleHQ+PC9zdmc+" alt="파노라마" width="1200" height="500"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NTAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNDUwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzZiNGZhMCIvPjx0ZXh0IHg9IjIyNSIgeT0iNDEyIiBmb250LXNpemU9IjU2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDk6MTY8L3RleHQ+PC9zdmc+" alt="세로 9:16" width="450" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MDAiIGhlaWdodD0iNzAwIj48cmVjdCB3aWR0aD0iNzAwIiBoZWlnaHQ9IjcwMCIgZmlsbD0iIzhhNmQzYiIvPjx0ZXh0IHg9IjM1MCIgeT0iMzYyIiBmb250LXNpemU9Ijg3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7KCV7IKs6rCBPC90ZXh0Pjwvc3ZnPg==" alt="정사각" width="700" height="700"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iOTAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJhN2Y4ZiIvPjx0ZXh0IHg9IjQ1MCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDM6MjwvdGV4dD48L3N2Zz4=" alt="가로 3:2" width="900" height="600"></div>
-<p><a href="https://github.com/jinix55/JmEditor" data-role="button" data-style="primary">GitHub 저장소</a> <a href="https://jinix55.github.io/JmEditor/" data-role="button" data-style="outline">데모 페이지</a></p>
+<div data-type="buttons" data-align="center"><a href="https://github.com/jinix55/JmEditor" data-role="button" data-style="primary">GitHub 저장소</a><a href="https://jinix55.github.io/JmEditor/" data-role="button" data-style="outline">데모 페이지</a></div>
 <p>참고 링크: <a href="https://developer.mozilla.org/ko/docs/Web/API/Range">MDN Range API</a></p>`);
 </script>
 </body>

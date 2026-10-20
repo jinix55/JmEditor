@@ -17,6 +17,10 @@ const FORMAT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none"
 /** 유튜브 버튼 아이콘 (자체 제작 SVG) */
 const YOUTUBE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3z" fill="currentColor"/></svg>';
 
+/** 목록 버튼 아이콘 (자체 제작 SVG) */
+const UL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none"/><path d="M10 6h10M10 12h10M10 18h10"/></svg>';
+const OL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><text x="2.5" y="8" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">1</text><text x="2.5" y="14" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">2</text><text x="2.5" y="20" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">3</text></svg>';
+
 /** 목록 유형 (list-style-type) */
 const UL_TYPES = [['disc', '● 기본'], ['circle', '○ 원'], ['square', '■ 사각']];
 const OL_TYPES = [['decimal', '1. 숫자'], ['decimal-leading-zero', '01. 숫자(0 채움)'], ['lower-alpha', 'a. 소문자'], ['upper-alpha', 'A. 대문자'], ['lower-roman', 'i. 로마 소문자'], ['upper-roman', 'I. 로마 대문자'], ['hangul', '가. 한글']];
@@ -49,9 +53,9 @@ const BUTTONS = [
   ['h3', 'H3', (s) => s.block === 'h3'],
   ['quote', '❝', (s) => s.block === 'blockquote'],
   null,
-  ['ul', '• 목록', (s) => s.list === 'ul', false, { tip: '비순서 목록' }],
+  ['ul', '비순서 목록', (s) => s.list === 'ul', false, { tip: '비순서 목록', icon: UL_ICON, iconOnly: true }],
   ['ulType', '▾', () => false, false, { tip: '비순서 목록 유형', compact: true }],
-  ['ol', '1. 목록', (s) => s.list === 'ol', false, { tip: '순서 목록' }],
+  ['ol', '순서 목록', (s) => s.list === 'ol', false, { tip: '순서 목록', icon: OL_ICON, iconOnly: true }],
   ['olType', '▾', () => false, false, { tip: '순서 목록 유형', compact: true }],
   null,
   ['link', '링크', (s) => s.a],
@@ -159,6 +163,7 @@ export class JmToolbarEditor {
       onChange: (html) => { this.dirty = true; options.onChange?.(html); },
       onSelectionChange: () => this.#refreshState(),
       pickColor: (x, y, cb) => this.colorPicker.open(x, y, cb, { sampleMode: 'background' }),
+      askUrl: (cur, cb) => this.#openInput('링크 주소', cur, (v) => { cb(v); return true; }),
     });
     if (options.initialHTML) this.editor.setHTML(options.initialHTML);
     this.dirty = false;
