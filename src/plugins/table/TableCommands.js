@@ -639,7 +639,8 @@ export class TableCommands {
   }
 
   getState() {
-    return { table: !!this.getTable(), tableSelection: !!this.selection };
+    const cell = this.getCell();
+    return { table: !!this.getTable(), tableSelection: !!this.selection, valign: cell ? (cell.style.verticalAlign || 'top') : null };
   }
 
   // ───────────── 내부 유틸 ─────────────
