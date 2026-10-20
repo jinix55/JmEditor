@@ -94,6 +94,8 @@ export class JmEditor {
       h2: () => c.setBlock('h2'),
       h3: () => c.setBlock('h3'),
       paragraph: () => c.setBlock('p'),
+      heading: (v) => c.setBlock(['h1', 'h2', 'h3'].includes(v) ? v : 'p'), // 툴바 제목 셀렉트
+
       quote: () => c.setBlock('blockquote'),
       ul: () => c.toggleList('ul', value),
       ol: () => c.toggleList('ol', value),
