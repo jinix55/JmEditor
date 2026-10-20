@@ -43,6 +43,7 @@
   background: var(--jm-border);
 }
 
+.jm-container [hidden] { display: none !important; }  /* hidden 속성이 display 지정보다 우선하도록 */
 .jm-source {
   display: block; width: 100%; min-height: 240px; padding: 12px 14px; border: 0; outline: none; resize: vertical;
   font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; color: var(--jm-text); background: #fafbfc; box-sizing: border-box;
