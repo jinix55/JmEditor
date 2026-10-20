@@ -12,14 +12,22 @@ const ALLOWED = {
   blockquote: [],
   a: ['href', 'target', 'rel'],
   img: ['src', 'alt', 'width', 'height'],
-  table: [], tbody: [], thead: [], tr: [], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'], // 병합은 서식 템플릿으로만 들어옴(UI 편집 미지원)
+  table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style'],
+  tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
   span: ['style'],
 };
 
-/** style 속성에서 허용하는 CSS 속성 (글자색·배경색만) */
-const ALLOWED_STYLE = ['color', 'background-color'];
 /** 색상 값 형식: #hex, rgb(a)(), 색 이름 */
 const SAFE_COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|[a-z]+)$/i;
+/** style 속성에서 허용하는 CSS 속성과 값 검사 */
+const ALLOWED_STYLE = {
+  'color': (v) => SAFE_COLOR.test(v),
+  'background-color': (v) => SAFE_COLOR.test(v),
+  'text-align': (v) => /^(left|center|right|justify)$/i.test(v),
+  'vertical-align': (v) => /^(top|middle|bottom)$/i.test(v),
+  'width': (v) => /^\d+(\.\d+)?(px|%)$/i.test(v) || v === 'auto',
+  'height': (v) => /^\d+(\.\d+)?px$/i.test(v),
+};
 
 /** 태그 이름 치환 (레거시/외부 태그 → 표준 태그) */
 const TAG_ALIAS = { b: 'strong', i: 'em', strike: 's', div: 'p' };
@@ -53,7 +61,7 @@ export class Sanitizer {
   static cleanStyle(style) {
     return style.split(';')
       .map((d) => d.split(':').map((x) => x.trim()))
-      .filter(([k, v]) => k && v && ALLOWED_STYLE.includes(k.toLowerCase()) && SAFE_COLOR.test(v))
+      .filter(([k, v]) => k && v && ALLOWED_STYLE[k.toLowerCase()]?.(v))
       .map(([k, v]) => `${k.toLowerCase()}: ${v}`)
       .join('; ');
   }

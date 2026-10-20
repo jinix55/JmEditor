@@ -164,6 +164,11 @@ export class JmEditor {
     const onDrop = (e) => this.#handleDrop(e);
     const onDragover = (e) => e.preventDefault();
     const onContext = (e) => this.#handleContextMenu(e);
+    const onDocDown = (e) => {
+      // 표 밖을 클릭하면 셀 범위 선택 해제
+      if (this.table.selection && !this.table.selection.table.contains(e.target)) this.table.clearSelection();
+    };
+    document.addEventListener('mousedown', onDocDown, true);
     const onSelChange = () => {
       if (document.activeElement === r) {
         this.sel.save();
@@ -191,6 +196,7 @@ export class JmEditor {
       r.removeEventListener('dragover', onDragover);
       r.removeEventListener('contextmenu', onContext);
       document.removeEventListener('selectionchange', onSelChange);
+      document.removeEventListener('mousedown', onDocDown, true);
     };
   }
   #unbind = null;
@@ -202,6 +208,8 @@ export class JmEditor {
     e.preventDefault();
     // 우클릭한 셀로 커서 이동 (셀 밖 레이어 여백을 눌렀으면 첫 셀)
     const cell = e.target.closest('td,th') || layer.querySelector('td,th');
+    const inSelection = this.table.selection && cell?.classList.contains('is-cell-selected');
+    if (!inSelection) this.table.clearSelection();
     if (cell && !cell.contains(this.sel.getRange()?.startContainer)) this.sel.placeCursor(cell, true);
     const pickColor = this.options.pickColor
       ? (cb) => this.options.pickColor(e.clientX, e.clientY, cb)
@@ -218,6 +226,7 @@ export class JmEditor {
       if (map[key]) { e.preventDefault(); this.exec(map[key]); return; }
     }
 
+    if (e.key === 'Escape' && this.table.selection) { this.table.clearSelection(); return; }
     // 표 셀 안에서 Tab → 셀 이동
     if (e.key === 'Tab' && this.table.handleTab(e.shiftKey)) { e.preventDefault(); return; }
 

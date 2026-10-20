@@ -68,6 +68,7 @@
 .jm-content table { border-collapse: collapse; width: 100%; margin: 0 0 8px; table-layout: fixed; }
 .jm-content td, .jm-content th { border: 1px solid #d0d5dd; padding: 6px 8px; vertical-align: top; }
 .jm-content th { background: #f2f4f7; font-weight: 600; text-align: left; }
+.jm-content table[data-border="0"] td, .jm-content table[data-border="0"] th { border-color: transparent; }
 .jm-content div[data-type="gallery"] { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
 
 .jm-editor {
@@ -100,10 +101,15 @@
 .jm-editor img { max-width: 100%; height: auto; display: block; }
 .jm-editor a { color: #1d4ed8; text-decoration: underline; }
 
-/* 표 */
+/* 표 (에디터·뷰어 공통 규칙은 .jm-content 쪽에도 동일하게 있음) */
 .jm-editor table { border-collapse: collapse; width: 100%; margin: 0 0 8px; table-layout: fixed; }
 .jm-editor td, .jm-editor th { border: 1px solid var(--jm-border); padding: 6px 8px; min-width: 40px; vertical-align: top; }
 .jm-editor th { background: #f2f4f7; font-weight: 600; text-align: left; }
+.jm-editor table[data-border="0"] td, .jm-editor table[data-border="0"] th { border-color: transparent; }
+.jm-editor table[data-border="0"]:hover td, .jm-editor table[data-border="0"]:hover th { border-color: #e9ecef; border-style: dashed; } /* 편집 중엔 흐리게 보이도록 */
+/* 셀 범위 선택 */
+.jm-editor td.is-cell-selected, .jm-editor th.is-cell-selected { background-color: #dbe7ff !important; outline: 1px solid #a9c4ff; outline-offset: -1px; }
+.jm-table-layer.is-resizing { user-select: none; }
 
 /* 표 레이어: 표 전체를 하나의 객체처럼 표시. 우클릭 시 표 메뉴 */
 .jm-table-layer { position: relative; margin: 0 0 8px; padding: 6px; border: 1px dashed transparent; border-radius: 4px; }
@@ -116,6 +122,8 @@
 .jm-ctxmenu-item { display: block; width: 100%; padding: 6px 10px; border: 0; border-radius: 4px; background: transparent; color: #222; font: 13px/1.4 inherit; text-align: left; cursor: pointer; }
 .jm-ctxmenu-item:hover, .jm-ctxmenu-item:focus-visible { background: #f2f4f7; outline: none; }
 .jm-ctxmenu-divider { height: 1px; margin: 4px 6px; background: #e4e7ec; }
+.jm-ctxmenu-item:disabled { opacity: .4; cursor: default; }
+.jm-ctxmenu-item.has-sub::after { content: "›"; float: right; margin-left: 12px; color: #98a2b3; }
 
 /* 표 크기 선택 격자 */
 .jm-gridpicker { position: fixed; z-index: 1000; padding: 8px; border: 1px solid #d0d5dd; border-radius: 6px; background: #fff; box-shadow: 0 6px 20px rgba(0,0,0,.12); }
