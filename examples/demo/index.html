@@ -2671,13 +2671,15 @@ class TableGridPicker {
     this.el.append(this.grid, this.label);
     document.body.appendChild(this.el);
 
-    this.onDocDown = (e) => { if (!this.el.contains(e.target)) this.close(); };
+    this.anchor = null;
+    this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.anchor?.contains(e.target)) this.close(); };
     this.onKey = (e) => this.#handleKey(e);
     this.#highlight(0, 0);
   }
 
   /** 버튼 기준 위치에 열기 */
   open(anchorEl) {
+    this.anchor = anchorEl;
     const r = anchorEl.getBoundingClientRect();
     this.el.hidden = false;
     this.el.style.left = `${Math.min(r.left, window.innerWidth - this.el.offsetWidth - 8)}px`;
@@ -2739,13 +2741,6 @@ class TableGridPicker {
   }
 }
 
-
-/**
- * ColorPicker
- * - 색상 견본(swatch) 격자 + 직접 선택(<input type="color">) + 「없음(해제)」.
- * - 툴바 글자색/배경색 버튼과 표 셀 배경색 메뉴에서 공용으로 쓴다.
- * - open(x, y, onPick) 또는 openAt(anchorEl, onPick) 으로 열고, 선택 시 onPick(color|null) 호출.
- */
 /** 스포이드 아이콘 (자체 제작 SVG) */
 const EYEDROPPER_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>';
 
@@ -2777,7 +2772,8 @@ class ColorPicker {
     this.#buildFoot();
     document.body.appendChild(this.el);
 
-    this.onDocDown = (e) => { if (!this.el.contains(e.target)) this.close(); };
+    this.anchor = null;
+    this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.anchor?.contains(e.target)) this.close(); };
     this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
   }
 
@@ -2920,13 +2916,21 @@ class ColorPicker {
   }
 
   openAt(anchorEl, onPick, opts) {
+    this.anchor = anchorEl;
     const r = anchorEl.getBoundingClientRect();
     this.open(r.left, r.bottom + 4, onPick, opts);
+  }
+
+  /** 같은 버튼을 다시 누르면 닫고, 아니면 연다 */
+  toggleAt(anchorEl, onPick, opts) {
+    if (!this.el.hidden && this.anchor === anchorEl) this.close();
+    else this.openAt(anchorEl, onPick, opts);
   }
 
   close() {
     if (this.el.hidden) return;
     this.el.hidden = true;
+    this.anchor = null;
     document.removeEventListener('mousedown', this.onDocDown, true);
     document.removeEventListener('keydown', this.onKey, true);
   }
@@ -3074,7 +3078,6 @@ class ColorPicker {
   }
 }
 
-
 /**
  * FormatPicker
  * - 툴바 「서식」 버튼 아래에 서식(템플릿) 목록 드롭다운을 띄우고, 선택하면 onPick(format) 호출.
@@ -3099,12 +3102,14 @@ class FormatPicker {
     this.el.setAttribute('role', 'listbox');
     document.body.appendChild(this.el);
 
-    this.onDocDown = (e) => { if (!this.el.contains(e.target)) this.close(); };
+    this.anchor = null; // 팝업을 연 버튼 — 그 버튼 클릭은 '바깥 클릭'으로 보지 않음 (토글 동작)
+    this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.anchor?.contains(e.target)) this.close(); };
     this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
   }
 
   /** 버튼 아래에 열기. 목록이 없으면 불러온 뒤 그린다 */
   async openAt(anchorEl) {
+    this.anchor = anchorEl;
     const r = anchorEl.getBoundingClientRect();
     this.el.hidden = false;
     this.el.style.left = `${Math.min(r.left, window.innerWidth - 280)}px`;
@@ -3217,7 +3222,7 @@ const SAMPLE_FORMATS = [
     id: 'image-gallery',
     name: '이미지 갤러리',
     description: '이미지만 넣는 블록. 드롭/추가 시 자동 균등 배치, 헤더에서 선택·전체 삭제',
-    html: ``,
+    html: `<div data-type="gallery" data-cols="3" data-auto="1"></div>`,
   },
   {
     id: 'divider-note',
@@ -3276,7 +3281,7 @@ function run(cmd){
     editor.sel.save(); linkbar.classList.add('open'); linkUrl.value='https://'; linkUrl.focus(); return;
   }
   if(cmd==='image'){fileInput.click();return;}
-  if(cmd==='color'||cmd==='bgColor'){const s=editor.getState();editor.sel.save();colorPicker.openAt(btns[cmd],c=>editor.exec(cmd,c),{current:cmd==='color'?s.color:s.bg,sampleMode:cmd==='color'?'color':'background'});return;}
+  if(cmd==='color'||cmd==='bgColor'){const s=editor.getState();editor.sel.save();colorPicker.toggleAt(btns[cmd],c=>editor.exec(cmd,c),{current:cmd==='color'?s.color:s.bg,sampleMode:cmd==='color'?'color':'background'});return;}
   if(cmd==='table'){editor.sel.save();gridPicker.toggle(btns.table);return;}
   if(cmd==='format'){editor.sel.save();formatPicker.toggle(btns.format);return;}
   if(cmd==='modeEditor'){setMode('editor');return;}

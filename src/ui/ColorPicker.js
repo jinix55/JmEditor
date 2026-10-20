@@ -37,7 +37,8 @@ export class ColorPicker {
     this.#buildFoot();
     document.body.appendChild(this.el);
 
-    this.onDocDown = (e) => { if (!this.el.contains(e.target)) this.close(); };
+    this.anchor = null;
+    this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.anchor?.contains(e.target)) this.close(); };
     this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
   }
 
@@ -180,13 +181,21 @@ export class ColorPicker {
   }
 
   openAt(anchorEl, onPick, opts) {
+    this.anchor = anchorEl;
     const r = anchorEl.getBoundingClientRect();
     this.open(r.left, r.bottom + 4, onPick, opts);
+  }
+
+  /** 같은 버튼을 다시 누르면 닫고, 아니면 연다 */
+  toggleAt(anchorEl, onPick, opts) {
+    if (!this.el.hidden && this.anchor === anchorEl) this.close();
+    else this.openAt(anchorEl, onPick, opts);
   }
 
   close() {
     if (this.el.hidden) return;
     this.el.hidden = true;
+    this.anchor = null;
     document.removeEventListener('mousedown', this.onDocDown, true);
     document.removeEventListener('keydown', this.onKey, true);
   }
