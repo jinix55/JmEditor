@@ -220,7 +220,11 @@ export class GalleryCommands {
           const before = e.clientX < r.left + r.width / 2;
           gallery.insertBefore(dragging, before ? over : over.nextSibling);
         } else if (!over) {
-          gallery.appendChild(dragging); // 빈 영역에 놓으면 맨 뒤로
+          // 빈 영역에 놓으면 커서 좌표(줄 → X)에 가장 가까운 위치로
+          const imgs = Array.from(gallery.querySelectorAll(':scope > img')).filter((i) => i !== dragging);
+          let ref = null;
+          for (const it of imgs) { const r = it.getBoundingClientRect(); if (e.clientY < r.top || (e.clientY <= r.bottom && e.clientX < r.left + r.width / 2)) { ref = it; break; } }
+          gallery.insertBefore(dragging, ref);
         }
         this.#layout(gallery);
         this.editor.commit();
