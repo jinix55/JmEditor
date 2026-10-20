@@ -139,10 +139,10 @@ export const SAMPLE_FORMATS = [
     html: `<h3>확인 사항</h3><ul><li>☐ 항목 1</li><li>☐ 항목 2</li><li>☐ 항목 3</li></ul>`,
   },
   {
-    id: 'button-link',
-    name: '버튼 링크',
-    description: '버튼 모양 링크. 글자를 고치고 「링크」로 주소를 바꾸세요',
-    html: `<p><a href="https://example.com" data-role="button" data-style="primary">자세히 보기</a> <a href="https://example.com" data-role="button" data-style="outline">신청하기</a></p>`,
+    id: 'buttons',
+    name: '버튼',
+    description: '버튼 묶음 블록. 추가·주소·모양·순서·정렬을 헤더에서 조정',
+    html: `<div data-type="buttons" data-align="center"><a href="https://example.com" data-role="button" data-style="primary">자세히 보기</a><a href="https://example.com" data-role="button" data-style="outline">신청하기</a></div>`,
   },
   {
     id: 'image-gallery',

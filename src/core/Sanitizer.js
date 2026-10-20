@@ -104,6 +104,19 @@ export class Sanitizer {
       return g;
     }
 
+    // 버튼 그룹 블록: div[data-type=buttons] 안에는 a[data-role=button] 만
+    if (tag === 'div' && node.getAttribute('data-type') === 'buttons') {
+      const b = document.createElement('div');
+      b.setAttribute('data-type', 'buttons');
+      const al = node.getAttribute('data-align');
+      b.setAttribute('data-align', ['left', 'center', 'right'].includes(al) ? al : 'center');
+      node.querySelectorAll(':scope > a').forEach((a) => {
+        const r = Sanitizer.#cleanNode(a);
+        if (r && r.nodeType === Node.ELEMENT_NODE && r.tagName === 'A') { r.setAttribute('data-role', 'button'); if (!r.getAttribute('data-style')) r.setAttribute('data-style', 'primary'); b.appendChild(r); }
+      });
+      return b.childNodes.length ? b : null;
+    }
+
     // 유튜브 블록: div[data-type=youtube] + iframe(src 는 youtube embed 주소만)
     if (tag === 'div' && node.getAttribute('data-type') === 'youtube') {
       const iframe = node.querySelector('iframe');

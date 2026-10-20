@@ -7,7 +7,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 ## 되는 것
 
 - 굵게 / 기울임 / 밑줄 / 취소선, 글자색 / 배경색 (견본 + HSV 팔레트 + HEX 입력 + 스포이드)
-- 제목 H1~H3, 인용, 순서 / 비순서 목록(● ○ ■, 1. 01. a. A. i. I. 가.), 링크, 버튼 모양 링크(서식)
+- 제목 H1~H3, 인용, 순서 / 비순서 목록(● ○ ■, 1. 01. a. A. i. I. 가.), 링크, 버튼 그룹 블록(서식 — 추가·주소·모양·순서·정렬)
 - 이미지 삽입 (버튼, 드래그 앤 드롭, 붙여넣기)
 - 유튜브 — 주소를 넣으면 16:9 영상 블록이 들어갑니다. 폭(100 / 75 / 50%)과 정렬 선택, ⠿ 핸들로 이동
 - 표 — 툴바에서 N×M 격자로 크기를 골라 삽입. 셀을 드래그(또는 Shift+클릭)하면 범위 선택. 우클릭 메뉴에서 행 / 열 추가·삭제·이동, 머리글 행·열 전환, 셀 병합·분할, 가로·세로 정렬, 셀·행 배경색, 표 폭·테두리. 셀 경계를 끌면 열 너비·행 높이 조절. 왼쪽 위 ⠿ 핸들을 끌어 위치 이동
@@ -95,7 +95,7 @@ api: {
 
 ## 저장되는 HTML
 
-허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만) 입니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `list-style-type` 만 남고 값 형식도 검사합니다.
+허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]` 입니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `list-style-type` 만 남고 값 형식도 검사합니다.
 
 표는 이렇게 저장됩니다. 열 너비는 `colgroup`, 행 높이는 `tr`, 병합은 `colspan` / `rowspan`, 테두리 숨김은 `data-border="0"` 입니다.
 

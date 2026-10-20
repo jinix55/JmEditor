@@ -273,3 +273,22 @@ a[data-role="button"] { display: inline-block; padding: 8px 18px; border-radius:
 a[data-role="button"][data-style="primary"] { background: #1d4ed8; color: #fff !important; }
 a[data-role="button"][data-style="outline"] { background: transparent; color: #1d4ed8 !important; border-color: #1d4ed8; }
 a[data-role="button"][data-style="gray"] { background: #e4e7ec; color: #344054 !important; }
+
+/* 버튼 그룹 블록 (저장 HTML 에도 필요 — 뷰어에도 포함) */
+div[data-type="buttons"] { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+div[data-type="buttons"][data-align="center"] { justify-content: center; }
+div[data-type="buttons"][data-align="right"] { justify-content: flex-end; }
+
+/* 버튼 그룹 레이어 (에디터 전용) */
+.jm-buttons-layer { margin: 0 0 8px; border: 1px solid var(--jm-border); border-radius: 6px; background: #fff; }
+.jm-buttons-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 8px; border-bottom: 1px solid var(--jm-border); background: #f8fafc; border-radius: 6px 6px 0 0; }
+.jm-buttons-title { font-size: 12px; font-weight: 600; color: #344054; }
+.jm-buttons-spacer { flex: 1; }
+.jm-buttons-btn { height: 26px; padding: 0 8px; font-size: 12px; }
+.jm-buttons-btn:disabled { opacity: .4; cursor: default; }
+.jm-buttons-style, .jm-buttons-align { height: 26px; font-size: 12px; border: 1px solid var(--jm-border); border-radius: 4px; background: #fff; }
+.jm-buttons-style:disabled { opacity: .4; }
+.jm-buttons-remove { color: #b42318; }
+.jm-buttons-layer div[data-type="buttons"] { padding: 10px; }
+.jm-buttons-layer a[data-role="button"] { outline: 2px solid transparent; outline-offset: 2px; cursor: text; }
+.jm-buttons-layer a[data-role="button"].is-selected { outline-color: #1d4ed8; }

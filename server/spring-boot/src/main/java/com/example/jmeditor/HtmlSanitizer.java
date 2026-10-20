@@ -92,8 +92,17 @@ public class HtmlSanitizer {
             f.attr("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture");
             f.attr("allowfullscreen", "");
         }
-        // div 는 갤러리/유튜브 블록만 허용, 그 외는 p 로 치환
+        // div 는 갤러리/유튜브/버튼 블록만 허용, 그 외는 p 로 치환
         for (Element div : doc.select("div")) {
+            if ("buttons".equals(div.attr("data-type"))) {
+                for (Element child : div.children()) if (!child.tagName().equals("a")) child.remove();
+                div.textNodes().forEach(org.jsoup.nodes.Node::remove);
+                for (Element a : div.children()) { a.attr("data-role", "button"); if (a.attr("data-style").isEmpty()) a.attr("data-style", "primary"); }
+                if (div.children().isEmpty()) { div.remove(); continue; }
+                String a = div.attr("data-align");
+                if (!a.equals("left") && !a.equals("center") && !a.equals("right")) div.attr("data-align", "center");
+                continue;
+            }
             if ("youtube".equals(div.attr("data-type"))) {
                 if (div.selectFirst("> iframe") == null) { div.remove(); continue; }
                 for (Element child : div.children()) if (!child.tagName().equals("iframe")) child.remove();
