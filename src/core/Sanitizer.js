@@ -103,6 +103,26 @@ export class Sanitizer {
       return g;
     }
 
+    // 유튜브 블록: div[data-type=youtube] + iframe(src 는 youtube embed 주소만)
+    if (tag === 'div' && node.getAttribute('data-type') === 'youtube') {
+      const iframe = node.querySelector('iframe');
+      const m = iframe?.getAttribute('src')?.match(/^https:\/\/www\.(?:youtube|youtube-nocookie)\.com\/embed\/([A-Za-z0-9_-]{11})(?:[?#].*)?$/);
+      if (!m) return null;
+      const b = document.createElement('div');
+      b.setAttribute('data-type', 'youtube');
+      const w = node.getAttribute('data-width');
+      b.setAttribute('data-width', ['100', '75', '50'].includes(w) ? w : '100');
+      const al = node.getAttribute('data-align');
+      b.setAttribute('data-align', ['left', 'center', 'right'].includes(al) ? al : 'center');
+      const f = document.createElement('iframe');
+      f.setAttribute('src', `https://www.youtube-nocookie.com/embed/${m[1]}`);
+      f.setAttribute('title', 'YouTube video');
+      f.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
+      f.setAttribute('allowfullscreen', '');
+      b.appendChild(f);
+      return b;
+    }
+
     tag = TAG_ALIAS[tag] || tag;
 
     // 허용되지 않은 태그 → 자식만 모아서 반환(언래핑)

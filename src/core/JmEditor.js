@@ -12,6 +12,7 @@ import { Commands } from './Commands.js';
 import { TableCommands, TABLE_LAYER_CLASS } from '../plugins/table/TableCommands.js';
 import { ContextMenu } from '../ui/ContextMenu.js';
 import { GalleryCommands, GALLERY_LAYER_CLASS } from '../plugins/gallery/GalleryCommands.js';
+import { EmbedCommands, EMBED_LAYER_CLASS } from '../plugins/embed/EmbedCommands.js';
 import { History } from './History.js';
 import { BlockDrag } from './BlockDrag.js';
 import { Sanitizer } from './Sanitizer.js';
@@ -44,6 +45,7 @@ export class JmEditor {
     this.menu = new ContextMenu();
     this.blockDrag = new BlockDrag(this); // 표·갤러리 블록 드래그 이동
     this.gallery = new GalleryCommands(this);
+    this.embed = new EmbedCommands(this);
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
 
     this.#ensureBlock();
@@ -59,6 +61,7 @@ export class JmEditor {
    *                      |color|bgColor (value: 색상 문자열, null 이면 해제)
    *                      |format (value: 삽입할 HTML — 서식/템플릿. 내부에서 sanitize 후 블록 단위 삽입)
    *                      |gallery (value: {cols, auto} — 이미지 갤러리 블록 삽입)
+   *                      |youtube (value: 유튜브 주소 또는 동영상 ID)
    * @param {*} [value] link 의 url, image 의 {src, alt}, table 의 {rows, cols, header}
    */
   exec(name, value) {
@@ -82,6 +85,7 @@ export class JmEditor {
       image: () => c.insertImage(value?.src, value?.alt),
       format: () => c.insertBlockHTML(Sanitizer.clean(value || '')),
       gallery: () => c.insertBlockHTML(GalleryCommands.template(value?.cols, value?.auto ?? true)),
+      youtube: () => this.embed.insertYouTube(value),
       color: () => c.setStyle('color', value ?? null),
       bgColor: () => c.setStyle('background-color', value ?? null),
       undo: () => this.history.undo(),
@@ -96,12 +100,16 @@ export class JmEditor {
       tableDeleteCol: () => this.table.deleteColumn(),
       tableDelete: () => this.table.deleteTable(),
     };
-    map[name]?.();
+    return map[name]?.();
   }
 
   /** 저장용 HTML 반환 (ZWSP·표 레이어 제거) */
   getHTML() {
-    return BlockDrag.cleanHTML(GalleryCommands.unwrapHTML(TableCommands.unwrapHTML(this.root.innerHTML.replace(new RegExp(ZWSP, 'g'), ''))));
+    let html = this.root.innerHTML.replace(new RegExp(ZWSP, 'g'), '');
+    html = TableCommands.unwrapHTML(html);
+    html = GalleryCommands.unwrapHTML(html);
+    html = EmbedCommands.unwrapHTML(html);
+    return BlockDrag.cleanHTML(html);
   }
 
   /** HTML 로드 (sanitize 후) */
@@ -109,6 +117,7 @@ export class JmEditor {
     this.root.innerHTML = Sanitizer.clean(html || '');
     this.table.wrapAll();
     this.gallery.wrapAll();
+    this.embed.wrapAll();
     this.#ensureBlock();
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
     this.#emitChange();
@@ -132,6 +141,7 @@ export class JmEditor {
   commit() {
     this.table.wrapAll(); // 붙여넣기 등으로 들어온 표도 레이어로
     this.gallery.wrapAll();
+    this.embed.wrapAll();
     this.#ensureBlock();
     this.history.push();
     this.#emitChange();
@@ -297,7 +307,7 @@ export class JmEditor {
       return;
     }
     Array.from(r.childNodes).forEach((n) => {
-      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.dataset?.type === 'gallery');
+      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.dataset?.type === 'gallery' || n.dataset?.type === 'youtube');
       if (!isBlock) {
         const p = document.createElement('p');
         r.insertBefore(p, n);
@@ -311,6 +321,7 @@ export class JmEditor {
     this.root.innerHTML = html;
     this.table.wrapAll();
     this.gallery.wrapAll();
+    this.embed.wrapAll();
     this.#ensureBlock();
     this.sel.placeCursor(this.root.lastChild || this.root, true);
     this.#emitChange();

@@ -395,6 +395,12 @@ export class Commands {
     }
     // 목록 항목이면 목록 전체 뒤에 삽입
     if (block && block.tagName === 'LI') block = block.parentNode;
+    // 블록이 없으면(레이어 안 등) 커서 범위의 루트 직속 조상을 기준으로
+    if (!block) {
+      let n = this.sel.getRange()?.startContainer || null;
+      while (n && n.parentNode && n.parentNode !== this.root) n = n.parentNode;
+      if (n && n.parentNode === this.root) block = n;
+    }
 
     const after = document.createElement('p');
     after.appendChild(document.createElement('br'));
