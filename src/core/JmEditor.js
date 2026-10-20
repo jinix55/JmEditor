@@ -61,6 +61,7 @@ export class JmEditor {
 
     this.#ensureBlock();
     this.#bind();
+    this.#bindGapInserter();
   }
 
   // ───────────── 공개 API ─────────────
@@ -181,6 +182,7 @@ export class JmEditor {
     this.gallery.destroy();
     this.slider.destroy();
     this.blockDrag.destroy();
+    this.gapBar?.remove();
   }
 
   // ───────────── 내부 ─────────────
@@ -336,6 +338,57 @@ export class JmEditor {
     if (!file) return;
     e.preventDefault();
     await this.insertImageFile(file);
+  }
+
+  /**
+   * 블록(레이어) 사이 빈 단락 삽입기
+   * - 편집 불가 레이어(표·갤러리·슬라이드·유튜브·버튼) 가 서로 붙어 있거나 문서 맨 앞/뒤에 있으면 그 사이에 커서를 둘 수 없다.
+   * - 경계 근처(±8px)에 마우스를 올리면 「＋ 단락 추가」 줄을 띄우고, 클릭하면 빈 단락을 넣고 커서를 옮긴다.
+   */
+  #bindGapInserter() {
+    const bar = document.createElement('button');
+    bar.type = 'button';
+    bar.className = 'jm-gap-insert';
+    bar.textContent = '＋ 단락 추가';
+    bar.hidden = true;
+    bar.addEventListener('mousedown', (e) => e.preventDefault());
+    bar.addEventListener('click', () => {
+      const p = document.createElement('p');
+      p.appendChild(document.createElement('br'));
+      if (bar._before) this.root.insertBefore(p, bar._before); else this.root.appendChild(p);
+      bar.hidden = true;
+      this.sel.placeCursor(p, false);
+      this.root.focus();
+      this.commit();
+    });
+    const wrap = this.root.parentNode || document.body;
+    if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+    wrap.appendChild(bar);
+    this.gapBar = bar;
+
+    const isLayer = (el) => el && el.nodeType === 1 && el.getAttribute('contenteditable') === 'false';
+    const onMove = (e) => {
+      if (this.gapBar.contains(e.target)) return;
+      const blocks = Array.from(this.root.children);
+      const rootRect = this.root.getBoundingClientRect();
+      let hit = null;
+      for (let i = 0; i <= blocks.length; i++) {
+        const prev = blocks[i - 1], next = blocks[i];
+        // 경계 양쪽 중 하나라도 레이어이고, 반대쪽이 (없거나) 레이어일 때만 (일반 단락이 있으면 거기서 쓰면 됨)
+        if (!(isLayer(prev) || isLayer(next))) continue;
+        if ((prev && !isLayer(prev)) || (next && !isLayer(next))) continue;
+        const y = next ? next.getBoundingClientRect().top : prev.getBoundingClientRect().bottom;
+        if (Math.abs(e.clientY - y) <= 8 && e.clientX >= rootRect.left && e.clientX <= rootRect.right) { hit = { y, before: next || null }; break; }
+      }
+      if (!hit) { bar.hidden = true; return; }
+      const wrapRect = wrap.getBoundingClientRect();
+      bar.style.top = `${hit.y - wrapRect.top + wrap.scrollTop}px`;
+      bar.style.left = `${rootRect.left - wrapRect.left + rootRect.width / 2}px`;
+      bar._before = hit.before;
+      bar.hidden = false;
+    };
+    this.root.addEventListener('mousemove', onMove);
+    this.root.addEventListener('mouseleave', (e) => { if (!bar.contains(e.relatedTarget)) bar.hidden = true; });
   }
 
   /** 편집 중 링크가 열리지 않도록 href 를 보관 속성으로 옮긴다 (setHTML / commit / restore 후 호출) */
