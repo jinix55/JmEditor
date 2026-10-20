@@ -182,6 +182,8 @@ export class JmEditor {
     const onDrop = (e) => this.#handleDrop(e);
     const onDragover = (e) => e.preventDefault();
     const onContext = (e) => this.#handleContextMenu(e);
+    // 편집 중에는 링크(버튼 포함)를 따라가지 않는다. 가운데 클릭(auxclick)도 차단
+    const onLinkClick = (e) => { if (e.target.closest?.('a')) e.preventDefault(); };
     const onDocDown = (e) => {
       // 표 밖을 클릭하면 셀 범위 선택 해제
       if (this.table.selection && !this.table.selection.table.contains(e.target)) this.table.clearSelection();
@@ -202,6 +204,8 @@ export class JmEditor {
     r.addEventListener('drop', onDrop);
     r.addEventListener('dragover', onDragover);
     r.addEventListener('contextmenu', onContext);
+    r.addEventListener('click', onLinkClick);
+    r.addEventListener('auxclick', onLinkClick);
     document.addEventListener('selectionchange', onSelChange);
 
     this.#unbind = () => {
@@ -213,6 +217,8 @@ export class JmEditor {
       r.removeEventListener('drop', onDrop);
       r.removeEventListener('dragover', onDragover);
       r.removeEventListener('contextmenu', onContext);
+      r.removeEventListener('click', onLinkClick);
+      r.removeEventListener('auxclick', onLinkClick);
       document.removeEventListener('selectionchange', onSelChange);
       document.removeEventListener('mousedown', onDocDown, true);
     };
