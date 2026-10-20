@@ -9,14 +9,14 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 - 굵게 / 기울임 / 밑줄 / 취소선, 글자색 / 배경색 (견본 + HSV 팔레트 + HEX 입력 + 스포이드)
 - 제목 H1~H3, 인용, 순서 / 비순서 목록, 링크
 - 이미지 삽입 (버튼, 드래그 앤 드롭, 붙여넣기)
-- 표 — 툴바에서 N×M 격자로 크기를 고르고, 표 위에서 우클릭하면 행 / 열 추가·삭제, 셀 / 행 배경색 메뉴. 왼쪽 위 ⠿ 핸들을 끌어 위치 이동
+- 표 — 툴바에서 N×M 격자로 크기를 골라 삽입. 셀을 드래그(또는 Shift+클릭)하면 범위 선택. 우클릭 메뉴에서 행 / 열 추가·삭제·이동, 머리글 행·열 전환, 셀 병합·분할, 가로·세로 정렬, 셀·행 배경색, 표 폭·테두리. 셀 경계를 끌면 열 너비·행 높이 조절. 왼쪽 위 ⠿ 핸들을 끌어 위치 이동
 - 이미지 갤러리 블록 — 이미지만 넣는 블록. 드롭하면 원본 비율을 유지한 채 줄마다 가로를 꽉 채우도록 배치되고(세로 사진이 섞여도 줄 높이가 같습니다), 헤더에서 선택 삭제 / 전체 삭제 / 열 수 / 배치 방식(비율 유지·잘라 채움) / 정렬(왼쪽·중앙·오른쪽)을 바꿉니다. 사진은 드래그해서 순서를 바꾸고, 헤더의 ⠿ 핸들을 끌면 블록 자체가 다른 위치로 이동합니다. 제목은 선택 사항
 - 서식(템플릿) 삽입 — 서버에서 받아온 HTML 조각을 골라 본문에 넣습니다. 서식 관리는 별도 화면에서
 - Editor / HTML / 미리보기 모드 전환
 - undo / redo, 한글 IME 조합 처리, 외부 글 붙여넣기 시 허용 태그만 남김
 - 조회 / 등록 / 수정 / 이미지 업로드 / 서식 목록 API 연동 (`JmEditorApi`)
 
-셀 병합, 열 너비 조절, 동시편집은 아직 없습니다.
+동시편집은 아직 없습니다.
 
 ## 쓰는 법
 
@@ -94,7 +94,16 @@ api: {
 
 ## 저장되는 HTML
 
-허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열, span, 그리고 갤러리용 `div[data-type="gallery"]` 입니다. style 은 `color` 와 `background-color` 만 남습니다.
+허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 그리고 갤러리용 `div[data-type="gallery"]` 입니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height` 만 남고 값 형식도 검사합니다.
+
+표는 이렇게 저장됩니다. 열 너비는 `colgroup`, 행 높이는 `tr`, 병합은 `colspan` / `rowspan`, 테두리 숨김은 `data-border="0"` 입니다.
+
+```html
+<table style="width: auto" data-border="0">
+  <colgroup><col style="width: 120px"><col style="width: 240px"></colgroup>
+  <tbody><tr style="height: 40px"><th colspan="2" style="text-align: center">제목</th></tr></tbody>
+</table>
+```
 
 표 레이어, 갤러리 헤더, 선택 표시 같은 편집용 UI 는 `getHTML()` 에서 전부 제거되고 순수 HTML 만 나옵니다. 조회 페이지에서는 본문 컨테이너에 `class="jm-content"` 를 주고 `jm-editor.css` 를 포함하면 미리보기와 같은 모습으로 보입니다.
 

@@ -17,16 +17,25 @@ import java.util.stream.Collectors;
 @Component
 public class HtmlSanitizer {
 
-    /** style 속성에서 허용하는 CSS 속성 */
-    private static final java.util.Set<String> ALLOWED_STYLE = java.util.Set.of("color", "background-color");
     /** 색상 값 형식: #hex, rgb(a)(), 색 이름 */
     private static final Pattern SAFE_COLOR = Pattern.compile("^(#[0-9a-fA-F]{3,8}|rgba?\\([\\d\\s.,%]+\\)|[a-zA-Z]+)$");
+    /** style 속성에서 허용하는 CSS 속성과 값 형식 (클라이언트 Sanitizer 와 동일) */
+    private static final java.util.Map<String, Pattern> ALLOWED_STYLE = java.util.Map.of(
+            "color", SAFE_COLOR,
+            "background-color", SAFE_COLOR,
+            "text-align", Pattern.compile("^(left|center|right|justify)$", Pattern.CASE_INSENSITIVE),
+            "vertical-align", Pattern.compile("^(top|middle|bottom)$", Pattern.CASE_INSENSITIVE),
+            "width", Pattern.compile("^(\\d+(\\.\\d+)?(px|%)|auto)$", Pattern.CASE_INSENSITIVE),
+            "height", Pattern.compile("^\\d+(\\.\\d+)?px$", Pattern.CASE_INSENSITIVE));
 
     private final Safelist safelist = new Safelist()
             .addTags("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
-                     "a", "img", "table", "tbody", "thead", "tr", "td", "th", "span", "div")
+                     "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div")
             .addAttributes("a", "href", "target", "rel")
             .addAttributes("img", "src", "alt", "width", "height")
+            .addAttributes("table", "style", "data-border")
+            .addAttributes("col", "style")
+            .addAttributes("tr", "style")
             .addAttributes("td", "style", "colspan", "rowspan")
             .addAttributes("th", "style", "colspan", "rowspan")
             .addAttributes("span", "style")
@@ -53,7 +62,7 @@ public class HtmlSanitizer {
                     .map(d -> d.split(":", 2))
                     .filter(kv -> kv.length == 2)
                     .map(kv -> new String[]{kv[0].trim().toLowerCase(), kv[1].trim()})
-                    .filter(kv -> ALLOWED_STYLE.contains(kv[0]) && SAFE_COLOR.matcher(kv[1]).matches())
+                    .filter(kv -> ALLOWED_STYLE.containsKey(kv[0]) && ALLOWED_STYLE.get(kv[0]).matcher(kv[1]).matches())
                     .map(kv -> kv[0] + ": " + kv[1])
                     .collect(Collectors.joining("; "));
             if (style.isEmpty()) el.removeAttr("style"); else el.attr("style", style);

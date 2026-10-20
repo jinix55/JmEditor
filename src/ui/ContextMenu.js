@@ -1,7 +1,8 @@
 /**
  * ContextMenu
- * - 에디터 안에서 쓰는 간단한 우클릭 메뉴. 프레임워크 독립.
- * - 항목은 [{ label, action, divider }] 배열. 바깥 클릭/Escape/스크롤 시 닫힌다.
+ * - 에디터 안에서 쓰는 우클릭 메뉴. 프레임워크 독립.
+ * - 항목: { label, action, divider, disabled, children: [...] }  children 이 있으면 하위 메뉴(마우스 오버로 펼침).
+ * - 바깥 클릭 / Escape / 스크롤 시 닫힌다.
  */
 export class ContextMenu {
   constructor() {
@@ -10,8 +11,9 @@ export class ContextMenu {
     this.el.hidden = true;
     this.el.setAttribute('role', 'menu');
     document.body.appendChild(this.el);
+    this.sub = null; // 열려 있는 하위 메뉴 요소
 
-    this.onDocDown = (e) => { if (!this.el.contains(e.target)) this.close(); };
+    this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.sub?.contains(e.target)) this.close(); };
     this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
     this.onScroll = () => this.close();
   }
@@ -20,34 +22,13 @@ export class ContextMenu {
    * 메뉴 열기
    * @param {number} x 화면 좌표
    * @param {number} y
-   * @param {Array<{label?: string, action?: () => void, divider?: boolean}>} items
+   * @param {Array<object>} items
    */
   open(x, y, items) {
-    this.el.innerHTML = '';
-    items.forEach((it) => {
-      if (it.divider) {
-        const d = document.createElement('div');
-        d.className = 'jm-ctxmenu-divider';
-        this.el.appendChild(d);
-        return;
-      }
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'jm-ctxmenu-item';
-      b.setAttribute('role', 'menuitem');
-      b.textContent = it.label;
-      // mousedown 에서 포커스/선택이 빠지지 않도록
-      b.addEventListener('mousedown', (e) => e.preventDefault());
-      b.addEventListener('click', () => { this.close(); it.action?.(); });
-      this.el.appendChild(b);
-    });
-
+    this.#closeSub();
+    this.#fill(this.el, items);
     this.el.hidden = false;
-    // 화면 밖으로 나가지 않게 보정
-    const { innerWidth: w, innerHeight: h } = window;
-    const r = this.el.getBoundingClientRect();
-    this.el.style.left = `${Math.min(x, w - r.width - 8)}px`;
-    this.el.style.top = `${Math.min(y, h - r.height - 8)}px`;
+    this.#place(this.el, x, y);
 
     document.addEventListener('mousedown', this.onDocDown, true);
     document.addEventListener('keydown', this.onKey, true);
@@ -56,6 +37,7 @@ export class ContextMenu {
 
   close() {
     if (this.el.hidden) return;
+    this.#closeSub();
     this.el.hidden = true;
     document.removeEventListener('mousedown', this.onDocDown, true);
     document.removeEventListener('keydown', this.onKey, true);
@@ -65,5 +47,59 @@ export class ContextMenu {
   destroy() {
     this.close();
     this.el.remove();
+  }
+
+  /** 항목들을 메뉴 요소에 채운다 */
+  #fill(menuEl, items) {
+    menuEl.innerHTML = '';
+    items.forEach((it) => {
+      if (it.divider) {
+        const d = document.createElement('div');
+        d.className = 'jm-ctxmenu-divider';
+        menuEl.appendChild(d);
+        return;
+      }
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'jm-ctxmenu-item' + (it.children ? ' has-sub' : '');
+      b.setAttribute('role', 'menuitem');
+      b.textContent = it.label;
+      b.disabled = !!it.disabled;
+      b.addEventListener('mousedown', (e) => e.preventDefault()); // 에디터 선택 유지
+      if (it.children) {
+        b.addEventListener('mouseenter', () => this.#openSub(b, it.children));
+        b.addEventListener('click', () => this.#openSub(b, it.children));
+      } else {
+        b.addEventListener('mouseenter', () => { if (menuEl === this.el) this.#closeSub(); });
+        b.addEventListener('click', () => { this.close(); it.action?.(); });
+      }
+      menuEl.appendChild(b);
+    });
+  }
+
+  /** 하위 메뉴를 항목 오른쪽에 펼친다 */
+  #openSub(anchor, items) {
+    this.#closeSub();
+    const sub = document.createElement('div');
+    sub.className = 'jm-ctxmenu jm-ctxmenu-sub';
+    sub.setAttribute('role', 'menu');
+    this.#fill(sub, items);
+    document.body.appendChild(sub);
+    const r = anchor.getBoundingClientRect();
+    this.#place(sub, r.right - 2, r.top - 4);
+    this.sub = sub;
+  }
+
+  #closeSub() {
+    this.sub?.remove();
+    this.sub = null;
+  }
+
+  /** 화면 밖으로 나가지 않게 위치 보정 */
+  #place(el, x, y) {
+    const { innerWidth: w, innerHeight: h } = window;
+    const r = el.getBoundingClientRect();
+    el.style.left = `${Math.max(0, Math.min(x, w - r.width - 8))}px`;
+    el.style.top = `${Math.max(0, Math.min(y, h - r.height - 8))}px`;
   }
 }
