@@ -23,6 +23,10 @@ const ALIGN_LEFT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="n
 const ALIGN_CENTER_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M6 12h12M4 18h16"/></svg>';
 const ALIGN_RIGHT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M9 12h12M5 18h16"/></svg>';
 
+/** 실행 취소 / 다시 실행 아이콘 */
+const UNDO_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>';
+const REDO_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>';
+
 /** 세로 정렬 아이콘 (표 셀 전용) */
 const VALIGN_TOP_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16"/><rect x="8" y="8" width="8" height="10" rx="1"/></svg>';
 const VALIGN_MIDDLE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 12h4M16 12h4"/><rect x="8" y="7" width="8" height="10" rx="1"/></svg>';
@@ -97,8 +101,8 @@ const BUTTONS = [
   ['youtube', '유튜브', () => false, false, { icon: YOUTUBE_ICON, iconOnly: true }], // 아이콘만 표시 (라벨은 title)
   ['table', '표', (s) => s.table, false, { tip: '표 삽입', icon: TABLE_ICON, iconOnly: true }], // 행·열 편집은 표 레이어 우클릭 메뉴에서
   null,
-  ['undo', '↶', () => false],
-  ['redo', '↷', () => false],
+  ['undo', '실행 취소', () => false, false, { tip: '실행 취소 (Ctrl+Z)', icon: UNDO_ICON, iconOnly: true }],
+  ['redo', '다시 실행', () => false, false, { tip: '다시 실행 (Ctrl+Y)', icon: REDO_ICON, iconOnly: true }],
 ];
 
 export class JmToolbarEditor {
