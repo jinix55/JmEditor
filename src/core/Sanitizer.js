@@ -78,6 +78,8 @@ export class Sanitizer {
       const cols = parseInt(node.getAttribute('data-cols'), 10);
       g.setAttribute('data-cols', String(cols >= 1 && cols <= 6 ? cols : 3));
       if (node.getAttribute('data-auto') === '1') g.setAttribute('data-auto', '1');
+      const layout = node.getAttribute('data-layout');
+      if (layout === 'justify' || layout === 'cover') g.setAttribute('data-layout', layout);
       // 제목(선택): 첫 번째 p[data-role=title]. 비어 있으면 저장하지 않음
       const title = node.querySelector(':scope > p[data-role="title"]');
       if (title && title.textContent.trim()) {

@@ -90,7 +90,9 @@ header p{margin:0;color:var(--muted);font-size:.92rem}
 .jm-formatpicker-preview p,.jm-formatpicker-preview ul,.jm-formatpicker-preview ol,.jm-formatpicker-preview table,.jm-formatpicker-preview blockquote{margin:0 0 3px}
 .jm-formatpicker-preview td,.jm-formatpicker-preview th{padding:2px 4px}
 .jm-editor div[data-type="gallery"],.jm-gallery{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
-div[data-type="gallery"] img{flex:1 1 calc((100% - 8px*(var(--jm-cols,3) - 1))/var(--jm-cols,3));min-width:0;height:180px;object-fit:cover;border-radius:4px;margin:0}
+div[data-type="gallery"]:not([data-layout="justify"]) img{flex:1 1 calc((100% - 8px*(var(--jm-cols,3) - 1))/var(--jm-cols,3));min-width:0;height:180px}
+div[data-type="gallery"][data-layout="justify"] img{flex:0 0 auto}
+div[data-type="gallery"] img{object-fit:cover;border-radius:4px;margin:0}
 .jm-gallery-layer{margin:0 0 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
 div[data-type="gallery"] p[data-role="title"]{flex:0 0 100%;margin:0 0 2px;font-size:15px;font-weight:600;line-height:1.4}
 .jm-gallery-layer p[data-role="title"]{outline:none;padding:4px 6px;border-radius:4px}
@@ -103,7 +105,7 @@ div[data-type="gallery"] p[data-role="title"]{flex:0 0 100%;margin:0 0 2px;font-
 .jm-gallery-count{flex:1;font-size:11px;color:var(--muted)}
 .jm-gallery-btn{height:26px;padding:0 8px;font-size:12px;background:var(--panel);border-color:var(--line)}
 .jm-gallery-btn:disabled{opacity:.4;cursor:default}
-.jm-gallery-cols{height:26px;font-size:12px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
+.jm-gallery-cols,.jm-gallery-layout{height:26px;font-size:12px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
 .jm-gallery-remove{color:#d14343}
 .jm-gallery-layer .jm-gallery{padding:8px;min-height:60px}
 .jm-gallery-layer .jm-gallery.is-empty{display:flex;align-items:center;justify-content:center;border:2px dashed var(--line);border-radius:4px;margin:8px;color:var(--muted);font-size:13px}
@@ -226,6 +228,8 @@ class Sanitizer {
       const cols = parseInt(node.getAttribute('data-cols'), 10);
       g.setAttribute('data-cols', String(cols >= 1 && cols <= 6 ? cols : 3));
       if (node.getAttribute('data-auto') === '1') g.setAttribute('data-auto', '1');
+      const layout = node.getAttribute('data-layout');
+      if (layout === 'justify' || layout === 'cover') g.setAttribute('data-layout', layout);
       // 제목(선택): 첫 번째 p[data-role=title]. 비어 있으면 저장하지 않음
       const title = node.querySelector(':scope > p[data-role="title"]');
       if (title && title.textContent.trim()) {
@@ -864,7 +868,7 @@ class Commands {
 const TABLE_LAYER_CLASS = 'jm-table-layer';
 
 class TableCommands {
-  /** @param {import('./JmEditor.js').JmEditor} editor */
+  /** @param {import('../../core/JmEditor.js').JmEditor} editor */
   constructor(editor) {
     this.editor = editor;
     this.sel = editor.sel;
@@ -1182,6 +1186,104 @@ class ContextMenu {
 }
 
 /**
+ * gallery-layout — 이미지 갤러리 저스티파이드 배치 (에디터·뷰어 공용)
+ *
+ * - 각 줄의 높이를 같게 두고, 이미지 폭은 원본 비율대로 잡은 뒤 한 줄이 컨테이너 폭을 꽉 채우도록 스케일한다.
+ *   세로 사진이 섞여도 줄이 가지런하고 가로가 남지 않는다.
+ * - 원본 비율은 img 의 width / height 속성에 저장한다 (저장 HTML 에 포함, 뷰어에서 이미지 로딩 전에도 계산 가능).
+ * - data-layout="justify" 인 갤러리만 처리. "cover"(칸 고정·잘라 채움) 는 CSS 만으로 동작하므로 건드리지 않는다.
+ * - data-cols 는 한 줄에 들어갈 대략적인 장 수로 쓰여 목표 줄 높이를 정한다.
+ *
+ * 뷰어 페이지에서는 아래 한 줄이면 된다:
+ *   import { observeGalleries } from '/js/jm-editor/plugins/gallery/gallery-layout.js';
+ *   observeGalleries(document.querySelector('.jm-content'));
+ */
+const GAP = 8;             // 이미지 사이 간격(px) — CSS gap 과 같아야 함
+const MAX_LAST_ROW_SCALE = 1.6; // 마지막 줄이 너무 커지지 않도록 확대 상한
+
+/** img 의 원본 비율 (w/h). width/height 속성 → naturalWidth/Height 순으로 읽고, 없으면 4:3 */
+function ratioOf(img) {
+  const w = parseFloat(img.getAttribute('width')) || img.naturalWidth;
+  const h = parseFloat(img.getAttribute('height')) || img.naturalHeight;
+  return w > 0 && h > 0 ? w / h : 4 / 3;
+}
+
+/** 로드된 이미지의 원본 크기를 width/height 속성에 기록 (저장 HTML 에 비율이 남도록) */
+function stampSize(img) {
+  if (img.naturalWidth && img.naturalHeight && !img.getAttribute('width')) {
+    img.setAttribute('width', img.naturalWidth);
+    img.setAttribute('height', img.naturalHeight);
+  }
+}
+
+/**
+ * 갤러리 하나를 배치한다
+ * @param {HTMLElement} gallery div[data-type="gallery"]
+ */
+function layoutGallery(gallery) {
+  const imgs = Array.from(gallery.querySelectorAll(':scope > img'));
+  if (gallery.dataset.layout !== 'justify') {
+    imgs.forEach((img) => { img.style.width = ''; img.style.height = ''; img.style.flex = ''; });
+    return;
+  }
+  const width = gallery.clientWidth - (parseFloat(getComputedStyle(gallery).paddingLeft) || 0) * 2;
+  if (!imgs.length || width <= 0) return;
+
+  const cols = Math.max(1, parseInt(gallery.dataset.cols, 10) || 3);
+  const targetH = (width - GAP * (cols - 1)) / cols / (4 / 3); // 4:3 사진이 cols 장 들어가는 높이
+
+  // 줄 나누기: 목표 높이 기준 폭 합이 컨테이너를 넘을 때,
+  // 이 이미지를 포함한 폭과 제외한 폭 중 컨테이너 폭에 더 가까운 쪽을 택한다 (한 줄이 과하게 확대/축소되는 것 방지)
+  const rows = [];
+  let row = [], rowW = 0;
+  imgs.forEach((img) => {
+    const r = ratioOf(img);
+    const w = r * targetH;
+    const withW = rowW + (row.length ? GAP : 0) + w;
+    if (row.length && withW > width && Math.abs(withW - width) > Math.abs(rowW - width)) {
+      rows.push(row); row = []; rowW = 0;
+    }
+    row.push({ img, r });
+    rowW += (row.length > 1 ? GAP : 0) + w;
+  });
+  if (row.length) rows.push(row);
+
+  // 줄마다 높이를 계산해 폭을 꽉 채움
+  rows.forEach((items, idx) => {
+    const sumRatio = items.reduce((a, it) => a + it.r, 0);
+    const avail = width - GAP * (items.length - 1);
+    let h = avail / sumRatio;
+    // 마지막 줄은 너무 커지지 않게 상한 적용 (그 이상이면 왼쪽 정렬로 남김)
+    if (idx === rows.length - 1 && h > targetH * MAX_LAST_ROW_SCALE) h = targetH * MAX_LAST_ROW_SCALE;
+    items.forEach(({ img, r }) => {
+      img.style.flex = '0 0 auto';
+      img.style.width = `${Math.floor(r * h)}px`;
+      img.style.height = `${Math.floor(h)}px`;
+    });
+  });
+}
+
+/**
+ * root 아래 모든 갤러리를 배치하고, 크기 변경·이미지 로드에 따라 다시 배치한다
+ * @param {HTMLElement|Document} root
+ * @returns {() => void} 해제 함수
+ */
+function observeGalleries(root = document) {
+  const galleries = () => Array.from(root.querySelectorAll('div[data-type="gallery"]'));
+  const relayout = () => galleries().forEach(layoutGallery);
+
+  // 이미지 로드 완료 시 원본 크기 기록 후 재배치
+  const onLoad = (e) => { if (e.target.tagName === 'IMG' && e.target.closest('div[data-type="gallery"]')) { stampSize(e.target); relayout(); } };
+  root.addEventListener('load', onLoad, true);
+
+  const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(relayout) : null;
+  galleries().forEach((g) => { g.querySelectorAll('img').forEach(stampSize); ro?.observe(g); });
+  relayout();
+
+  return () => { root.removeEventListener('load', onLoad, true); ro?.disconnect(); };
+}
+
+/**
  * GalleryCommands
  * - 이미지 갤러리 블록: 저장 HTML 은 <div data-type="gallery" data-cols="N" data-auto="1"><p data-role="title">제목</p><img …>…</div>
  *   제목은 선택 사항. 비어 있으면 저장 시 제거되어 뷰어에는 제목 없이 이미지만 보인다.
@@ -1190,12 +1292,14 @@ class ContextMenu {
  * - 이미지는 CSS grid 로 data-cols 열에 균등 배치. data-auto="1" 이면 개수에 따라 열 수를 자동 계산한다.
  * - 갤러리 위에 이미지 파일을 드롭하거나 헤더 「이미지 추가」로 여러 장을 넣을 수 있다.
  */
+
 const GALLERY_LAYER_CLASS = 'jm-gallery-layer';
 const SELECTED_CLASS = 'is-selected';
+const DEFAULT_LAYOUT = 'justify'; // 'justify'(비율 유지, 줄 채움) | 'cover'(칸 고정, 잘라 채움)
 const MAX_AUTO_COLS = 4;
 
 class GalleryCommands {
-  /** @param {import('./JmEditor.js').JmEditor} editor */
+  /** @param {import('../../core/JmEditor.js').JmEditor} editor */
   constructor(editor) {
     this.editor = editor;
     this.sel = editor.sel;
@@ -1219,8 +1323,8 @@ class GalleryCommands {
   // ───────────── 생성 / 레이어 ─────────────
 
   /** 갤러리 블록 HTML (서식 삽입용) */
-  static template(cols = 3, auto = true) {
-    return `<div data-type="gallery" data-cols="${cols}"${auto ? ' data-auto="1"' : ''}></div>`;
+  static template(cols = 3, auto = true, layout = DEFAULT_LAYOUT) {
+    return `<div data-type="gallery" data-cols="${cols}"${auto ? ' data-auto="1"' : ''} data-layout="${layout}"></div>`;
   }
 
   /** 루트 안의 갤러리 요소를 모두 레이어로 감싼다 (setHTML / commit 후) */
@@ -1238,8 +1342,13 @@ class GalleryCommands {
     gallery.parentNode.insertBefore(layer, gallery);
     layer.append(this.#buildHeader(gallery), gallery);
     gallery.classList.add('jm-gallery');
+    if (!gallery.dataset.layout) gallery.dataset.layout = DEFAULT_LAYOUT;
     this.#ensureTitle(gallery);
     this.#bindGallery(gallery);
+    gallery.querySelectorAll('img').forEach(stampSize);
+    // 폭 변경·이미지 로드 시 재배치
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => layoutGallery(gallery)).observe(gallery);
+    gallery.addEventListener('load', (e) => { if (e.target.tagName === 'IMG') { stampSize(e.target); layoutGallery(gallery); } }, true);
     this.#layout(gallery);
     return layer;
   }
@@ -1299,6 +1408,17 @@ class GalleryCommands {
       this.editor.commit();
     });
 
+    // 배치 방식: 비율 유지(줄 채움) / 칸 고정(잘라 채움)
+    const layout = document.createElement('select');
+    layout.className = 'jm-gallery-layout';
+    layout.title = '배치 방식';
+    [['justify', '비율 유지'], ['cover', '잘라 채움']].forEach(([v, t]) => {
+      const o = document.createElement('option'); o.value = v; o.textContent = t; layout.appendChild(o);
+    });
+    layout.value = gallery.dataset.layout || DEFAULT_LAYOUT;
+    layout.addEventListener('mousedown', (e) => e.stopPropagation());
+    layout.addEventListener('change', () => { gallery.dataset.layout = layout.value; this.#layout(gallery); this.editor.commit(); });
+
     const count = document.createElement('span');
     count.className = 'jm-gallery-count';
     gallery._countEl = count;
@@ -1306,7 +1426,7 @@ class GalleryCommands {
     const remove = mk('✕', () => this.deleteGallery(gallery), 'jm-gallery-remove');
     remove.title = '갤러리 삭제';
 
-    h.append(title, count, add, delSel, delAll, cols, remove);
+    h.append(title, count, add, delSel, delAll, cols, layout, remove);
     return h;
   }
 
@@ -1334,6 +1454,7 @@ class GalleryCommands {
     if (gallery.dataset.auto === '1') gallery.dataset.cols = String(Math.max(1, Math.min(MAX_AUTO_COLS, n)));
     gallery.style.setProperty('--jm-cols', gallery.dataset.cols || '3');
     gallery.classList.toggle('is-empty', n === 0);
+    layoutGallery(gallery);
     this.#refreshHeader(gallery);
   }
 
@@ -1354,8 +1475,9 @@ class GalleryCommands {
         ? await this.editor.options.uploadImage(file)
         : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
       const img = document.createElement('img');
-      img.src = src;
       img.alt = file.name;
+      // 원본 크기를 width/height 속성에 기록한 뒤 붙임 (저장 HTML 에 비율 포함)
+      await new Promise((resolve) => { img.onload = () => { stampSize(img); resolve(); }; img.onerror = resolve; img.src = src; });
       gallery.appendChild(img);
     }
     this.#layout(gallery);
@@ -1398,7 +1520,7 @@ class GalleryCommands {
       if (!g) { layer.remove(); return; }
       g.removeAttribute('class');
       g.removeAttribute('style');
-      g.querySelectorAll('img').forEach((img) => img.removeAttribute('class'));
+      g.querySelectorAll('img').forEach((img) => { img.removeAttribute('class'); img.removeAttribute('style'); });
       // 제목: 편집 속성 제거, 비어 있으면 통째로 제거
       const t = g.querySelector(':scope > p[data-role="title"]');
       if (t) {
@@ -2397,7 +2519,7 @@ function refresh(){if(mode!=='editor')return;const s=editor.getState();BUTTONS.f
 
 /* 모드 전환: editor / html / preview. html 모드에서 나갈 때 textarea 내용을 setHTML 로 반영 */
 function prettify(html){return html.replace(/<(p|h1|h2|h3|ul|ol|li|blockquote|table|tbody|thead|tr|div)(\s[^>]*)?>/g,'\n<$1$2>').replace(/<\/(p|h1|h2|h3|ul|ol|blockquote|table|tbody|thead|tr|div)>/g,'</$1>\n').replace(/\n{2,}/g,'\n').trim();}
-const previewEl=document.getElementById('preview');
+const previewEl=document.getElementById('preview');let stopPreview=null;
 function setMode(m){
   if(m===mode)return;
   if(mode==='html')editor.setHTML(sourceEl.value);
@@ -2405,7 +2527,7 @@ function setMode(m){
   const area=document.getElementById('editor');
   area.hidden=m!=='editor';sourceEl.hidden=m!=='html';previewEl.hidden=m!=='preview';
   if(m==='html'){sourceEl.value=prettify(editor.getHTML());sourceEl.focus();}
-  else if(m==='preview'){previewEl.innerHTML=editor.getHTML();}
+  else if(m==='preview'){previewEl.innerHTML=editor.getHTML();stopPreview?.();stopPreview=observeGalleries(previewEl);}
   else area.focus();
   BUTTONS.forEach(d=>{if(!d)return;const [c,,act,,o={}]=d;if(o.group==='mode')btns[c].classList.toggle('is-active',!!act());else btns[c].disabled=m!=='editor';});
   toolbar.hidden=m!=='editor';
