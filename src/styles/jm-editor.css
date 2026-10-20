@@ -286,6 +286,8 @@ div[data-type="buttons"][data-align="right"] { justify-content: flex-end; }
 .jm-buttons-spacer { flex: 1; }
 .jm-buttons-btn { height: 26px; padding: 0 8px; font-size: 12px; }
 .jm-buttons-btn:disabled { opacity: .4; cursor: default; }
+.jm-buttons-url { width: 220px; height: 26px; padding: 0 8px; border: 1px solid var(--jm-border); border-radius: 4px; font: 12px ui-monospace, Menlo, monospace; }
+.jm-buttons-url:disabled { opacity: .4; }
 .jm-buttons-style, .jm-buttons-align { height: 26px; font-size: 12px; border: 1px solid var(--jm-border); border-radius: 4px; background: #fff; }
 .jm-buttons-style:disabled { opacity: .4; }
 .jm-buttons-remove { color: #b42318; }

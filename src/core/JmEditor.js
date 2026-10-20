@@ -28,7 +28,6 @@ export class JmEditor {
    * @param {() => void} [options.onSelectionChange] 커서 이동 콜백 (툴바 상태 갱신용)
    * @param {(file: File) => Promise<string>} [options.uploadImage] 이미지 파일 → URL 반환. 없으면 base64 로 삽입
    * @param {string} [options.placeholder]
-   * @param {(current: string, cb: (url: string|null) => void) => void} [options.askUrl] 주소 입력 UI (버튼 그룹 등). 없으면 window.prompt
    * @param {(x: number, y: number, cb: (color: string|null) => void) => void} [options.pickColor]
    *        색상 선택 UI 를 띄우는 콜백 (표 셀/행 배경색 메뉴에서 사용). 래퍼가 주입한다.
    */

@@ -15,8 +15,6 @@ const STYLES = [['primary', '채움'], ['outline', '외곽선'], ['gray', '회�
 export class ButtonsCommands {
   /**
    * @param {import('../../core/JmEditor.js').JmEditor} editor
-   * @param {object} [options]
-   * @param {(current: string, cb: (url: string|null) => void) => void} [options.askUrl] 주소 입력 UI (래퍼가 주입). 없으면 window.prompt
    */
   constructor(editor) {
     this.editor = editor;
@@ -79,7 +77,17 @@ export class ButtonsCommands {
     const spacer = document.createElement('span'); spacer.className = 'jm-buttons-spacer';
 
     const add = mk('＋ 버튼 추가', () => this.addButton(block));
-    const url = mk('주소…', () => this.editUrl(block), 'needs-sel', '선택한 버튼의 링크 주소');
+    // 주소 입력란: 선택한 버튼의 href 를 레이어 안에서 바로 편집
+    const url = document.createElement('input');
+    url.type = 'text';
+    url.className = 'jm-buttons-url needs-sel';
+    url.placeholder = '선택한 버튼의 주소 (https://…)';
+    url.title = '선택한 버튼의 링크 주소';
+    url.addEventListener('mousedown', (e) => e.stopPropagation());
+    url.addEventListener('input', () => { const a = this.#selected(block); if (a) a.setAttribute('href', url.value.trim() || '#'); });
+    url.addEventListener('change', () => this.editor.commit());
+    url.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); url.blur(); } });
+    block._urlInput = url;
     const style = mkSelect('jm-buttons-style needs-sel', STYLES, (v) => this.setStyle(block, v));
     style.title = '선택한 버튼의 모양';
     const left = mk('◀', () => this.move(block, -1), 'needs-sel', '선택한 버튼을 앞으로');
@@ -123,6 +131,7 @@ export class ButtonsCommands {
     block._header?.querySelectorAll('.needs-sel').forEach((el) => { el.disabled = !sel; });
     const style = block._header?.querySelector('.jm-buttons-style');
     if (style && sel) style.value = sel.dataset.style || 'primary';
+    if (block._urlInput) block._urlInput.value = sel ? (sel.getAttribute('href') || '') : '';
   }
 
   // ───────────── 조작 ─────────────
@@ -136,17 +145,6 @@ export class ButtonsCommands {
     this.#select(block, a);
     a.focus();
     this.editor.commit();
-  }
-
-  editUrl(block) {
-    const a = this.#selected(block);
-    if (!a) return;
-    const ask = this.editor.options.askUrl || ((cur, cb) => cb(window.prompt('링크 주소', cur)));
-    ask(a.getAttribute('href') || '', (url) => {
-      if (url == null) return;
-      a.setAttribute('href', url.trim() || '#');
-      this.editor.commit();
-    });
   }
 
   setStyle(block, style) {

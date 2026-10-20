@@ -163,7 +163,6 @@ export class JmToolbarEditor {
       onChange: (html) => { this.dirty = true; options.onChange?.(html); },
       onSelectionChange: () => this.#refreshState(),
       pickColor: (x, y, cb) => this.colorPicker.open(x, y, cb, { sampleMode: 'background' }),
-      askUrl: (cur, cb) => this.#openInput('링크 주소', cur, (v) => { cb(v); return true; }),
     });
     if (options.initialHTML) this.editor.setHTML(options.initialHTML);
     this.dirty = false;
