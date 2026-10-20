@@ -7,8 +7,11 @@
  * - 이미지는 CSS grid 로 data-cols 열에 균등 배치. data-auto="1" 이면 개수에 따라 열 수를 자동 계산한다.
  * - 갤러리 위에 이미지 파일을 드롭하거나 헤더 「이미지 추가」로 여러 장을 넣을 수 있다.
  */
+import { layoutGallery, stampSize } from './gallery-layout.js';
+
 export const GALLERY_LAYER_CLASS = 'jm-gallery-layer';
 const SELECTED_CLASS = 'is-selected';
+const DEFAULT_LAYOUT = 'justify'; // 'justify'(비율 유지, 줄 채움) | 'cover'(칸 고정, 잘라 채움)
 const MAX_AUTO_COLS = 4;
 
 export class GalleryCommands {
@@ -36,8 +39,8 @@ export class GalleryCommands {
   // ───────────── 생성 / 레이어 ─────────────
 
   /** 갤러리 블록 HTML (서식 삽입용) */
-  static template(cols = 3, auto = true) {
-    return `<div data-type="gallery" data-cols="${cols}"${auto ? ' data-auto="1"' : ''}></div>`;
+  static template(cols = 3, auto = true, layout = DEFAULT_LAYOUT) {
+    return `<div data-type="gallery" data-cols="${cols}"${auto ? ' data-auto="1"' : ''} data-layout="${layout}"></div>`;
   }
 
   /** 루트 안의 갤러리 요소를 모두 레이어로 감싼다 (setHTML / commit 후) */
@@ -55,8 +58,13 @@ export class GalleryCommands {
     gallery.parentNode.insertBefore(layer, gallery);
     layer.append(this.#buildHeader(gallery), gallery);
     gallery.classList.add('jm-gallery');
+    if (!gallery.dataset.layout) gallery.dataset.layout = DEFAULT_LAYOUT;
     this.#ensureTitle(gallery);
     this.#bindGallery(gallery);
+    gallery.querySelectorAll('img').forEach(stampSize);
+    // 폭 변경·이미지 로드 시 재배치
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => layoutGallery(gallery)).observe(gallery);
+    gallery.addEventListener('load', (e) => { if (e.target.tagName === 'IMG') { stampSize(e.target); layoutGallery(gallery); } }, true);
     this.#layout(gallery);
     return layer;
   }
@@ -116,6 +124,17 @@ export class GalleryCommands {
       this.editor.commit();
     });
 
+    // 배치 방식: 비율 유지(줄 채움) / 칸 고정(잘라 채움)
+    const layout = document.createElement('select');
+    layout.className = 'jm-gallery-layout';
+    layout.title = '배치 방식';
+    [['justify', '비율 유지'], ['cover', '잘라 채움']].forEach(([v, t]) => {
+      const o = document.createElement('option'); o.value = v; o.textContent = t; layout.appendChild(o);
+    });
+    layout.value = gallery.dataset.layout || DEFAULT_LAYOUT;
+    layout.addEventListener('mousedown', (e) => e.stopPropagation());
+    layout.addEventListener('change', () => { gallery.dataset.layout = layout.value; this.#layout(gallery); this.editor.commit(); });
+
     const count = document.createElement('span');
     count.className = 'jm-gallery-count';
     gallery._countEl = count;
@@ -123,7 +142,7 @@ export class GalleryCommands {
     const remove = mk('✕', () => this.deleteGallery(gallery), 'jm-gallery-remove');
     remove.title = '갤러리 삭제';
 
-    h.append(title, count, add, delSel, delAll, cols, remove);
+    h.append(title, count, add, delSel, delAll, cols, layout, remove);
     return h;
   }
 
@@ -151,6 +170,7 @@ export class GalleryCommands {
     if (gallery.dataset.auto === '1') gallery.dataset.cols = String(Math.max(1, Math.min(MAX_AUTO_COLS, n)));
     gallery.style.setProperty('--jm-cols', gallery.dataset.cols || '3');
     gallery.classList.toggle('is-empty', n === 0);
+    layoutGallery(gallery);
     this.#refreshHeader(gallery);
   }
 
@@ -171,8 +191,9 @@ export class GalleryCommands {
         ? await this.editor.options.uploadImage(file)
         : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
       const img = document.createElement('img');
-      img.src = src;
       img.alt = file.name;
+      // 원본 크기를 width/height 속성에 기록한 뒤 붙임 (저장 HTML 에 비율 포함)
+      await new Promise((resolve) => { img.onload = () => { stampSize(img); resolve(); }; img.onerror = resolve; img.src = src; });
       gallery.appendChild(img);
     }
     this.#layout(gallery);
@@ -215,7 +236,7 @@ export class GalleryCommands {
       if (!g) { layer.remove(); return; }
       g.removeAttribute('class');
       g.removeAttribute('style');
-      g.querySelectorAll('img').forEach((img) => img.removeAttribute('class'));
+      g.querySelectorAll('img').forEach((img) => { img.removeAttribute('class'); img.removeAttribute('style'); });
       // 제목: 편집 속성 제거, 비어 있으면 통째로 제거
       const t = g.querySelector(':scope > p[data-role="title"]');
       if (t) {

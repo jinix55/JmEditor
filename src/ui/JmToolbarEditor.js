@@ -8,6 +8,7 @@ import { TableGridPicker } from './TableGridPicker.js';
 import { ColorPicker } from './ColorPicker.js';
 import { FormatPicker, SAMPLE_FORMATS } from './FormatPicker.js';
 import { JmEditorApi } from '../api/JmEditorApi.js';
+import { observeGalleries } from '../plugins/gallery/gallery-layout.js';
 
 /** 서식 버튼 아이콘 (자체 제작 SVG) */
 const FORMAT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>';
@@ -274,7 +275,11 @@ export class JmToolbarEditor {
     this.previewPane.hidden = mode !== 'preview';
 
     if (mode === 'html') { this.source.value = JmToolbarEditor.prettify(this.editor.getHTML()); this.source.focus(); }
-    else if (mode === 'preview') { this.previewPane.innerHTML = this.editor.getHTML(); }
+    else if (mode === 'preview') {
+      this.previewPane.innerHTML = this.editor.getHTML();
+      this.#stopPreviewLayout?.();
+      this.#stopPreviewLayout = observeGalleries(this.previewPane); // 갤러리 저스티파이드 배치 (뷰어와 동일)
+    }
     else this.area.focus();
 
     // 편집 모드가 아니면 서식 버튼 비활성, 모드 버튼은 활성 표시
@@ -298,6 +303,8 @@ export class JmToolbarEditor {
       .replace(/\n{2,}/g, '\n')
       .trim();
   }
+
+  #stopPreviewLayout = null;
 
   getHTML() { return this.mode === 'html' ? this.source.value : this.editor.getHTML(); }
   setHTML(html) { this.editor.setHTML(html); if (this.mode === 'html') this.source.value = JmToolbarEditor.prettify(html); if (this.mode === 'preview') this.previewPane.innerHTML = this.editor.getHTML(); }

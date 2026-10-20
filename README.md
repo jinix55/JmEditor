@@ -10,7 +10,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 - 제목 H1~H3, 인용, 순서 / 비순서 목록, 링크
 - 이미지 삽입 (버튼, 드래그 앤 드롭, 붙여넣기)
 - 표 — 툴바에서 N×M 격자로 크기를 고르고, 표 위에서 우클릭하면 행 / 열 추가·삭제, 셀 / 행 배경색 메뉴
-- 이미지 갤러리 블록 — 이미지만 넣는 블록. 드롭하면 줄을 채우며 자동 배치되고 헤더에서 선택 삭제 / 전체 삭제 / 열 수를 바꿉니다. 제목은 선택 사항
+- 이미지 갤러리 블록 — 이미지만 넣는 블록. 드롭하면 원본 비율을 유지한 채 줄마다 가로를 꽉 채우도록 배치되고(세로 사진이 섞여도 줄 높이가 같습니다), 헤더에서 선택 삭제 / 전체 삭제 / 열 수 / 배치 방식(비율 유지·잘라 채움)을 바꿉니다. 제목은 선택 사항
 - 서식(템플릿) 삽입 — 서버에서 받아온 HTML 조각을 골라 본문에 넣습니다. 서식 관리는 별도 화면에서
 - Editor / HTML / 미리보기 모드 전환
 - undo / redo, 한글 IME 조합 처리, 외부 글 붙여넣기 시 허용 태그만 남김
@@ -101,18 +101,27 @@ api: {
 갤러리 블록은 이렇게 저장됩니다.
 
 ```html
-<div data-type="gallery" data-cols="3" data-auto="1">
+<div data-type="gallery" data-cols="3" data-auto="1" data-layout="justify">
   <p data-role="title">현장 사진</p>
-  <img src="..."><img src="..."><img src="...">
+  <img src="..." width="1600" height="1200"><img src="..." width="900" height="1600">
 </div>
 ```
+
+`width` / `height` 는 원본 크기이고 비율 계산에 씁니다. `data-layout="justify"` 갤러리는 조회 페이지에서도 배치 스크립트가 필요합니다.
+
+```js
+import { observeGalleries } from '/js/jm-editor/plugins/gallery/gallery-layout.js';
+observeGalleries(document.querySelector('.jm-content'));
+```
+
+`data-layout="cover"` 는 CSS 만으로 동작합니다.
 
 ## 구조
 
 ```
 src/
   core/      JmEditor.js(진입점), Commands.js, SelectionUtil.js, History.js, Sanitizer.js
-  plugins/   table/, gallery/   — 블록형 기능. 편집 중에만 쓰는 레이어를 씌우고 저장 시 벗김
+  plugins/   table/, gallery/(GalleryCommands, gallery-layout) — 블록형 기능. 편집 중에만 쓰는 레이어를 씌우고 저장 시 벗김
   ui/        JmToolbarEditor.js(툴바), ColorPicker, TableGridPicker, FormatPicker, ContextMenu
   api/       JmEditorApi.js
   styles/    jm-editor.css
