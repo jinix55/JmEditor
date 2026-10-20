@@ -1654,7 +1654,7 @@ class TableCommands {
       const refCell = grid.firstCellInRowFromCol(r, at);
       grid.rows[r].insertBefore(cell, refCell);
     }
-    this.#syncColgroup(table);
+    this.#colgroupInsert(table, at);
     this.#afterChange(table, this.#grid(table).cellAt(rect.r1, at));
   }
 
@@ -1662,9 +1662,8 @@ class TableCommands {
     const rect = this.#targetRect();
     if (!rect) return;
     const { table } = rect;
-    for (let c = rect.c2; c >= rect.c1; c--) this.#deleteOneColumn(table, c);
+    for (let c = rect.c2; c >= rect.c1; c--) { this.#deleteOneColumn(table, c); this.#colgroupRemove(table, c); }
     if (!this.#grid(table).colCount) { this.deleteTable(table); return; }
-    this.#syncColgroup(table);
     const g = this.#grid(table);
     this.#afterChange(table, g.cellAt(rect.r1, Math.min(rect.c1, g.colCount - 1)));
   }
@@ -1960,13 +1959,49 @@ class TableCommands {
     }));
   }
 
-  /** colgroup 의 col 수를 열 수에 맞춤 */
-  #syncColgroup(table) {
+  /** colgroup 의 각 col 너비를 % 로 읽는다 (px 면 표 폭 기준 환산, 없으면 균등) */
+  #colPercents(table) {
+    const cg = table.querySelector(':scope > colgroup');
+    const cols = cg ? Array.from(cg.children) : [];
+    const tw = table.getBoundingClientRect().width || 1;
+    return cols.map((col) => {
+      const w = col.style.width;
+      if (/%$/.test(w)) return parseFloat(w);
+      if (/px$/.test(w)) return (parseFloat(w) / tw) * 100;
+      return NaN;
+    });
+  }
+
+  /** 합이 100% 가 되도록 col 너비를 다시 쓴다 (NaN 은 평균으로) */
+  #writeColPercents(table, pct) {
     const cg = table.querySelector(':scope > colgroup');
     if (!cg) return;
-    const n = this.#grid(table).colCount;
-    while (cg.children.length < n) cg.appendChild(document.createElement('col'));
-    while (cg.children.length > n) cg.lastChild.remove();
+    const known = pct.filter((v) => !Number.isNaN(v));
+    const avg = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 100 / pct.length;
+    const filled = pct.map((v) => (Number.isNaN(v) ? avg : v));
+    const sum = filled.reduce((a, b) => a + b, 0) || 1;
+    Array.from(cg.children).forEach((col, i) => { col.style.width = `${((filled[i] / sum) * 100).toFixed(2)}%`; });
+  }
+
+  /** 열 추가 시: at 위치에 col 을 끼우고 평균 너비를 준 뒤 100% 로 재배분 */
+  #colgroupInsert(table, at) {
+    const cg = table.querySelector(':scope > colgroup');
+    if (!cg) return;
+    const pct = this.#colPercents(table);
+    const col = document.createElement('col');
+    cg.insertBefore(col, cg.children[at] || null);
+    pct.splice(at, 0, NaN);
+    this.#writeColPercents(table, pct);
+  }
+
+  /** 열 삭제 시: 해당 col 을 빼고 100% 로 재배분 */
+  #colgroupRemove(table, c) {
+    const cg = table.querySelector(':scope > colgroup');
+    if (!cg) return;
+    const pct = this.#colPercents(table);
+    cg.children[c]?.remove();
+    pct.splice(c, 1);
+    this.#writeColPercents(table, pct);
   }
 
   /** 변경 후 공통 처리: 선택 해제, 커서 이동, 기록 */
