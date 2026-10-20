@@ -105,7 +105,7 @@ ol[style*="hangul"] > li { counter-increment: jm-hangul; position: relative; }
 ol[style*="hangul"] > li::before { content: counter(jm-hangul, hangul) ". "; position: absolute; left: -24px; }
 @supports not (counter(x, hangul)) { ol[style*="hangul"] > li::before { content: counter(jm-hangul) ". "; } }
 .jm-editor img { max-width: 100%; height: auto; display: block; }
-.jm-editor a { color: #1d4ed8; text-decoration: underline; }
+.jm-editor a { color: #1d4ed8; text-decoration: underline; cursor: text; } /* 편집 중엔 링크를 따라가지 않음 */
 
 /* 표 (에디터·뷰어 공통 규칙은 .jm-content 쪽에도 동일하게 있음) */
 .jm-editor table { border-collapse: collapse; width: 100%; margin: 0 0 8px; table-layout: fixed; }

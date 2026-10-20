@@ -45,7 +45,7 @@ header p{margin:0;color:var(--muted);font-size:.92rem}
 .jm-editor blockquote{margin:8px 0;padding:6px 12px;border-left:3px solid var(--accent);color:var(--muted)}
 .jm-editor ul,.jm-editor ol{margin:0 0 8px;padding-left:24px}
 ol[style*="hangul"]{list-style:none;counter-reset:jm-hangul}ol[style*="hangul"]>li{counter-increment:jm-hangul;position:relative}ol[style*="hangul"]>li::before{content:counter(jm-hangul,hangul) ". ";position:absolute;left:-24px}.jm-editor img{max-width:100%;height:auto;display:block;border-radius:4px}
-.jm-editor a{color:var(--accent);text-decoration:underline}
+.jm-editor a{color:var(--accent);text-decoration:underline;cursor:text}
 .jm-editor table{border-collapse:collapse;width:100%;margin:0 0 8px;table-layout:fixed}
 .jm-editor td,.jm-editor th{border:1px solid var(--line);padding:6px 8px;min-width:40px;vertical-align:top}
 .jm-editor th{background:var(--accent-soft);font-weight:600;text-align:left}
@@ -2902,6 +2902,8 @@ class JmEditor {
     const onDrop = (e) => this.#handleDrop(e);
     const onDragover = (e) => e.preventDefault();
     const onContext = (e) => this.#handleContextMenu(e);
+    // 편집 중에는 링크(버튼 포함)를 따라가지 않는다. 가운데 클릭(auxclick)도 차단
+    const onLinkClick = (e) => { if (e.target.closest?.('a')) e.preventDefault(); };
     const onDocDown = (e) => {
       // 표 밖을 클릭하면 셀 범위 선택 해제
       if (this.table.selection && !this.table.selection.table.contains(e.target)) this.table.clearSelection();
@@ -2922,6 +2924,8 @@ class JmEditor {
     r.addEventListener('drop', onDrop);
     r.addEventListener('dragover', onDragover);
     r.addEventListener('contextmenu', onContext);
+    r.addEventListener('click', onLinkClick);
+    r.addEventListener('auxclick', onLinkClick);
     document.addEventListener('selectionchange', onSelChange);
 
     this.#unbind = () => {
@@ -2933,6 +2937,8 @@ class JmEditor {
       r.removeEventListener('drop', onDrop);
       r.removeEventListener('dragover', onDragover);
       r.removeEventListener('contextmenu', onContext);
+      r.removeEventListener('click', onLinkClick);
+      r.removeEventListener('auxclick', onLinkClick);
       document.removeEventListener('selectionchange', onSelChange);
       document.removeEventListener('mousedown', onDocDown, true);
     };
