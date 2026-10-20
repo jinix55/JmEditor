@@ -13,6 +13,9 @@ import { observeGalleries } from '../plugins/gallery/gallery-layout.js';
 /** 서식 버튼 아이콘 (자체 제작 SVG) */
 const FORMAT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>';
 
+/** 유튜브 버튼 아이콘 (자체 제작 SVG) */
+const YOUTUBE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3z" fill="currentColor"/></svg>';
+
 /** 코드 보기 / 미리보기 아이콘 (자체 제작 SVG) */
 const CODE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 6-6 6 6 6"/><path d="m16 6 6 6-6 6"/><path d="m14 4-4 16"/></svg>';
 const PREVIEW_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -45,6 +48,7 @@ const BUTTONS = [
   null,
   ['link', '링크', (s) => s.a],
   ['image', '이미지', () => false],
+  ['youtube', '유튜브', () => false, false, { icon: YOUTUBE_ICON }],
   ['table', '표', (s) => s.table], // 행·열 편집은 표 레이어 우클릭 메뉴에서
   null,
   ['undo', '↶', () => false],
@@ -90,11 +94,25 @@ export class JmToolbarEditor {
     this.source.className = 'jm-source';
     this.source.hidden = true;
     this.source.spellcheck = false;
+    // 인라인 입력줄 (링크 URL / 유튜브 주소) — 툴바 아래에 펼쳐짐
+    this.inputBar = document.createElement('div');
+    this.inputBar.className = 'jm-inputbar';
+    this.inputBar.hidden = true;
+    this.inputBar.innerHTML = '<span class="jm-inputbar-label"></span><input type="text" class="jm-inputbar-input"><button type="button" class="jm-btn jm-inputbar-ok">적용</button><button type="button" class="jm-btn jm-inputbar-cancel">취소</button>';
+    this.inputLabel = this.inputBar.querySelector('.jm-inputbar-label');
+    this.inputField = this.inputBar.querySelector('.jm-inputbar-input');
+    this.inputBar.querySelector('.jm-inputbar-ok').addEventListener('mousedown', (e) => e.preventDefault());
+    this.inputBar.querySelector('.jm-inputbar-ok').addEventListener('click', () => this.#submitInput());
+    this.inputBar.querySelector('.jm-inputbar-cancel').addEventListener('mousedown', (e) => e.preventDefault());
+    this.inputBar.querySelector('.jm-inputbar-cancel').addEventListener('click', () => this.#closeInput());
+    this.inputField.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.#submitInput(); } if (e.key === 'Escape') this.#closeInput(); });
+    this.inputHandler = null;
+
     // 미리보기 패널 — 저장될 HTML 을 뷰어 스타일(.jm-content)로 렌더
     this.previewPane = document.createElement('div');
     this.previewPane.className = 'jm-preview-pane jm-content';
     this.previewPane.hidden = true;
-    this.container.append(this.toolbarTop, this.toolbar, this.area, this.source, this.previewPane);
+    this.container.append(this.toolbarTop, this.toolbar, this.inputBar, this.area, this.source, this.previewPane);
     this.mode = 'editor'; // 'editor' | 'html' | 'preview'
 
     // 이미지 선택용 숨김 input
@@ -221,8 +239,15 @@ export class JmToolbarEditor {
   #onCommand(cmd) {
     if (cmd === 'link') {
       if (this.editor.getState().a) { this.editor.exec('unlink'); return; }
-      const url = window.prompt('링크 URL 을 입력하세요', 'https://');
-      if (url) this.editor.exec('link', url);
+      this.#openInput('링크 URL', 'https://', (v) => { if (v) this.editor.exec('link', v); return true; });
+      return;
+    }
+    if (cmd === 'youtube') {
+      this.#openInput('유튜브 주소', '', (v) => {
+        if (!v) return true;
+        if (!this.editor.exec('youtube', v)) { this.inputField.setCustomValidity('유튜브 주소가 아닙니다'); this.inputField.reportValidity(); return false; }
+        return true;
+      });
       return;
     }
     if (cmd === 'image') { this.fileInput.click(); return; }
@@ -257,6 +282,34 @@ export class JmToolbarEditor {
     // 현재 색을 버튼 하단 띠로 표시
     this.buttons.color.style.setProperty('--jm-swatch', state.color || 'transparent');
     this.buttons.bgColor.style.setProperty('--jm-swatch', state.bg || 'transparent');
+  }
+
+  /** 인라인 입력줄 열기. handler(value) 가 true 를 돌려주면 닫는다 */
+  #openInput(label, initial, handler) {
+    this.editor.sel.save();
+    this.inputLabel.textContent = label;
+    this.inputField.value = initial;
+    this.inputField.setCustomValidity('');
+    this.inputHandler = handler;
+    this.inputBar.hidden = false;
+    this.inputField.focus();
+    this.inputField.select();
+  }
+
+  #submitInput() {
+    this.inputField.setCustomValidity('');
+    const v = this.inputField.value.trim();
+    this.editor.root.focus();
+    this.editor.sel.restore();
+    if (this.inputHandler?.(v) !== false) this.#closeInput();
+    else this.inputField.focus();
+  }
+
+  #closeInput() {
+    this.inputBar.hidden = true;
+    this.inputHandler = null;
+    this.editor.root.focus();
+    this.editor.sel.restore();
   }
 
   /**

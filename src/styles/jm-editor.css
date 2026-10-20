@@ -227,3 +227,29 @@ div[data-type="gallery"] p[data-role="title"] { flex: 0 0 100%; margin: 0 0 2px;
 .is-block-dragging { opacity: .4; }
 .jm-drop-before { box-shadow: 0 -3px 0 0 #1d4ed8; }
 .jm-drop-after { box-shadow: 0 3px 0 0 #1d4ed8; }
+
+/* 인라인 입력줄 (링크 / 유튜브) */
+.jm-inputbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--jm-border); background: #f8fafc; }
+.jm-inputbar-label { font-size: 12px; color: #475467; white-space: nowrap; }
+.jm-inputbar-input { flex: 1; min-width: 0; padding: 5px 8px; border: 1px solid var(--jm-border); border-radius: 4px; font: 13px ui-monospace, Menlo, monospace; }
+
+/* 유튜브 블록 (저장 HTML 에도 필요 — 뷰어에도 포함) */
+div[data-type="youtube"] { position: relative; margin: 0 0 8px; }
+div[data-type="youtube"][data-width="100"] { width: 100%; }
+div[data-type="youtube"][data-width="75"] { width: 75%; }
+div[data-type="youtube"][data-width="50"] { width: 50%; }
+div[data-type="youtube"][data-align="center"] { margin-left: auto; margin-right: auto; }
+div[data-type="youtube"][data-align="right"] { margin-left: auto; }
+div[data-type="youtube"] iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 6px; background: #000; }
+
+/* 유튜브 레이어 (에디터 전용) */
+.jm-embed-layer { margin: 0 0 8px; border: 1px solid var(--jm-border); border-radius: 6px; background: #fff; }
+.jm-embed-header { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--jm-border); background: #f8fafc; border-radius: 6px 6px 0 0; }
+.jm-embed-title { font-size: 12px; font-weight: 600; color: #344054; }
+.jm-embed-spacer { flex: 1; }
+.jm-embed-width, .jm-embed-align { height: 26px; font-size: 12px; border: 1px solid var(--jm-border); border-radius: 4px; background: #fff; }
+.jm-embed-remove { color: #b42318; }
+.jm-embed-layer div[data-type="youtube"] { margin-top: 8px; margin-bottom: 8px; }
+.jm-embed-layer div[data-type="youtube"][data-align="left"] { margin-left: 8px; }
+.jm-embed-layer div[data-type="youtube"][data-align="right"] { margin-right: 8px; }
+.jm-embed-cover { position: absolute; inset: 0; cursor: default; }

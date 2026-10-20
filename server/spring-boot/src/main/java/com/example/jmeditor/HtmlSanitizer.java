@@ -30,7 +30,7 @@ public class HtmlSanitizer {
 
     private final Safelist safelist = new Safelist()
             .addTags("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
-                     "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div")
+                     "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe")
             .addAttributes("a", "href", "target", "rel")
             .addAttributes("img", "src", "alt", "width", "height")
             .addAttributes("table", "style", "data-border")
@@ -39,7 +39,9 @@ public class HtmlSanitizer {
             .addAttributes("td", "style", "colspan", "rowspan")
             .addAttributes("th", "style", "colspan", "rowspan")
             .addAttributes("span", "style")
-            .addAttributes("div", "data-type", "data-cols", "data-auto", "data-layout", "data-align")   // 이미지 갤러리 블록
+            .addAttributes("div", "data-type", "data-cols", "data-auto", "data-layout", "data-align", "data-width")
+            .addAttributes("iframe", "src", "title", "allow", "allowfullscreen")
+            .addProtocols("iframe", "src", "https")   // 이미지 갤러리 블록
             .addAttributes("p", "data-role")                                 // 갤러리 제목
             .addProtocols("a", "href", "http", "https", "mailto")
             .addProtocols("img", "src", "http", "https", "data")
@@ -70,8 +72,30 @@ public class HtmlSanitizer {
         // 스타일이 없는 span 은 의미 없으므로 언래핑
         for (Element span : doc.select("span:not([style])")) span.unwrap();
 
-        // div 는 갤러리 블록만 허용, 그 외는 p 로 치환. 갤러리 안에는 제목 p 와 img 만
+        // iframe 은 유튜브 블록 안의 embed 주소만 허용
+        Pattern yt = Pattern.compile("^https://www\\.(youtube|youtube-nocookie)\\.com/embed/([A-Za-z0-9_-]{11})([?#].*)?$");
+        for (Element f : doc.select("iframe")) {
+            var m = yt.matcher(f.attr("src"));
+            boolean inBlock = f.parent() != null && "youtube".equals(f.parent().attr("data-type"));
+            if (!inBlock || !m.matches()) { f.remove(); continue; }
+            f.clearAttributes();
+            f.attr("src", "https://www.youtube-nocookie.com/embed/" + m.group(2));
+            f.attr("title", "YouTube video");
+            f.attr("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture");
+            f.attr("allowfullscreen", "");
+        }
+        // div 는 갤러리/유튜브 블록만 허용, 그 외는 p 로 치환
         for (Element div : doc.select("div")) {
+            if ("youtube".equals(div.attr("data-type"))) {
+                if (div.selectFirst("> iframe") == null) { div.remove(); continue; }
+                for (Element child : div.children()) if (!child.tagName().equals("iframe")) child.remove();
+                div.textNodes().forEach(org.jsoup.nodes.Node::remove);
+                String w = div.attr("data-width");
+                if (!w.equals("100") && !w.equals("75") && !w.equals("50")) div.attr("data-width", "100");
+                String a = div.attr("data-align");
+                if (!a.equals("left") && !a.equals("center") && !a.equals("right")) div.attr("data-align", "center");
+                continue;
+            }
             if (!"gallery".equals(div.attr("data-type"))) { div.tagName("p"); div.clearAttributes(); continue; }
             int cols = parseIntOr(div.attr("data-cols"), 3);
             div.attr("data-cols", String.valueOf(Math.max(1, Math.min(6, cols))));

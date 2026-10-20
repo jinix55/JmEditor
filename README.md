@@ -9,6 +9,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 - 굵게 / 기울임 / 밑줄 / 취소선, 글자색 / 배경색 (견본 + HSV 팔레트 + HEX 입력 + 스포이드)
 - 제목 H1~H3, 인용, 순서 / 비순서 목록, 링크
 - 이미지 삽입 (버튼, 드래그 앤 드롭, 붙여넣기)
+- 유튜브 — 주소를 넣으면 16:9 영상 블록이 들어갑니다. 폭(100 / 75 / 50%)과 정렬 선택, ⠿ 핸들로 이동
 - 표 — 툴바에서 N×M 격자로 크기를 골라 삽입. 셀을 드래그(또는 Shift+클릭)하면 범위 선택. 우클릭 메뉴에서 행 / 열 추가·삭제·이동, 머리글 행·열 전환, 셀 병합·분할, 가로·세로 정렬, 셀·행 배경색, 표 폭·테두리. 셀 경계를 끌면 열 너비·행 높이 조절. 왼쪽 위 ⠿ 핸들을 끌어 위치 이동
 - 이미지 갤러리 블록 — 이미지만 넣는 블록. 드롭하면 원본 비율을 유지한 채 줄마다 가로를 꽉 채우도록 배치되고(세로 사진이 섞여도 줄 높이가 같습니다), 헤더에서 선택 삭제 / 전체 삭제 / 열 수 / 배치 방식(비율 유지·잘라 채움) / 정렬(왼쪽·중앙·오른쪽)을 바꿉니다. 사진은 드래그해서 순서를 바꾸고, 헤더의 ⠿ 핸들을 끌면 블록 자체가 다른 위치로 이동합니다. 제목은 선택 사항
 - 서식(템플릿) 삽입 — 서버에서 받아온 HTML 조각을 골라 본문에 넣습니다. 서식 관리는 별도 화면에서
@@ -94,7 +95,7 @@ api: {
 
 ## 저장되는 HTML
 
-허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 그리고 갤러리용 `div[data-type="gallery"]` 입니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height` 만 남고 값 형식도 검사합니다.
+허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만) 입니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height` 만 남고 값 형식도 검사합니다.
 
 표는 이렇게 저장됩니다. 열 너비는 `colgroup`, 행 높이는 `tr`, 병합은 `colspan` / `rowspan`, 테두리 숨김은 `data-border="0"` 입니다.
 
