@@ -200,3 +200,9 @@ div[data-type="gallery"] p[data-role="title"] { flex: 0 0 100%; margin: 0 0 2px;
 .jm-gallery-layer .jm-gallery img { cursor: pointer; outline: 3px solid transparent; outline-offset: -3px; transition: outline-color .1s; }
 .jm-gallery-layer .jm-gallery img:hover { outline-color: #a9c4ff; }
 .jm-gallery-layer .jm-gallery img.is-selected { outline-color: #1d4ed8; box-shadow: 0 0 0 2px #fff inset; }
+/* 갤러리 사진 순서 이동 (드래그) */
+.jm-gallery-layer .jm-gallery img { cursor: grab; }
+.jm-gallery-layer .jm-gallery img.is-dragging { opacity: .4; }
+.jm-gallery-layer .jm-gallery img.drop-before { box-shadow: -4px 0 0 0 #1d4ed8; }
+.jm-gallery-layer .jm-gallery img.drop-after { box-shadow: 4px 0 0 0 #1d4ed8; }
+.jm-gallery-move { min-width: 28px; padding: 0 4px; }

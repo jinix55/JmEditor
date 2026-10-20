@@ -139,10 +139,15 @@ export class GalleryCommands {
     count.className = 'jm-gallery-count';
     gallery._countEl = count;
 
+    const up = mk('▲', () => this.moveBlock(gallery, -1), 'jm-gallery-move');
+    up.title = '위로 이동';
+    const down = mk('▼', () => this.moveBlock(gallery, 1), 'jm-gallery-move');
+    down.title = '아래로 이동';
+
     const remove = mk('✕', () => this.deleteGallery(gallery), 'jm-gallery-remove');
     remove.title = '갤러리 삭제';
 
-    h.append(title, count, add, delSel, delAll, cols, layout, remove);
+    h.append(title, count, add, delSel, delAll, cols, layout, up, down, remove);
     return h;
   }
 
@@ -154,11 +159,53 @@ export class GalleryCommands {
       img.classList.toggle(SELECTED_CLASS);
       this.#refreshHeader(gallery);
     });
-    gallery.addEventListener('dragover', (e) => { e.preventDefault(); gallery.classList.add('is-dragover'); });
-    gallery.addEventListener('dragleave', () => gallery.classList.remove('is-dragover'));
+    // 사진 순서 이동: 갤러리 안의 img 를 드래그해 다른 img 앞/뒤에 놓는다
+    let dragging = null;
+    gallery.addEventListener('dragstart', (e) => {
+      const img = e.target.closest?.('img');
+      if (!img || img.parentNode !== gallery) return;
+      dragging = img;
+      img.classList.add('is-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', 'jm-gallery-reorder'); // Firefox 는 데이터가 있어야 드래그 시작
+    });
+    gallery.addEventListener('dragend', () => {
+      dragging?.classList.remove('is-dragging');
+      gallery.querySelectorAll('.drop-before, .drop-after').forEach((el) => el.classList.remove('drop-before', 'drop-after'));
+      dragging = null;
+    });
+    gallery.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (dragging) {
+        // 마우스가 대상 이미지의 왼쪽 절반이면 앞, 오른쪽 절반이면 뒤
+        e.dataTransfer.dropEffect = 'move';
+        gallery.querySelectorAll('.drop-before, .drop-after').forEach((el) => el.classList.remove('drop-before', 'drop-after'));
+        const over = e.target.closest?.('img');
+        if (over && over !== dragging && over.parentNode === gallery) {
+          const r = over.getBoundingClientRect();
+          over.classList.add(e.clientX < r.left + r.width / 2 ? 'drop-before' : 'drop-after');
+        }
+        return;
+      }
+      gallery.classList.add('is-dragover');
+    });
+    gallery.addEventListener('dragleave', (e) => { if (!gallery.contains(e.relatedTarget)) gallery.classList.remove('is-dragover'); });
     gallery.addEventListener('drop', async (e) => {
       e.preventDefault(); e.stopPropagation();
       gallery.classList.remove('is-dragover');
+      if (dragging) {
+        const over = e.target.closest?.('img');
+        if (over && over !== dragging && over.parentNode === gallery) {
+          const r = over.getBoundingClientRect();
+          const before = e.clientX < r.left + r.width / 2;
+          gallery.insertBefore(dragging, before ? over : over.nextSibling);
+        } else if (!over) {
+          gallery.appendChild(dragging); // 빈 영역에 놓으면 맨 뒤로
+        }
+        this.#layout(gallery);
+        this.editor.commit();
+        return;
+      }
       const files = Array.from(e.dataTransfer?.files || []).filter((f) => f.type.startsWith('image/'));
       if (files.length) await this.addFiles(gallery, files);
     });
@@ -209,6 +256,21 @@ export class GalleryCommands {
   deleteAll(gallery) {
     gallery.querySelectorAll('img').forEach((img) => img.remove());
     this.#layout(gallery);
+    this.editor.commit();
+  }
+
+  /**
+   * 갤러리 블록을 문서에서 위/아래로 한 칸 이동 (앞·뒤 형제 블록과 자리 바꿈)
+   * @param {HTMLElement} gallery
+   * @param {-1|1} dir
+   */
+  moveBlock(gallery, dir) {
+    const layer = gallery.closest(`.${GALLERY_LAYER_CLASS}`) || gallery;
+    const sibling = dir < 0 ? layer.previousElementSibling : layer.nextElementSibling;
+    if (!sibling) return;
+    if (dir < 0) layer.parentNode.insertBefore(layer, sibling);
+    else layer.parentNode.insertBefore(sibling, layer);
+    layer.scrollIntoView({ block: 'nearest' });
     this.editor.commit();
   }
 
