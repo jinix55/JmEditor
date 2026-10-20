@@ -24,6 +24,10 @@ const OL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" str
 /** 글자 크기 선택지 (px) */
 const FONT_SIZES = [10, 11, 12, 13, 14, 15, 16, 18, 20, 24, 28, 32, 36, 48];
 
+/** 링크 / 이미지 버튼 아이콘 (자체 제작 SVG) */
+const LINK_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
+const IMAGE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-8 8"/></svg>';
+
 /** 표 버튼 아이콘 (자체 제작 SVG) */
 const TABLE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg>';
 
@@ -69,8 +73,8 @@ const BUTTONS = [
   ['ol', '순서 목록', (s) => s.list === 'ol', false, { tip: '순서 목록', icon: OL_ICON, iconOnly: true, splitMain: true }],
   ['olType', '순서 목록 유형', () => false, false, { tip: '순서 목록 유형', icon: CHEVRON_ICON, iconOnly: true, splitArrow: true }],
   null,
-  ['link', '링크', (s) => s.a],
-  ['image', '이미지', () => false],
+  ['link', '링크', (s) => s.a, false, { tip: '링크', icon: LINK_ICON, iconOnly: true }],
+  ['image', '이미지', () => false, false, { tip: '이미지', icon: IMAGE_ICON, iconOnly: true }],
   ['youtube', '유튜브', () => false, false, { icon: YOUTUBE_ICON, iconOnly: true }], // 아이콘만 표시 (라벨은 title)
   ['table', '표', (s) => s.table, false, { tip: '표 삽입', icon: TABLE_ICON, iconOnly: true }], // 행·열 편집은 표 레이어 우클릭 메뉴에서
   null,
