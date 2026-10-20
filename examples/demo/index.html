@@ -101,6 +101,14 @@ div[data-type="slider"] > img.is-current, div[data-type="slider"]:not(:has(> img
 .jm-slider-bar { width: 28px; height: 4px; padding: 0; border: 0; border-radius: 2px; background: rgba(255,255,255,.5); cursor: pointer; }
 .jm-slider-bar.is-current { background: var(--panel); }
 .jm-slider-ind-numbers { justify-content: flex-end; right: 12px; left: auto; }
+.jm-slider-pos-bottom-left,.jm-slider-pos-top-left{justify-content:flex-start;padding-left:12px}
+.jm-slider-pos-bottom-right,.jm-slider-pos-top-right{justify-content:flex-end;padding-right:12px}
+.jm-slider-pos-top-left,.jm-slider-pos-top-center,.jm-slider-pos-top-right{bottom:auto;top:10px}
+div[data-type="slider"] p[data-role="title"]~.jm-slider-pos-top-left,div[data-type="slider"] p[data-role="title"]~.jm-slider-pos-top-center,div[data-type="slider"] p[data-role="title"]~.jm-slider-pos-top-right{top:calc(10px + 1.4em + 6px)}
+.jm-slider-pos-below{position:static;margin-top:8px}
+.jm-slider-pos-below .jm-slider-dot,.jm-slider-pos-below .jm-slider-bar{background:var(--line)}
+.jm-slider-pos-below .jm-slider-dot.is-current,.jm-slider-pos-below .jm-slider-bar.is-current{background:var(--accent)}
+.jm-slider-pos-below .jm-slider-num{background:var(--code);color:var(--fg)}
 .jm-slider-num { padding: 3px 10px; border-radius: 12px; background: rgba(0,0,0,.55); color: var(--panel); font-size: 12px; font-variant-numeric: tabular-nums; }
 .jm-slider-layer { margin: 0 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
 .jm-slider-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--accent-soft); border-radius: 6px 6px 0 0; }
@@ -108,7 +116,7 @@ div[data-type="slider"] > img.is-current, div[data-type="slider"]:not(:has(> img
 .jm-slider-count { flex: 1; font-size: 11px; color: var(--muted); }
 .jm-slider-btn { height: 26px; padding: 0 8px; font-size: 12px; }
 .jm-slider-btn:disabled { opacity: .4; cursor: default; }
-.jm-slider-interval, .jm-slider-ratio, .jm-slider-indicator, .jm-slider-width, .jm-slider-align { height: 26px; font-size: 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+.jm-slider-interval, .jm-slider-ratio, .jm-slider-indicator, .jm-slider-indpos, .jm-slider-width, .jm-slider-align { height: 26px; font-size: 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
 .jm-slider-remove { color: #d14343; }
 .jm-slider-layer div[data-type="slider"] { margin-top: 8px; margin-bottom: 8px; }
 .jm-slider-layer div[data-type="slider"][data-align="left"] { margin-left: 8px; }
@@ -389,6 +397,8 @@ class Sanitizer {
       b.setAttribute('data-ratio', ['16:9', '4:3', '1:1', '21:9'].includes(ratio) ? ratio : '16:9');
       const ind = node.getAttribute('data-indicator');
       b.setAttribute('data-indicator', ['dots', 'numbers', 'bars', 'none'].includes(ind) ? ind : 'dots');
+      const pos = node.getAttribute('data-indicator-pos');
+      b.setAttribute('data-indicator-pos', ['bottom-center', 'bottom-left', 'bottom-right', 'top-left', 'top-center', 'top-right', 'below'].includes(pos) ? pos : 'bottom-center');
       const w = node.getAttribute('data-width');
       b.setAttribute('data-width', ['100', '75', '50'].includes(w) ? w : '100');
       const al = node.getAttribute('data-align');
@@ -2936,6 +2946,7 @@ class ButtonsCommands {
  * - div[data-type="slider"] 안의 img 들을 한 장씩 보여주며 data-interval(ms, 0 이면 수동) 간격으로 자동 전환한다.
  * - 화살표·인디케이터는 런타임이 붙이는 UI(.jm-slider-ui) 로, 저장 HTML 에는 포함되지 않는다.
  * - data-indicator: dots(점) | numbers(현재/전체) | bars(막대) | none
+ * - data-indicator-pos: bottom-center(기본) | bottom-left | bottom-right | top-left | top-center | top-right | below(이미지 아래)
  * - 마우스를 올리면 자동 전환을 멈춘다.
  *
  * 뷰어 페이지:
@@ -2974,7 +2985,7 @@ function initSlider(block) {
     list.forEach((img, i) => img.classList.toggle('is-current', i === index));
     dots.innerHTML = '';
     const kind = block.dataset.indicator || 'dots';
-    dots.className = `${UI} jm-slider-dots jm-slider-ind-${kind}`;
+    dots.className = `${UI} jm-slider-dots jm-slider-ind-${kind} jm-slider-pos-${block.dataset.indicatorPos || 'bottom-center'}`;
     if (kind === 'numbers') {
       const n = document.createElement('span');
       n.className = 'jm-slider-num';
@@ -3071,7 +3082,7 @@ class SliderCommands {
   }
 
   static template(interval = 3000, ratio = '16:9') {
-    return `<div data-type="slider" data-interval="${interval}" data-ratio="${ratio}" data-indicator="dots" data-width="100" data-align="center"></div>`;
+    return `<div data-type="slider" data-interval="${interval}" data-ratio="${ratio}" data-indicator="dots" data-indicator-pos="bottom-center" data-width="100" data-align="center"></div>`;
   }
 
   // ───────────── 레이어 ─────────────
@@ -3134,10 +3145,11 @@ class SliderCommands {
     const interval = mkSelect('jm-slider-interval', [['0', '수동'], ['2000', '2초'], ['3000', '3초'], ['5000', '5초'], ['8000', '8초']], String(parseInt(block.dataset.interval, 10) || 0), (v) => { block.dataset.interval = v; block._slider?.refresh(); }, '자동 전환 간격');
     const ratio = mkSelect('jm-slider-ratio', [['16:9', '16:9'], ['4:3', '4:3'], ['1:1', '1:1'], ['21:9', '21:9']], block.dataset.ratio || '16:9', (v) => { block.dataset.ratio = v; }, '화면 비율');
     const indicator = mkSelect('jm-slider-indicator', [['dots', '점'], ['numbers', '숫자'], ['bars', '막대'], ['none', '표시 없음']], block.dataset.indicator || 'dots', (v) => { block.dataset.indicator = v; block._slider?.refresh(); }, '인디케이터');
+    const indPos = mkSelect('jm-slider-indpos', [['bottom-center', '아래 가운데'], ['bottom-left', '아래 왼쪽'], ['bottom-right', '아래 오른쪽'], ['top-left', '위 왼쪽'], ['top-center', '위 가운데'], ['top-right', '위 오른쪽'], ['below', '이미지 밖 아래']], block.dataset.indicatorPos || 'bottom-center', (v) => { block.dataset.indicatorPos = v; block._slider?.refresh(); }, '인디케이터 위치');
     const width = mkSelect('jm-slider-width', [['100', '폭 100%'], ['75', '폭 75%'], ['50', '폭 50%']], block.dataset.width || '100', (v) => { block.dataset.width = v; }, '본문에서 보이는 폭');
     const align = mkSelect('jm-slider-align', [['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']], block.dataset.align || 'center', (v) => { block.dataset.align = v; }, '정렬');
     const remove = mk('✕', () => this.#deleteBlock(block), 'jm-slider-remove', '슬라이드 삭제');
-    h.append(handle, title, count, add, delSel, delAll, interval, ratio, indicator, width, align, remove);
+    h.append(handle, title, count, add, delSel, delAll, interval, ratio, indicator, indPos, width, align, remove);
     return h;
   }
 
@@ -4426,7 +4438,7 @@ editor.setHTML(`<h2>공지사항 작성 샘플</h2>
 <tr><td>셀 경계를 끌어 열 너비·행 높이 조절</td><td>10/22</td><td>10/25</td></tr>
 <tr><td>우클릭 → 셀 배경색… / 행 배경색…</td><td style="background-color:#e1bee7">기획</td><td>10/23</td><td style="text-align:right">10/27</td></tr>
 </tbody></table>
-<div data-type="slider" data-interval="3000" data-ratio="16:9" data-indicator="dots" data-width="75" data-align="center"><p data-role="title">행사 사진 — 3초마다 자동 전환</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjMmY2ZjRlIi8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMTwvdGV4dD48L3N2Zz4=" alt="슬라이드 1" width="1280" height="720"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjM2I2ZWE1Ii8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMjwvdGV4dD48L3N2Zz4=" alt="슬라이드 2" width="1280" height="720"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMzwvdGV4dD48L3N2Zz4=" alt="슬라이드 3" width="1280" height="720"></div>
+<div data-type="slider" data-interval="3000" data-ratio="16:9" data-indicator="dots" data-indicator-pos="bottom-center" data-width="75" data-align="center"><p data-role="title">행사 사진 — 3초마다 자동 전환</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjMmY2ZjRlIi8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMTwvdGV4dD48L3N2Zz4=" alt="슬라이드 1" width="1280" height="720"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjM2I2ZWE1Ii8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMjwvdGV4dD48L3N2Zz4=" alt="슬라이드 2" width="1280" height="720"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMzwvdGV4dD48L3N2Zz4=" alt="슬라이드 3" width="1280" height="720"></div>
 <div data-type="youtube" data-width="75" data-align="center"><iframe src="https://www.youtube-nocookie.com/embed/M2lu8RiZhW0" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
 <div data-type="gallery" data-cols="3" data-layout="justify"><p data-role="title">현장 사진 — 사진은 드래그로 순서 변경, 헤더의 ⠿ 로 블록 이동</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJmNmY0ZSIvPjx0ZXh0IHg9IjQwMCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDQ6MzwvdGV4dD48L3N2Zz4=" alt="가로 4:3" width="800" height="600"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzNiNmVhNSIvPjx0ZXh0IHg9IjMwMCIgeT0iNDEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDM6NDwvdGV4dD48L3N2Zz4=" alt="세로 3:4" width="600" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjUwMCI+PHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNTAwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjAwIiB5PSIyNjIiIGZvbnQtc2l6ZT0iNjIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7tjIzrhbjrnbzrp4g8L3RleHQ+PC9zdmc+" alt="파노라마" width="1200" height="500"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NTAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNDUwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzZiNGZhMCIvPjx0ZXh0IHg9IjIyNSIgeT0iNDEyIiBmb250LXNpemU9IjU2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDk6MTY8L3RleHQ+PC9zdmc+" alt="세로 9:16" width="450" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MDAiIGhlaWdodD0iNzAwIj48cmVjdCB3aWR0aD0iNzAwIiBoZWlnaHQ9IjcwMCIgZmlsbD0iIzhhNmQzYiIvPjx0ZXh0IHg9IjM1MCIgeT0iMzYyIiBmb250LXNpemU9Ijg3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7KCV7IKs6rCBPC90ZXh0Pjwvc3ZnPg==" alt="정사각" width="700" height="700"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iOTAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJhN2Y4ZiIvPjx0ZXh0IHg9IjQ1MCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDM6MjwvdGV4dD48L3N2Zz4=" alt="가로 3:2" width="900" height="600"></div>
 <div data-type="buttons" data-align="center"><a href="https://github.com/jinix55/JmEditor" data-role="button" data-style="primary">GitHub 저장소</a><a href="https://jinix55.github.io/JmEditor/" data-role="button" data-style="outline">데모 페이지</a></div>

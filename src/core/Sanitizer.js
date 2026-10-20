@@ -115,6 +115,8 @@ export class Sanitizer {
       b.setAttribute('data-ratio', ['16:9', '4:3', '1:1', '21:9'].includes(ratio) ? ratio : '16:9');
       const ind = node.getAttribute('data-indicator');
       b.setAttribute('data-indicator', ['dots', 'numbers', 'bars', 'none'].includes(ind) ? ind : 'dots');
+      const pos = node.getAttribute('data-indicator-pos');
+      b.setAttribute('data-indicator-pos', ['bottom-center', 'bottom-left', 'bottom-right', 'top-left', 'top-center', 'top-right', 'below'].includes(pos) ? pos : 'bottom-center');
       const w = node.getAttribute('data-width');
       b.setAttribute('data-width', ['100', '75', '50'].includes(w) ? w : '100');
       const al = node.getAttribute('data-align');

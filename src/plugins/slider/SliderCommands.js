@@ -32,7 +32,7 @@ export class SliderCommands {
   }
 
   static template(interval = 3000, ratio = '16:9') {
-    return `<div data-type="slider" data-interval="${interval}" data-ratio="${ratio}" data-indicator="dots" data-width="100" data-align="center"></div>`;
+    return `<div data-type="slider" data-interval="${interval}" data-ratio="${ratio}" data-indicator="dots" data-indicator-pos="bottom-center" data-width="100" data-align="center"></div>`;
   }
 
   // ───────────── 레이어 ─────────────
@@ -95,10 +95,11 @@ export class SliderCommands {
     const interval = mkSelect('jm-slider-interval', [['0', '수동'], ['2000', '2초'], ['3000', '3초'], ['5000', '5초'], ['8000', '8초']], String(parseInt(block.dataset.interval, 10) || 0), (v) => { block.dataset.interval = v; block._slider?.refresh(); }, '자동 전환 간격');
     const ratio = mkSelect('jm-slider-ratio', [['16:9', '16:9'], ['4:3', '4:3'], ['1:1', '1:1'], ['21:9', '21:9']], block.dataset.ratio || '16:9', (v) => { block.dataset.ratio = v; }, '화면 비율');
     const indicator = mkSelect('jm-slider-indicator', [['dots', '점'], ['numbers', '숫자'], ['bars', '막대'], ['none', '표시 없음']], block.dataset.indicator || 'dots', (v) => { block.dataset.indicator = v; block._slider?.refresh(); }, '인디케이터');
+    const indPos = mkSelect('jm-slider-indpos', [['bottom-center', '아래 가운데'], ['bottom-left', '아래 왼쪽'], ['bottom-right', '아래 오른쪽'], ['top-left', '위 왼쪽'], ['top-center', '위 가운데'], ['top-right', '위 오른쪽'], ['below', '이미지 밖 아래']], block.dataset.indicatorPos || 'bottom-center', (v) => { block.dataset.indicatorPos = v; block._slider?.refresh(); }, '인디케이터 위치');
     const width = mkSelect('jm-slider-width', [['100', '폭 100%'], ['75', '폭 75%'], ['50', '폭 50%']], block.dataset.width || '100', (v) => { block.dataset.width = v; }, '본문에서 보이는 폭');
     const align = mkSelect('jm-slider-align', [['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']], block.dataset.align || 'center', (v) => { block.dataset.align = v; }, '정렬');
     const remove = mk('✕', () => this.#deleteBlock(block), 'jm-slider-remove', '슬라이드 삭제');
-    h.append(handle, title, count, add, delSel, delAll, interval, ratio, indicator, width, align, remove);
+    h.append(handle, title, count, add, delSel, delAll, interval, ratio, indicator, indPos, width, align, remove);
     return h;
   }
 
