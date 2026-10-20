@@ -25,6 +25,8 @@ header p{margin:0;color:var(--muted);font-size:.92rem}
 .jm-sep{width:1px;height:22px;margin:0 4px;background:var(--line)}
 .jm-select{height:30px;padding:0 6px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--fg);font:13px var(--sans)}
 .jm-select:disabled{opacity:.4}
+.jm-btn-dropdown{gap:2px;padding-right:4px}
+.jm-btn-dropdown svg:last-child{opacity:.6}
 .jm-btn-split-main{border-radius:5px 0 0 5px;border-color:var(--line)}
 .jm-btn-split-arrow{min-width:22px;padding:0 4px;margin-left:-5px;border-radius:0 5px 5px 0;border-color:var(--line);border-left-color:transparent;background:var(--code)}
 .jm-btn-split-main:hover+.jm-btn-split-arrow,.jm-btn-split-arrow:hover{border-left-color:var(--line)}
@@ -4548,8 +4550,7 @@ const BUTTONS = [
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
   ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),selectDefault:['','기본']}],null,
   ['h1','H1',s=>s.block==='h1'],['h2','H2',s=>s.block==='h2'],['h3','H3',s=>s.block==='h3'],['quote','인용',s=>s.block==='blockquote',false,{tip:'인용',icon:QUOTE_ICON,iconOnly:true}],null,
-  ['alignLeft','왼쪽 정렬',s=>s.align==='left',false,{tip:'왼쪽 정렬',icon:ALIGN_LEFT_ICON,iconOnly:true}],['alignCenter','가운데 정렬',s=>s.align==='center',false,{tip:'가운데 정렬',icon:ALIGN_CENTER_ICON,iconOnly:true}],['alignRight','오른쪽 정렬',s=>s.align==='right',false,{tip:'오른쪽 정렬',icon:ALIGN_RIGHT_ICON,iconOnly:true}],
-  ['valignTop','위 정렬',s=>s.table&&s.valign==='top',false,{tip:'셀 위 정렬 (표)',icon:VALIGN_TOP_ICON,iconOnly:true,tableEnabled:true}],['valignMiddle','중간 정렬',s=>s.table&&s.valign==='middle',false,{tip:'셀 중간 정렬 (표)',icon:VALIGN_MIDDLE_ICON,iconOnly:true,tableEnabled:true}],['valignBottom','아래 정렬',s=>s.table&&s.valign==='bottom',false,{tip:'셀 아래 정렬 (표)',icon:VALIGN_BOTTOM_ICON,iconOnly:true,tableEnabled:true}],null,
+  ['alignMenu','가로 정렬',()=>false,false,{tip:'가로 정렬',icon:ALIGN_LEFT_ICON,iconOnly:true,dropdown:true}],['valignMenu','세로 정렬',()=>false,false,{tip:'세로 정렬 (표 셀)',icon:VALIGN_TOP_ICON,iconOnly:true,dropdown:true,tableEnabled:true}],null,
   ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true,splitMain:true}],['ulType','비순서 목록 유형',()=>false,false,{tip:'비순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true,splitMain:true}],['olType','순서 목록 유형',()=>false,false,{tip:'순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],null,
   ['link','링크',s=>s.a,false,{tip:'링크',icon:LINK_ICON,iconOnly:true}],['image','이미지',()=>false,false,{tip:'이미지',icon:IMAGE_ICON,iconOnly:true}],['youtube','유튜브',()=>false,false,{icon:YOUTUBE_ICON,iconOnly:true}],['table','표',s=>s.table,false,{tip:'표 삽입',icon:TABLE_ICON,iconOnly:true}],null,
   ['undo','실행 취소',()=>false,false,{tip:'실행 취소 (Ctrl+Z)',icon:UNDO_ICON,iconOnly:true}],['redo','다시 실행',()=>false,false,{tip:'다시 실행 (Ctrl+Y)',icon:REDO_ICON,iconOnly:true}]];
@@ -4559,6 +4560,8 @@ const linkbar=document.getElementById('linkbar'), linkUrl=document.getElementByI
 const fileInput=document.getElementById('file');
 const colorPicker=new ColorPicker();
 const listMenu=new ContextMenu();
+const ALIGN_ITEMS=[['left','왼쪽',ALIGN_LEFT_ICON],['center','가운데',ALIGN_CENTER_ICON],['right','오른쪽',ALIGN_RIGHT_ICON]];
+const VALIGN_ITEMS=[['top','위',VALIGN_TOP_ICON],['middle','중간',VALIGN_MIDDLE_ICON],['bottom','아래',VALIGN_BOTTOM_ICON]];
 const UL_TYPES=[['disc','● 기본'],['circle','○ 원'],['square','■ 사각']];
 const OL_TYPES=[['decimal','1. 숫자'],['decimal-leading-zero','01. 숫자(0 채움)'],['lower-alpha','a. 소문자'],['upper-alpha','A. 대문자'],['lower-roman','i. 로마 소문자'],['upper-roman','I. 로마 대문자'],['hangul','가. 한글']];
 // 서식 목록: 테스트 샘플(SAMPLE_FORMATS). 운영에서는 서식 관리 API(fetch) 로 교체
@@ -4578,7 +4581,7 @@ BUTTONS.forEach(def=>{
   if(opts.select){const sel=document.createElement('select');sel.className='jm-select';sel.dataset.cmd=cmd;sel.title=opts.tip||'';[opts.selectDefault,...opts.select].filter(Boolean).forEach(([v,tx])=>{const o=document.createElement('option');o.value=v;o.textContent=tx;sel.appendChild(o);});sel.addEventListener('mousedown',()=>editor.sel.save());sel.addEventListener('change',()=>editor.exec(cmd,sel.value||null));(opts.row==='top'?toolbarTop:toolbar).appendChild(sel);btns[cmd]=sel;return;}
   const b=document.createElement('button');
   b.type='button';b.className='jm-btn';b.title=opts.tip||cmd;b.dataset.cmd=cmd;
-  if(opts.icon){b.classList.add('jm-btn-icon');b.innerHTML=opts.iconOnly?opts.icon:opts.icon+'<span>'+label+'</span>';b.setAttribute('aria-label',label);b.title=label;}else b.textContent=label;
+  if(opts.icon){b.classList.add('jm-btn-icon');b.innerHTML=opts.iconOnly?opts.icon:opts.icon+'<span>'+label+'</span>';if(opts.dropdown){b.classList.add('jm-btn-dropdown');b.innerHTML+=CHEVRON_ICON;}b.setAttribute('aria-label',label);b.title=label;}else b.textContent=label;
   if(opts.right)b.classList.add('jm-btn-right');if(opts.splitMain)b.classList.add('jm-btn-split-main');if(opts.splitArrow)b.classList.add('jm-btn-split-arrow');if(opts.group)b.classList.add('jm-btn-seg');if(opts.segFirst)b.classList.add('jm-btn-seg-first');if(opts.segLast)b.classList.add('jm-btn-seg-last');
   if(tableOnly)b.hidden=true; // 표 안에서만 표시
   b.addEventListener('mousedown',e=>e.preventDefault()); // 선택 영역 유지
@@ -4596,6 +4599,7 @@ function run(cmd){
   }
   if(cmd==='image'){fileInput.click();return;}
   if(cmd==='color'||cmd==='bgColor'){const s=editor.getState();editor.sel.save();colorPicker.toggleAt(btns[cmd],c=>editor.exec(cmd,c),{current:cmd==='color'?s.color:s.bg,sampleMode:cmd==='color'?'color':'background'});return;}
+  if(cmd==='alignMenu'||cmd==='valignMenu'){const r=btns[cmd].getBoundingClientRect();editor.sel.save();const items=cmd==='alignMenu'?ALIGN_ITEMS:VALIGN_ITEMS;const prefix=cmd==='alignMenu'?'align':'valign';listMenu.open(r.left,r.bottom+4,items.map(([v,label])=>({label,action:()=>editor.exec(prefix+v.charAt(0).toUpperCase()+v.slice(1))})));return;}
   if(cmd==='ulType'||cmd==='olType'){const tag=cmd==='ulType'?'ul':'ol';const r=btns[cmd].getBoundingClientRect();editor.sel.save();listMenu.open(r.left,r.bottom+4,(tag==='ul'?UL_TYPES:OL_TYPES).map(([v,label])=>({label,action:()=>editor.exec(tag,v)})));return;}
   if(cmd==='table'){editor.sel.save();gridPicker.toggle(btns.table);return;}
   if(cmd==='format'){editor.sel.save();formatPicker.toggle(btns.format);return;}
@@ -4616,6 +4620,8 @@ document.getElementById('linkCancel').addEventListener('click',closeInput);
 linkUrl.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('linkOk').click();if(e.key==='Escape')document.getElementById('linkCancel').click();});
 fileInput.addEventListener('change',()=>{editor.insertImageFile(fileInput.files[0]);fileInput.value='';});
 function refresh(){if(mode!=='editor')return;const s=editor.getState();BUTTONS.forEach(d=>{if(!d)return;btns[d[0]].classList.toggle('is-active',!!d[2](s));if(d[3])btns[d[0]].hidden=!s.table;if(d[4]?.tableEnabled)btns[d[0]].disabled=!s.table;});
+  const setIcon=(c,icon)=>{if(btns[c])btns[c].innerHTML=icon+CHEVRON_ICON;};
+  setIcon('alignMenu',(ALIGN_ITEMS.find(([v])=>v===s.align)||ALIGN_ITEMS[0])[2]);setIcon('valignMenu',(VALIGN_ITEMS.find(([v])=>v===s.valign)||VALIGN_ITEMS[0])[2]);
   if(btns.fontSize)btns.fontSize.value=FONT_SIZES.map(n=>n+'px').includes(s.fontSize)?s.fontSize:'';
   btns.color.style.setProperty('--jm-swatch',s.color||'transparent');btns.bgColor.style.setProperty('--jm-swatch',s.bg||'transparent');}
 

@@ -35,6 +35,10 @@
 
 .jm-select { height: 30px; padding: 0 6px; border: 1px solid var(--jm-border); border-radius: 4px; background: var(--jm-bg); color: var(--jm-text); font-size: 13px; }
 .jm-select:disabled { opacity: .4; }
+/* 드롭다운 버튼 (아이콘 + 꺾쇠) */
+.jm-btn-dropdown { gap: 2px; padding-right: 4px; }
+.jm-btn-dropdown svg:last-child { opacity: .6; }
+
 /* 스플릿 버튼 (목록 + 유형 꺾쇠) */
 .jm-btn-split-main { border-radius: 4px 0 0 4px; border-color: var(--jm-border); }
 .jm-btn-split-arrow { min-width: 22px; padding: 0 4px; margin-left: -5px; /* 툴바 gap(4px)+테두리 1px 상쇄 */ border-radius: 0 4px 4px 0; border-color: var(--jm-border); border-left-color: transparent; background: #f8fafc; }
