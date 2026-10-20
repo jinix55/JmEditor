@@ -1974,7 +1974,8 @@ class TableCommands {
   }
 
   getState() {
-    return { table: !!this.getTable(), tableSelection: !!this.selection };
+    const cell = this.getCell();
+    return { table: !!this.getTable(), tableSelection: !!this.selection, valign: cell ? (cell.style.verticalAlign || 'top') : null };
   }
 
   // ───────────── 내부 유틸 ─────────────
@@ -3467,6 +3468,7 @@ class JmEditor {
    *                      |color|bgColor (value: 색상 문자열, null 이면 해제)
    *                      |fontSize (value: '14px' 등, null 이면 해제)
    *                      |alignLeft|alignCenter|alignRight (블록 가로 정렬)
+   *                      |valignTop|valignMiddle|valignBottom (표 셀 세로 정렬)
    *                      |format (value: 삽입할 HTML — 서식/템플릿. 내부에서 sanitize 후 블록 단위 삽입)
    *                      |gallery (value: {cols, auto} — 이미지 갤러리 블록 삽입)
    *                      |youtube (value: 유튜브 주소 또는 동영상 ID)
@@ -3505,6 +3507,9 @@ class JmEditor {
       alignLeft: () => (this.table.selection ? this.table.setAlign('left') : c.setAlign('left')),
       alignCenter: () => (this.table.selection ? this.table.setAlign('center') : c.setAlign('center')),
       alignRight: () => (this.table.selection ? this.table.setAlign('right') : c.setAlign('right')),
+      valignTop: () => this.table.setVAlign('top'),
+      valignMiddle: () => this.table.setVAlign('middle'),
+      valignBottom: () => this.table.setVAlign('bottom'),
       undo: () => this.history.undo(),
       redo: () => this.history.redo(),
       // 표
@@ -4525,6 +4530,9 @@ const OL_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" strok
 const ALIGN_LEFT_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h12M3 18h16"/></svg>';
 const ALIGN_CENTER_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M6 12h12M4 18h16"/></svg>';
 const ALIGN_RIGHT_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M9 12h12M5 18h16"/></svg>';
+const VALIGN_TOP_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16"/><rect x="8" y="8" width="8" height="10" rx="1"/></svg>';
+const VALIGN_MIDDLE_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 12h4M16 12h4"/><rect x="8" y="7" width="8" height="10" rx="1"/></svg>';
+const VALIGN_BOTTOM_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20h16"/><rect x="8" y="6" width="8" height="10" rx="1"/></svg>';
 const LINK_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
 const IMAGE_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-8 8"/></svg>';
 const TABLE_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg>';
@@ -4537,7 +4545,8 @@ const BUTTONS = [
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
   ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),selectDefault:['','기본']}],null,
   ['h1','H1',s=>s.block==='h1'],['h2','H2',s=>s.block==='h2'],['h3','H3',s=>s.block==='h3'],['quote','❝ 인용',s=>s.block==='blockquote'],null,
-  ['alignLeft','왼쪽 정렬',s=>s.align==='left',false,{tip:'왼쪽 정렬',icon:ALIGN_LEFT_ICON,iconOnly:true}],['alignCenter','가운데 정렬',s=>s.align==='center',false,{tip:'가운데 정렬',icon:ALIGN_CENTER_ICON,iconOnly:true}],['alignRight','오른쪽 정렬',s=>s.align==='right',false,{tip:'오른쪽 정렬',icon:ALIGN_RIGHT_ICON,iconOnly:true}],null,
+  ['alignLeft','왼쪽 정렬',s=>s.align==='left',false,{tip:'왼쪽 정렬',icon:ALIGN_LEFT_ICON,iconOnly:true}],['alignCenter','가운데 정렬',s=>s.align==='center',false,{tip:'가운데 정렬',icon:ALIGN_CENTER_ICON,iconOnly:true}],['alignRight','오른쪽 정렬',s=>s.align==='right',false,{tip:'오른쪽 정렬',icon:ALIGN_RIGHT_ICON,iconOnly:true}],
+  ['valignTop','위 정렬',s=>s.table&&s.valign==='top',false,{tip:'셀 위 정렬 (표)',icon:VALIGN_TOP_ICON,iconOnly:true,tableEnabled:true}],['valignMiddle','중간 정렬',s=>s.table&&s.valign==='middle',false,{tip:'셀 중간 정렬 (표)',icon:VALIGN_MIDDLE_ICON,iconOnly:true,tableEnabled:true}],['valignBottom','아래 정렬',s=>s.table&&s.valign==='bottom',false,{tip:'셀 아래 정렬 (표)',icon:VALIGN_BOTTOM_ICON,iconOnly:true,tableEnabled:true}],null,
   ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true,splitMain:true}],['ulType','비순서 목록 유형',()=>false,false,{tip:'비순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true,splitMain:true}],['olType','순서 목록 유형',()=>false,false,{tip:'순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],null,
   ['link','링크',s=>s.a,false,{tip:'링크',icon:LINK_ICON,iconOnly:true}],['image','이미지',()=>false,false,{tip:'이미지',icon:IMAGE_ICON,iconOnly:true}],['youtube','유튜브',()=>false,false,{icon:YOUTUBE_ICON,iconOnly:true}],['table','표',s=>s.table,false,{tip:'표 삽입',icon:TABLE_ICON,iconOnly:true}],null,
   ['undo','↶',()=>false],['redo','↷',()=>false]];
@@ -4603,7 +4612,7 @@ document.getElementById('linkCancel').addEventListener('mousedown',e=>e.preventD
 document.getElementById('linkCancel').addEventListener('click',closeInput);
 linkUrl.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('linkOk').click();if(e.key==='Escape')document.getElementById('linkCancel').click();});
 fileInput.addEventListener('change',()=>{editor.insertImageFile(fileInput.files[0]);fileInput.value='';});
-function refresh(){if(mode!=='editor')return;const s=editor.getState();BUTTONS.forEach(d=>{if(!d)return;btns[d[0]].classList.toggle('is-active',!!d[2](s));if(d[3])btns[d[0]].hidden=!s.table;});
+function refresh(){if(mode!=='editor')return;const s=editor.getState();BUTTONS.forEach(d=>{if(!d)return;btns[d[0]].classList.toggle('is-active',!!d[2](s));if(d[3])btns[d[0]].hidden=!s.table;if(d[4]?.tableEnabled)btns[d[0]].disabled=!s.table;});
   if(btns.fontSize)btns.fontSize.value=FONT_SIZES.map(n=>n+'px').includes(s.fontSize)?s.fontSize:'';
   btns.color.style.setProperty('--jm-swatch',s.color||'transparent');btns.bgColor.style.setProperty('--jm-swatch',s.bg||'transparent');}
 

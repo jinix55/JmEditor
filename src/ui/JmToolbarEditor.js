@@ -23,6 +23,11 @@ const ALIGN_LEFT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="n
 const ALIGN_CENTER_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M6 12h12M4 18h16"/></svg>';
 const ALIGN_RIGHT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M9 12h12M5 18h16"/></svg>';
 
+/** 세로 정렬 아이콘 (표 셀 전용) */
+const VALIGN_TOP_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4h16"/><rect x="8" y="8" width="8" height="10" rx="1"/></svg>';
+const VALIGN_MIDDLE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 12h4M16 12h4"/><rect x="8" y="7" width="8" height="10" rx="1"/></svg>';
+const VALIGN_BOTTOM_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20h16"/><rect x="8" y="6" width="8" height="10" rx="1"/></svg>';
+
 /** 목록 버튼 아이콘 (자체 제작 SVG) */
 const UL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none"/><path d="M10 6h10M10 12h10M10 18h10"/></svg>';
 const OL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><text x="2.5" y="8" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">1</text><text x="2.5" y="14" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">2</text><text x="2.5" y="20" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">3</text></svg>';
@@ -76,6 +81,10 @@ const BUTTONS = [
   ['alignLeft', '왼쪽 정렬', (s) => s.align === 'left', false, { tip: '왼쪽 정렬', icon: ALIGN_LEFT_ICON, iconOnly: true }],
   ['alignCenter', '가운데 정렬', (s) => s.align === 'center', false, { tip: '가운데 정렬', icon: ALIGN_CENTER_ICON, iconOnly: true }],
   ['alignRight', '오른쪽 정렬', (s) => s.align === 'right', false, { tip: '오른쪽 정렬', icon: ALIGN_RIGHT_ICON, iconOnly: true }],
+  // 세로 정렬: 표 셀 안에서만 활성 (tableOnlyEnabled)
+  ['valignTop', '위 정렬', (s) => s.table && s.valign === 'top', false, { tip: '셀 위 정렬 (표)', icon: VALIGN_TOP_ICON, iconOnly: true, tableEnabled: true }],
+  ['valignMiddle', '중간 정렬', (s) => s.table && s.valign === 'middle', false, { tip: '셀 중간 정렬 (표)', icon: VALIGN_MIDDLE_ICON, iconOnly: true, tableEnabled: true }],
+  ['valignBottom', '아래 정렬', (s) => s.table && s.valign === 'bottom', false, { tip: '셀 아래 정렬 (표)', icon: VALIGN_BOTTOM_ICON, iconOnly: true, tableEnabled: true }],
   null,
   // 목록: 스플릿 버튼 (본 버튼 = 토글, 오른쪽 꺾쇠 = 유형 메뉴)
   ['ul', '비순서 목록', (s) => s.list === 'ul', false, { tip: '비순서 목록', icon: UL_ICON, iconOnly: true, splitMain: true }],
@@ -346,6 +355,7 @@ export class JmToolbarEditor {
       const [cmd, , isActive, tableOnly] = def;
       this.buttons[cmd].classList.toggle('is-active', !!isActive(state));
       if (tableOnly) this.buttons[cmd].hidden = !state.table;
+      if (def[4]?.tableEnabled) this.buttons[cmd].disabled = !state.table;
     });
     // 현재 글자 크기 표시
     if (this.buttons.fontSize) this.buttons.fontSize.value = FONT_SIZES.map((n) => `${n}px`).includes(state.fontSize) ? state.fontSize : '';
