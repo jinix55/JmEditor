@@ -21,6 +21,9 @@ const YOUTUBE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none
 const UL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none"/><path d="M10 6h10M10 12h10M10 18h10"/></svg>';
 const OL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><text x="2.5" y="8" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">1</text><text x="2.5" y="14" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">2</text><text x="2.5" y="20" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">3</text></svg>';
 
+/** 글자 크기 선택지 (px) */
+const FONT_SIZES = [10, 11, 12, 13, 14, 15, 16, 18, 20, 24, 28, 32, 36, 48];
+
 /** 목록 유형 (list-style-type) */
 const UL_TYPES = [['disc', '● 기본'], ['circle', '○ 원'], ['square', '■ 사각']];
 const OL_TYPES = [['decimal', '1. 숫자'], ['decimal-leading-zero', '01. 숫자(0 채움)'], ['lower-alpha', 'a. 소문자'], ['upper-alpha', 'A. 대문자'], ['lower-roman', 'i. 로마 소문자'], ['upper-roman', 'I. 로마 대문자'], ['hangul', '가. 한글']];
@@ -47,6 +50,7 @@ const BUTTONS = [
   ['strike', 'S', (s) => s.s, false, { tip: '취소선' }],
   ['color', 'A', (s) => !!s.color, false, { tip: '글자색' }],     // 버튼 하단 색 띠로 현재 색 표시
   ['bgColor', 'A', (s) => !!s.bg, false, { tip: '글자 배경색' }],
+  ['fontSize', '크기', () => false, false, { tip: '글자 크기', select: FONT_SIZES.map((n) => [`${n}px`, `${n}px`]), selectDefault: ['', '기본'] }],
   null, // 구분선
   ['h1', 'H1', (s) => s.block === 'h1'],
   ['h2', 'H2', (s) => s.block === 'h2'],
@@ -226,6 +230,19 @@ export class JmToolbarEditor {
       }
       const [cmd, label, , tableOnly, opts = {}] = def;
       const bar = opts.row === 'top' ? this.toolbarTop : this.toolbar;
+      if (opts.select) {
+        // 셀렉트형 컨트롤 (글자 크기 등): 값 선택 시 exec(cmd, value)
+        const sel = document.createElement('select');
+        sel.className = 'jm-select';
+        sel.dataset.cmd = cmd;
+        if (opts.tip) sel.title = opts.tip;
+        [opts.selectDefault, ...opts.select].filter(Boolean).forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); });
+        sel.addEventListener('mousedown', () => this.editor.sel.save());
+        sel.addEventListener('change', () => { this.editor.exec(cmd, sel.value || null); });
+        bar.appendChild(sel);
+        this.buttons[cmd] = sel;
+        return;
+      }
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'jm-btn';
@@ -308,6 +325,8 @@ export class JmToolbarEditor {
       this.buttons[cmd].classList.toggle('is-active', !!isActive(state));
       if (tableOnly) this.buttons[cmd].hidden = !state.table;
     });
+    // 현재 글자 크기 표시
+    if (this.buttons.fontSize) this.buttons.fontSize.value = FONT_SIZES.map((n) => `${n}px`).includes(state.fontSize) ? state.fontSize : '';
     // 현재 색을 버튼 하단 띠로 표시
     this.buttons.color.style.setProperty('--jm-swatch', state.color || 'transparent');
     this.buttons.bgColor.style.setProperty('--jm-swatch', state.bg || 'transparent');

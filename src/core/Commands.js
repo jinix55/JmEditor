@@ -228,10 +228,11 @@ export class Commands {
   /** 현재 커서 위치의 글자색/배경색 */
   getStyleState() {
     const r = this.sel.getRange();
-    if (!r) return { color: null, bg: null };
+    if (!r) return { color: null, bg: null, fontSize: null };
     return {
       color: this.#findStyledAncestor(r.startContainer, 'color')?.style.color || null,
       bg: this.#findStyledAncestor(r.startContainer, 'background-color')?.style.backgroundColor || null,
+      fontSize: this.#findStyledAncestor(r.startContainer, 'font-size')?.style.fontSize || null,
     };
   }
 

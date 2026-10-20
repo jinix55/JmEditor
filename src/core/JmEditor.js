@@ -68,6 +68,7 @@ export class JmEditor {
    * @param {string} name bold|italic|underline|strike|h1|h2|h3|paragraph|quote|ul|ol|link|unlink|image|undo|redo
    *                      |table|tableRowBelow|tableRowAbove|tableColRight|tableColLeft|tableDeleteRow|tableDeleteCol|tableDelete
    *                      |color|bgColor (value: 색상 문자열, null 이면 해제)
+   *                      |fontSize (value: '14px' 등, null 이면 해제)
    *                      |format (value: 삽입할 HTML — 서식/템플릿. 내부에서 sanitize 후 블록 단위 삽입)
    *                      |gallery (value: {cols, auto} — 이미지 갤러리 블록 삽입)
    *                      |youtube (value: 유튜브 주소 또는 동영상 ID)
@@ -99,6 +100,7 @@ export class JmEditor {
       buttons: () => c.insertBlockHTML(ButtonsCommands.template(value?.align)),
       color: () => c.setStyle('color', value ?? null),
       bgColor: () => c.setStyle('background-color', value ?? null),
+      fontSize: () => c.setStyle('font-size', value ?? null),
       undo: () => this.history.undo(),
       redo: () => this.history.redo(),
       // 표

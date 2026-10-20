@@ -10,7 +10,7 @@ const ALLOWED = {
   h1: [], h2: [], h3: [],
   ul: ['style'], ol: ['style', 'start'], li: [],
   blockquote: [],
-  a: ['href', 'target', 'rel', 'data-role', 'data-style'], // data-role=button → 버튼 모양 링크
+  a: ['href', 'target', 'rel', 'data-role', 'data-style', 'data-size'], // data-role=button → 버튼 모양 링크
   img: ['src', 'alt', 'width', 'height'],
   table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style'],
   tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
@@ -27,6 +27,7 @@ const ALLOWED_STYLE = {
   'vertical-align': (v) => /^(top|middle|bottom)$/i.test(v),
   'width': (v) => /^\d+(\.\d+)?(px|%)$/i.test(v) || v === 'auto',
   'height': (v) => /^\d+(\.\d+)?px$/i.test(v),
+  'font-size': (v) => { const m = v.match(/^(\d+)px$/i); return !!m && +m[1] >= 8 && +m[1] <= 96; },
   'list-style-type': (v) => /^(disc|circle|square|decimal|decimal-leading-zero|lower-alpha|upper-alpha|lower-roman|upper-roman|hangul|hangul-consonant|none)$/i.test(v),
 };
 
@@ -175,8 +176,11 @@ export class Sanitizer {
     // 링크는 새창 + noopener 강제. 버튼 링크 속성은 허용 값만
     if (tag === 'a') {
       el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer');
-      if (el.getAttribute('data-role') !== 'button') { el.removeAttribute('data-role'); el.removeAttribute('data-style'); }
-      else if (!['primary', 'outline', 'gray'].includes(el.getAttribute('data-style'))) el.setAttribute('data-style', 'primary');
+      if (el.getAttribute('data-role') !== 'button') { el.removeAttribute('data-role'); el.removeAttribute('data-style'); el.removeAttribute('data-size'); }
+      else {
+        if (!['primary', 'outline', 'gray'].includes(el.getAttribute('data-style'))) el.setAttribute('data-style', 'primary');
+        if (!['sm', 'lg'].includes(el.getAttribute('data-size'))) el.removeAttribute('data-size');
+      }
     }
 
     Array.from(node.childNodes).forEach((c) => {
