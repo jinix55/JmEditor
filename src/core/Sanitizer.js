@@ -47,6 +47,7 @@ export class Sanitizer {
     const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
     const frag = document.createDocumentFragment();
     Array.from(doc.body.childNodes).forEach((n) => {
+      if (n.nodeType === Node.TEXT_NODE && !n.textContent.trim()) return; // 최상위 공백 텍스트(블록 사이 줄바꿈) 제거
       const r = Sanitizer.#cleanNode(n);
       if (r) frag.appendChild(r);
     });

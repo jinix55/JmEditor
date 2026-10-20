@@ -412,6 +412,8 @@ export class JmEditor {
       return;
     }
     Array.from(r.childNodes).forEach((n) => {
+      // 블록 사이 줄바꿈 같은 공백 텍스트는 단락으로 만들지 않고 제거
+      if (n.nodeType === Node.TEXT_NODE && !n.textContent.replace(/[\s\u200B]/g, '')) { n.remove(); return; }
       const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider'].includes(n.dataset?.type));
       if (!isBlock) {
         const p = document.createElement('p');
