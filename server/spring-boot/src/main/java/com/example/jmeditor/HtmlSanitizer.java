@@ -31,7 +31,7 @@ public class HtmlSanitizer {
     private final Safelist safelist = new Safelist()
             .addTags("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
                      "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe")
-            .addAttributes("a", "href", "target", "rel")
+            .addAttributes("a", "href", "target", "rel", "data-role", "data-style")
             .addAttributes("img", "src", "alt", "width", "height")
             .addAttributes("table", "style", "data-border")
             .addAttributes("col", "style")
@@ -72,6 +72,11 @@ public class HtmlSanitizer {
         // 스타일이 없는 span 은 의미 없으므로 언래핑
         for (Element span : doc.select("span:not([style])")) span.unwrap();
 
+        // 버튼 링크: data-role=button 일 때만 data-style 허용
+        for (Element a : doc.select("a")) {
+            if (!"button".equals(a.attr("data-role"))) { a.removeAttr("data-role"); a.removeAttr("data-style"); }
+            else if (!java.util.Set.of("primary", "outline", "gray").contains(a.attr("data-style"))) a.attr("data-style", "primary");
+        }
         // iframe 은 유튜브 블록 안의 embed 주소만 허용
         Pattern yt = Pattern.compile("^https://www\\.(youtube|youtube-nocookie)\\.com/embed/([A-Za-z0-9_-]{11})([?#].*)?$");
         for (Element f : doc.select("iframe")) {

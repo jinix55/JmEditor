@@ -72,6 +72,10 @@ div[data-type="youtube"] iframe{display:block;width:100%;aspect-ratio:16/9;borde
 .jm-embed-info{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;background:linear-gradient(transparent,rgba(0,0,0,.75));color:#fff}
 .jm-embed-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .jm-embed-author{font-size:12px;opacity:.85}
+a[data-role="button"]{display:inline-block;padding:8px 18px;border-radius:6px;font-weight:600;text-decoration:none!important;line-height:1.3;border:1px solid transparent}
+a[data-role="button"][data-style="primary"]{background:var(--accent);color:#fff!important}
+a[data-role="button"][data-style="outline"]{background:transparent;color:var(--accent)!important;border-color:var(--accent)}
+a[data-role="button"][data-style="gray"]{background:var(--line);color:var(--fg)!important}
 .jm-btn[hidden]{display:none!important}
 .jm-table-layer{position:relative;margin:0 0 8px;padding:6px;border:1px dashed transparent;border-radius:4px}
 .jm-table-layer:hover,.jm-table-layer:focus-within{border-color:var(--accent);background:var(--accent-soft)}
@@ -200,7 +204,7 @@ const ALLOWED = {
   h1: [], h2: [], h3: [],
   ul: [], ol: [], li: [],
   blockquote: [],
-  a: ['href', 'target', 'rel'],
+  a: ['href', 'target', 'rel', 'data-role', 'data-style'], // data-role=button → 버튼 모양 링크
   img: ['src', 'alt', 'width', 'height'],
   table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style'],
   tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
@@ -347,8 +351,12 @@ class Sanitizer {
       });
       return frag;
     }
-    // 링크는 새창 + noopener 강제
-    if (tag === 'a') { el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer'); }
+    // 링크는 새창 + noopener 강제. 버튼 링크 속성은 허용 값만
+    if (tag === 'a') {
+      el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer');
+      if (el.getAttribute('data-role') !== 'button') { el.removeAttribute('data-role'); el.removeAttribute('data-style'); }
+      else if (!['primary', 'outline', 'gray'].includes(el.getAttribute('data-style'))) el.setAttribute('data-style', 'primary');
+    }
 
     Array.from(node.childNodes).forEach((c) => {
       const r = Sanitizer.#cleanNode(c);
@@ -924,14 +932,16 @@ class Commands {
     if (!range) return;
     const existing = this.sel.closest('a');
 
-    if (!url || existing) {
-      if (existing) {
+    if (existing) {
+      if (url) { existing.href = url; }                       // 기존 링크: 주소만 수정
+      else {                                                 // 해제
         while (existing.firstChild) existing.parentNode.insertBefore(existing.firstChild, existing);
         existing.remove();
       }
-      if (!url) { this.editor.commit(); return; }
+      this.editor.commit();
+      return;
     }
-    if (range.collapsed) return;
+    if (!url || range.collapsed) return;
 
     const a = document.createElement('a');
     a.href = url;
@@ -3445,6 +3455,12 @@ const SAMPLE_FORMATS = [
     html: `<h3>확인 사항</h3><ul><li>☐ 항목 1</li><li>☐ 항목 2</li><li>☐ 항목 3</li></ul>`,
   },
   {
+    id: 'button-link',
+    name: '버튼 링크',
+    description: '버튼 모양 링크. 글자를 고치고 「링크」로 주소를 바꾸세요',
+    html: `<p><a href="https://example.com" data-role="button" data-style="primary">자세히 보기</a> <a href="https://example.com" data-role="button" data-style="outline">신청하기</a></p>`,
+  },
+  {
     id: 'image-gallery',
     name: '이미지 갤러리',
     description: '이미지만 넣는 블록. 드롭/추가 시 자동 균등 배치, 헤더에서 선택·전체 삭제',
@@ -3504,8 +3520,9 @@ BUTTONS.forEach(def=>{
 });
 function run(cmd){
   if(cmd==='link'){
-    if(editor.getState().a){editor.exec('unlink');return;}
-    openInput('링크 URL','https://',v=>{if(v)editor.exec('link',v);return true;});return;
+    const a=editor.sel.closest('a');
+    if(a)openInput('링크 URL (비우면 해제)',a.getAttribute('href')||'',v=>{editor.exec(v?'link':'unlink',v);return true;});
+    else openInput('링크 URL','https://',v=>{if(v)editor.exec('link',v);return true;});return;
   }
   if(cmd==='youtube'){
     openInput('유튜브 주소','',v=>{if(!v)return true;if(!editor.exec('youtube',v)){linkUrl.setCustomValidity('유튜브 주소가 아닙니다');linkUrl.reportValidity();return false;}return true;});return;
@@ -3563,6 +3580,7 @@ editor.setHTML(`<h2>공지사항 작성 샘플</h2>
 </tbody></table>
 <div data-type="youtube" data-width="75" data-align="center"><iframe src="https://www.youtube-nocookie.com/embed/M2lu8RiZhW0" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
 <div data-type="gallery" data-cols="3" data-layout="justify"><p data-role="title">현장 사진 — 사진은 드래그로 순서 변경, 헤더의 ⠿ 로 블록 이동</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJmNmY0ZSIvPjx0ZXh0IHg9IjQwMCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDQ6MzwvdGV4dD48L3N2Zz4=" alt="가로 4:3" width="800" height="600"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzNiNmVhNSIvPjx0ZXh0IHg9IjMwMCIgeT0iNDEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDM6NDwvdGV4dD48L3N2Zz4=" alt="세로 3:4" width="600" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjUwMCI+PHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNTAwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjAwIiB5PSIyNjIiIGZvbnQtc2l6ZT0iNjIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7tjIzrhbjrnbzrp4g8L3RleHQ+PC9zdmc+" alt="파노라마" width="1200" height="500"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NTAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNDUwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzZiNGZhMCIvPjx0ZXh0IHg9IjIyNSIgeT0iNDEyIiBmb250LXNpemU9IjU2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDk6MTY8L3RleHQ+PC9zdmc+" alt="세로 9:16" width="450" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MDAiIGhlaWdodD0iNzAwIj48cmVjdCB3aWR0aD0iNzAwIiBoZWlnaHQ9IjcwMCIgZmlsbD0iIzhhNmQzYiIvPjx0ZXh0IHg9IjM1MCIgeT0iMzYyIiBmb250LXNpemU9Ijg3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7KCV7IKs6rCBPC90ZXh0Pjwvc3ZnPg==" alt="정사각" width="700" height="700"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iOTAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJhN2Y4ZiIvPjx0ZXh0IHg9IjQ1MCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDM6MjwvdGV4dD48L3N2Zz4=" alt="가로 3:2" width="900" height="600"></div>
+<p><a href="https://github.com/jinix55/JmEditor" data-role="button" data-style="primary">GitHub 저장소</a> <a href="https://jinix55.github.io/JmEditor/" data-role="button" data-style="outline">데모 페이지</a></p>
 <p>참고 링크: <a href="https://developer.mozilla.org/ko/docs/Web/API/Range">MDN Range API</a></p>`);
 </script>
 </body>

@@ -313,14 +313,16 @@ export class Commands {
     if (!range) return;
     const existing = this.sel.closest('a');
 
-    if (!url || existing) {
-      if (existing) {
+    if (existing) {
+      if (url) { existing.href = url; }                       // 기존 링크: 주소만 수정
+      else {                                                 // 해제
         while (existing.firstChild) existing.parentNode.insertBefore(existing.firstChild, existing);
         existing.remove();
       }
-      if (!url) { this.editor.commit(); return; }
+      this.editor.commit();
+      return;
     }
-    if (range.collapsed) return;
+    if (!url || range.collapsed) return;
 
     const a = document.createElement('a');
     a.href = url;
