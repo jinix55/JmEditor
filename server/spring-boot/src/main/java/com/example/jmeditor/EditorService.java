@@ -44,7 +44,7 @@ public class EditorService {
     @Transactional(readOnly = true)
     public List<EditorDto.FormatResponse> formats() {
         return formatRepository.findByUseYnOrderBySortOrderAscIdAsc("Y").stream()
-                .map(f -> new EditorDto.FormatResponse(f.getId(), f.getName(), f.getDescription(), sanitizer.clean(f.getHtml())))
+                .map(f -> new EditorDto.FormatResponse(f.getId(), f.getName(), f.getCategory(), f.getDescription(), sanitizer.clean(f.getHtml())))
                 .toList();
     }
 

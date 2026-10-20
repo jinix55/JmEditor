@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS editor_content (
 CREATE TABLE IF NOT EXISTS editor_format (
     id          BIGSERIAL PRIMARY KEY,
     name        VARCHAR(100) NOT NULL,
+    category    VARCHAR(50),                                -- 서식 목록에서 묶어 보여줄 분류
     description VARCHAR(300),
     html        TEXT         NOT NULL,                      -- 에디터 허용 태그 범위로 작성
     sort_order  INT          NOT NULL DEFAULT 0,
