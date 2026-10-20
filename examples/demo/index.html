@@ -25,7 +25,10 @@ header p{margin:0;color:var(--muted);font-size:.92rem}
 .jm-sep{width:1px;height:22px;margin:0 4px;background:var(--line)}
 .jm-select{height:30px;padding:0 6px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--fg);font:13px var(--sans)}
 .jm-select:disabled{opacity:.4}
-.jm-btn-compact{min-width:18px;padding:0 2px;margin-left:-4px;font-size:10px}
+.jm-btn-split-main{border-radius:5px 0 0 5px;border-color:var(--line)}
+.jm-btn-split-arrow{min-width:22px;padding:0 4px;margin-left:-1px;border-radius:0 5px 5px 0;border-color:var(--line);border-left-color:transparent;background:var(--code)}
+.jm-btn-split-main:hover+.jm-btn-split-arrow,.jm-btn-split-arrow:hover{border-left-color:var(--line)}
+.jm-btn-split-main.is-active+.jm-btn-split-arrow{border-color:var(--accent)}
 .jm-btn-right{margin-left:auto}
 .jm-btn:disabled{opacity:.4;cursor:default}
 .jm-container [hidden]{display:none!important}
@@ -3843,6 +3846,7 @@ const sourceEl=document.getElementById('source');
 const YOUTUBE_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3z" fill="currentColor"/></svg>';
 const UL_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none"/><path d="M10 6h10M10 12h10M10 18h10"/></svg>';
 const OL_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><text x="2.5" y="8" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">1</text><text x="2.5" y="14" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">2</text><text x="2.5" y="20" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">3</text></svg>';
+const CHEVRON_ICON='<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 const FONT_SIZES=[10,11,12,13,14,15,16,18,20,24,28,32,36,48];
 const BUTTONS = [
   ['modeEditor','Editor',s=>mode==='editor',false,{group:'mode',segFirst:true,row:'top'}],
@@ -3851,7 +3855,7 @@ const BUTTONS = [
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
   ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),selectDefault:['','기본']}],null,
   ['h1','H1',s=>s.block==='h1'],['h2','H2',s=>s.block==='h2'],['h3','H3',s=>s.block==='h3'],['quote','❝ 인용',s=>s.block==='blockquote'],null,
-  ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true}],['ulType','▾',()=>false,false,{tip:'비순서 목록 유형',compact:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true}],['olType','▾',()=>false,false,{tip:'순서 목록 유형',compact:true}],null,
+  ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true,splitMain:true}],['ulType','비순서 목록 유형',()=>false,false,{tip:'비순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true,splitMain:true}],['olType','순서 목록 유형',()=>false,false,{tip:'순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],null,
   ['link','링크',s=>s.a],['image','이미지',()=>false],['youtube','유튜브',()=>false,false,{icon:YOUTUBE_ICON,iconOnly:true}],['table','표',s=>s.table],null,
   ['undo','↶',()=>false],['redo','↷',()=>false]];
 const toolbar=document.getElementById('toolbar'), toolbarTop=document.getElementById('toolbarTop'), btns={};
@@ -3880,7 +3884,7 @@ BUTTONS.forEach(def=>{
   const b=document.createElement('button');
   b.type='button';b.className='jm-btn';b.title=opts.tip||cmd;b.dataset.cmd=cmd;
   if(opts.icon){b.classList.add('jm-btn-icon');b.innerHTML=opts.iconOnly?opts.icon:opts.icon+'<span>'+label+'</span>';b.setAttribute('aria-label',label);b.title=label;}else b.textContent=label;
-  if(opts.right)b.classList.add('jm-btn-right');if(opts.compact)b.classList.add('jm-btn-compact');if(opts.group)b.classList.add('jm-btn-seg');if(opts.segFirst)b.classList.add('jm-btn-seg-first');if(opts.segLast)b.classList.add('jm-btn-seg-last');
+  if(opts.right)b.classList.add('jm-btn-right');if(opts.splitMain)b.classList.add('jm-btn-split-main');if(opts.splitArrow)b.classList.add('jm-btn-split-arrow');if(opts.group)b.classList.add('jm-btn-seg');if(opts.segFirst)b.classList.add('jm-btn-seg-first');if(opts.segLast)b.classList.add('jm-btn-seg-last');
   if(tableOnly)b.hidden=true; // 표 안에서만 표시
   b.addEventListener('mousedown',e=>e.preventDefault()); // 선택 영역 유지
   b.addEventListener('click',()=>run(cmd));
