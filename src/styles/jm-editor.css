@@ -336,14 +336,8 @@ div[data-type="slider"] > img.is-current, div[data-type="slider"]:not(:has(> img
 .jm-slider-bar { width: 28px; height: 4px; padding: 0; border: 0; border-radius: 2px; background: rgba(255,255,255,.5); cursor: pointer; }
 .jm-slider-bar.is-current { background: #fff; }
 /* 인디케이터 위치 */
-.jm-slider-pos-bottom-left, .jm-slider-pos-top-left { justify-content: flex-start; padding-left: 12px; }
-.jm-slider-pos-bottom-right, .jm-slider-pos-top-right { justify-content: flex-end; padding-right: 12px; }
-.jm-slider-pos-top-left, .jm-slider-pos-top-center, .jm-slider-pos-top-right { bottom: auto; top: 10px; }
-div[data-type="slider"] p[data-role="title"] ~ .jm-slider-pos-top-left, div[data-type="slider"] p[data-role="title"] ~ .jm-slider-pos-top-center, div[data-type="slider"] p[data-role="title"] ~ .jm-slider-pos-top-right { top: calc(10px + 1.4em + 6px); } /* 제목이 있으면 그 아래 */
-.jm-slider-pos-below { position: static; margin-top: 8px; }
-.jm-slider-pos-below .jm-slider-dot, .jm-slider-pos-below .jm-slider-bar { background: #cfd4dc; }
-.jm-slider-pos-below .jm-slider-dot.is-current, .jm-slider-pos-below .jm-slider-bar.is-current { background: #1d4ed8; }
-.jm-slider-pos-below .jm-slider-num { background: #e4e7ec; color: #344054; }
+.jm-slider-pos-bottom-left { justify-content: flex-start; padding-left: 12px; }
+.jm-slider-pos-bottom-right { justify-content: flex-end; padding-right: 12px; }
 .jm-slider-num { padding: 3px 10px; border-radius: 12px; background: rgba(0,0,0,.55); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; }
 
 /* 슬라이드 레이어 (에디터 전용) */
