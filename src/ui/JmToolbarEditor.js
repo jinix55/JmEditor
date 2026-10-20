@@ -35,6 +35,10 @@ const VALIGN_TOP_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="n
 const VALIGN_MIDDLE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 12h4M16 12h4"/><rect x="8" y="7" width="8" height="10" rx="1"/></svg>';
 const VALIGN_BOTTOM_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20h16"/><rect x="8" y="6" width="8" height="10" rx="1"/></svg>';
 
+/** 정렬 메뉴 항목 */
+const ALIGN_ITEMS = [['left', '왼쪽', ALIGN_LEFT_ICON], ['center', '가운데', ALIGN_CENTER_ICON], ['right', '오른쪽', ALIGN_RIGHT_ICON]];
+const VALIGN_ITEMS = [['top', '위', VALIGN_TOP_ICON], ['middle', '중간', VALIGN_MIDDLE_ICON], ['bottom', '아래', VALIGN_BOTTOM_ICON]];
+
 /** 목록 버튼 아이콘 (자체 제작 SVG) */
 const UL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none"/><path d="M10 6h10M10 12h10M10 18h10"/></svg>';
 const OL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><text x="2.5" y="8" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">1</text><text x="2.5" y="14" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">2</text><text x="2.5" y="20" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">3</text></svg>';
@@ -85,13 +89,9 @@ const BUTTONS = [
   ['h3', 'H3', (s) => s.block === 'h3'],
   ['quote', '인용', (s) => s.block === 'blockquote', false, { tip: '인용', icon: QUOTE_ICON, iconOnly: true }],
   null,
-  ['alignLeft', '왼쪽 정렬', (s) => s.align === 'left', false, { tip: '왼쪽 정렬', icon: ALIGN_LEFT_ICON, iconOnly: true }],
-  ['alignCenter', '가운데 정렬', (s) => s.align === 'center', false, { tip: '가운데 정렬', icon: ALIGN_CENTER_ICON, iconOnly: true }],
-  ['alignRight', '오른쪽 정렬', (s) => s.align === 'right', false, { tip: '오른쪽 정렬', icon: ALIGN_RIGHT_ICON, iconOnly: true }],
-  // 세로 정렬: 표 셀 안에서만 활성 (tableOnlyEnabled)
-  ['valignTop', '위 정렬', (s) => s.table && s.valign === 'top', false, { tip: '셀 위 정렬 (표)', icon: VALIGN_TOP_ICON, iconOnly: true, tableEnabled: true }],
-  ['valignMiddle', '중간 정렬', (s) => s.table && s.valign === 'middle', false, { tip: '셀 중간 정렬 (표)', icon: VALIGN_MIDDLE_ICON, iconOnly: true, tableEnabled: true }],
-  ['valignBottom', '아래 정렬', (s) => s.table && s.valign === 'bottom', false, { tip: '셀 아래 정렬 (표)', icon: VALIGN_BOTTOM_ICON, iconOnly: true, tableEnabled: true }],
+  // 정렬: 드롭다운 두 개 (가로 / 세로). 버튼 아이콘은 현재 상태를 보여주고, 누르면 목록
+  ['alignMenu', '가로 정렬', () => false, false, { tip: '가로 정렬', icon: ALIGN_LEFT_ICON, iconOnly: true, dropdown: true }],
+  ['valignMenu', '세로 정렬', () => false, false, { tip: '세로 정렬 (표 셀)', icon: VALIGN_TOP_ICON, iconOnly: true, dropdown: true, tableEnabled: true }],
   null,
   // 목록: 스플릿 버튼 (본 버튼 = 토글, 오른쪽 꺾쇠 = 유형 메뉴)
   ['ul', '비순서 목록', (s) => s.list === 'ul', false, { tip: '비순서 목록', icon: UL_ICON, iconOnly: true, splitMain: true }],
@@ -296,6 +296,7 @@ export class JmToolbarEditor {
         // 아이콘 (+ 텍스트). iconOnly 면 라벨은 툴팁으로만
         btn.classList.add('jm-btn-icon');
         btn.innerHTML = opts.iconOnly ? opts.icon : `${opts.icon}<span>${label}</span>`;
+        if (opts.dropdown) { btn.classList.add('jm-btn-dropdown'); btn.innerHTML += CHEVRON_ICON; }
         btn.title = label;
         btn.setAttribute('aria-label', label);
       } else {
@@ -335,6 +336,16 @@ export class JmToolbarEditor {
       });
       return;
     }
+    if (cmd === 'alignMenu' || cmd === 'valignMenu') {
+      const r = this.buttons[cmd].getBoundingClientRect();
+      this.editor.sel.save();
+      const items = cmd === 'alignMenu' ? ALIGN_ITEMS : VALIGN_ITEMS;
+      const prefix = cmd === 'alignMenu' ? 'align' : 'valign';
+      this.listMenu.open(r.left, r.bottom + 4, items.map(([v, label]) => ({
+        label, action: () => this.editor.exec(prefix + v.charAt(0).toUpperCase() + v.slice(1)),
+      })));
+      return;
+    }
     if (cmd === 'ulType' || cmd === 'olType') {
       const tag = cmd === 'ulType' ? 'ul' : 'ol';
       const r = this.buttons[cmd].getBoundingClientRect();
@@ -364,6 +375,10 @@ export class JmToolbarEditor {
       if (tableOnly) this.buttons[cmd].hidden = !state.table;
       if (def[4]?.tableEnabled) this.buttons[cmd].disabled = !state.table;
     });
+    // 정렬 버튼 아이콘을 현재 상태로
+    const setIcon = (cmd, icon) => { const b = this.buttons[cmd]; if (b) b.innerHTML = icon + CHEVRON_ICON; };
+    setIcon('alignMenu', (ALIGN_ITEMS.find(([v]) => v === state.align) || ALIGN_ITEMS[0])[2]);
+    setIcon('valignMenu', (VALIGN_ITEMS.find(([v]) => v === state.valign) || VALIGN_ITEMS[0])[2]);
     // 현재 글자 크기 표시
     if (this.buttons.fontSize) this.buttons.fontSize.value = FONT_SIZES.map((n) => `${n}px`).includes(state.fontSize) ? state.fontSize : '';
     // 현재 색을 버튼 하단 띠로 표시
