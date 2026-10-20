@@ -323,7 +323,7 @@ export class Commands {
     const existing = this.sel.closest('a');
 
     if (existing) {
-      if (url) { existing.href = url; }                       // 기존 링크: 주소만 수정
+      if (url) { this.editor.constructor.setHref(existing, url); } // 기존 링크: 주소만 수정
       else {                                                 // 해제
         while (existing.firstChild) existing.parentNode.insertBefore(existing.firstChild, existing);
         existing.remove();
@@ -334,7 +334,7 @@ export class Commands {
     if (!url || range.collapsed) return;
 
     const a = document.createElement('a');
-    a.href = url;
+    this.editor.constructor.setHref(a, url);
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     a.appendChild(range.extractContents());

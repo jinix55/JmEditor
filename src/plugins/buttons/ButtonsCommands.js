@@ -84,7 +84,7 @@ export class ButtonsCommands {
     url.placeholder = '선택한 버튼의 주소 (https://…)';
     url.title = '선택한 버튼의 링크 주소';
     url.addEventListener('mousedown', (e) => e.stopPropagation());
-    url.addEventListener('input', () => { const a = this.#selected(block); if (a) a.setAttribute('href', url.value.trim() || '#'); });
+    url.addEventListener('input', () => { const a = this.#selected(block); if (a) this.editor.constructor.setHref(a, url.value.trim() || '#'); });
     url.addEventListener('change', () => this.editor.commit());
     url.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); url.blur(); } });
     block._urlInput = url;
@@ -131,7 +131,7 @@ export class ButtonsCommands {
     block._header?.querySelectorAll('.needs-sel').forEach((el) => { el.disabled = !sel; });
     const style = block._header?.querySelector('.jm-buttons-style');
     if (style && sel) style.value = sel.dataset.style || 'primary';
-    if (block._urlInput) block._urlInput.value = sel ? (sel.getAttribute('href') || '') : '';
+    if (block._urlInput) block._urlInput.value = sel ? this.editor.constructor.getHref(sel) : '';
   }
 
   // ───────────── 조작 ─────────────
@@ -140,6 +140,7 @@ export class ButtonsCommands {
     const tpl = document.createElement('template');
     tpl.innerHTML = ButtonsCommands.buttonHTML('버튼', 'https://example.com', 'primary');
     const a = tpl.content.firstChild;
+    this.editor.constructor.setHref(a, a.getAttribute('href'));
     block.appendChild(a);
     this.#bindButtons(block);
     this.#select(block, a);

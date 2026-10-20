@@ -974,7 +974,7 @@ class Commands {
     const existing = this.sel.closest('a');
 
     if (existing) {
-      if (url) { existing.href = url; }                       // 기존 링크: 주소만 수정
+      if (url) { this.editor.constructor.setHref(existing, url); } // 기존 링크: 주소만 수정
       else {                                                 // 해제
         while (existing.firstChild) existing.parentNode.insertBefore(existing.firstChild, existing);
         existing.remove();
@@ -985,7 +985,7 @@ class Commands {
     if (!url || range.collapsed) return;
 
     const a = document.createElement('a');
-    a.href = url;
+    this.editor.constructor.setHref(a, url);
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     a.appendChild(range.extractContents());
@@ -2615,7 +2615,7 @@ class ButtonsCommands {
     url.placeholder = '선택한 버튼의 주소 (https://…)';
     url.title = '선택한 버튼의 링크 주소';
     url.addEventListener('mousedown', (e) => e.stopPropagation());
-    url.addEventListener('input', () => { const a = this.#selected(block); if (a) a.setAttribute('href', url.value.trim() || '#'); });
+    url.addEventListener('input', () => { const a = this.#selected(block); if (a) this.editor.constructor.setHref(a, url.value.trim() || '#'); });
     url.addEventListener('change', () => this.editor.commit());
     url.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); url.blur(); } });
     block._urlInput = url;
@@ -2662,7 +2662,7 @@ class ButtonsCommands {
     block._header?.querySelectorAll('.needs-sel').forEach((el) => { el.disabled = !sel; });
     const style = block._header?.querySelector('.jm-buttons-style');
     if (style && sel) style.value = sel.dataset.style || 'primary';
-    if (block._urlInput) block._urlInput.value = sel ? (sel.getAttribute('href') || '') : '';
+    if (block._urlInput) block._urlInput.value = sel ? this.editor.constructor.getHref(sel) : '';
   }
 
   // ───────────── 조작 ─────────────
@@ -2671,6 +2671,7 @@ class ButtonsCommands {
     const tpl = document.createElement('template');
     tpl.innerHTML = ButtonsCommands.buttonHTML('버튼', 'https://example.com', 'primary');
     const a = tpl.content.firstChild;
+    this.editor.constructor.setHref(a, a.getAttribute('href'));
     block.appendChild(a);
     this.#bindButtons(block);
     this.#select(block, a);
@@ -2740,7 +2741,14 @@ class ButtonsCommands {
  */
 
 
+const HREF_ATTR = 'data-jm-href'; // 편집 중 링크 주소 보관 속성 (href 는 제거해 어떤 환경에서도 열리지 않게)
+
 class JmEditor {
+  /** 편집 DOM 의 링크 주소 읽기 (href 또는 보관 속성) */
+  static getHref(a) { return a?.getAttribute(HREF_ATTR) ?? a?.getAttribute('href') ?? ''; }
+  /** 편집 DOM 의 링크 주소 쓰기 (href 는 두지 않음) */
+  static setHref(a, url) { a.setAttribute(HREF_ATTR, url); a.removeAttribute('href'); }
+
   /**
    * @param {HTMLElement} root 편집 영역이 될 요소
    * @param {object} options
@@ -2834,6 +2842,7 @@ class JmEditor {
     html = GalleryCommands.unwrapHTML(html);
     html = EmbedCommands.unwrapHTML(html);
     html = ButtonsCommands.unwrapHTML(html);
+    html = JmEditor.#restoreLinks(html);
     return BlockDrag.cleanHTML(html);
   }
 
@@ -2844,6 +2853,7 @@ class JmEditor {
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
+    this.#neutralizeLinks();
     this.#ensureBlock();
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
     this.#emitChange();
@@ -2869,6 +2879,7 @@ class JmEditor {
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
+    this.#neutralizeLinks();
     this.#ensureBlock();
     this.history.push();
     this.#emitChange();
@@ -3038,6 +3049,19 @@ class JmEditor {
     await this.insertImageFile(file);
   }
 
+  /** 편집 중 링크가 열리지 않도록 href 를 보관 속성으로 옮긴다 (setHTML / commit / restore 후 호출) */
+  #neutralizeLinks() {
+    this.root.querySelectorAll('a[href]').forEach((a) => JmEditor.setHref(a, a.getAttribute('href')));
+  }
+
+  /** 저장용 HTML 에서 보관 속성을 href 로 되돌린다 */
+  static #restoreLinks(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll(`a[${HREF_ATTR}]`).forEach((a) => { a.setAttribute('href', a.getAttribute(HREF_ATTR)); a.removeAttribute(HREF_ATTR); });
+    return tpl.innerHTML;
+  }
+
   /** 루트가 비었거나 루트 직속에 텍스트/인라인만 있으면 p 로 감싼다 */
   #ensureBlock() {
     const r = this.root;
@@ -3062,6 +3086,7 @@ class JmEditor {
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
+    this.#neutralizeLinks();
     this.#ensureBlock();
     this.sel.placeCursor(this.root.lastChild || this.root, true);
     this.#emitChange();
@@ -3750,7 +3775,7 @@ BUTTONS.forEach(def=>{
 function run(cmd){
   if(cmd==='link'){
     const a=editor.sel.closest('a');
-    if(a)openInput('링크 URL (비우면 해제)',a.getAttribute('href')||'',v=>{editor.exec(v?'link':'unlink',v);return true;});
+    if(a)openInput('링크 URL (비우면 해제)',JmEditor.getHref(a),v=>{editor.exec(v?'link':'unlink',v);return true;});
     else openInput('링크 URL','https://',v=>{if(v)editor.exec('link',v);return true;});return;
   }
   if(cmd==='youtube'){
