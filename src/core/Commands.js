@@ -255,23 +255,31 @@ export class Commands {
   // ───────────── 목록 (ul / ol) ─────────────
 
   /**
-   * 목록 토글
+   * 목록 토글 / 유형 지정
    * - 일반 블록이면 li 로 감싸 목록 생성
-   * - 이미 같은 종류 목록이면 p 로 해제, 다른 종류면 목록 타입 변경
+   * - 이미 같은 종류 목록이면: styleType 이 있으면 유형만 변경, 없으면 p 로 해제
+   * - 다른 종류 목록이면 목록 태그 변경
    * @param {'ul'|'ol'} listTag
+   * @param {string} [styleType] list-style-type 값 (disc, circle, square, decimal, lower-alpha, upper-roman, hangul …). 기본값이면 스타일 제거
    */
-  toggleList(listTag) {
+  toggleList(listTag, styleType) {
     const block = this.sel.getBlock();
     if (!block || /^(TD|TH)$/.test(block.tagName)) return; // 표 셀 안에서는 목록 미지원
+    const isDefault = !styleType || styleType === (listTag === 'ul' ? 'disc' : 'decimal');
+    const applyType = (list) => {
+      if (isDefault) list.style.removeProperty('list-style-type'); else list.style.listStyleType = styleType;
+      if (!list.getAttribute('style')?.trim()) list.removeAttribute('style');
+    };
 
     if (block.tagName === 'LI') {
       const list = block.parentNode;
       if (list.tagName.toLowerCase() === listTag) {
-        this.#removeFromList(block);
+        if (styleType) applyType(list); else this.#removeFromList(block);
       } else {
         const newList = document.createElement(listTag);
         while (list.firstChild) newList.appendChild(list.firstChild);
         list.replaceWith(newList);
+        applyType(newList);
       }
     } else {
       const list = document.createElement(listTag);
@@ -279,6 +287,7 @@ export class Commands {
       while (block.firstChild) li.appendChild(block.firstChild);
       list.appendChild(li);
       block.replaceWith(list);
+      applyType(list);
       this.sel.placeCursor(li, true);
     }
     this.editor.commit();
@@ -430,6 +439,7 @@ export class Commands {
       ...this.getStyleState(),
       block: block ? block.tagName.toLowerCase() : null,
       list: block && block.tagName === 'LI' ? block.parentNode.tagName.toLowerCase() : null,
+      listType: block && block.tagName === 'LI' ? (block.parentNode.style.listStyleType || null) : null,
     };
   }
 }

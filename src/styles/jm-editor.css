@@ -33,6 +33,7 @@
 .jm-btn:hover { background: #f2f4f7; }
 .jm-btn.is-active { background: var(--jm-active); border-color: #a9c4ff; }
 
+.jm-btn-compact { min-width: 18px; padding: 0 2px; margin-left: -4px; font-size: 10px; }
 .jm-btn-right { margin-left: auto; }               /* 툴바 우측 끝으로 */
 .jm-btn-icon { display: inline-flex; align-items: center; gap: 6px; }
 
@@ -98,6 +99,11 @@
   color: #475467;
 }
 .jm-editor ul, .jm-editor ol { margin: 0 0 8px; padding-left: 24px; }
+/* 한글 목록 번호: list-style-type: hangul 은 비표준이라 counter 로 표시 (뷰어 .jm-content 도 동일) */
+ol[style*="hangul"] { list-style: none; counter-reset: jm-hangul; }
+ol[style*="hangul"] > li { counter-increment: jm-hangul; position: relative; }
+ol[style*="hangul"] > li::before { content: counter(jm-hangul, hangul) ". "; position: absolute; left: -24px; }
+@supports not (counter(x, hangul)) { ol[style*="hangul"] > li::before { content: counter(jm-hangul) ". "; } }
 .jm-editor img { max-width: 100%; height: auto; display: block; }
 .jm-editor a { color: #1d4ed8; text-decoration: underline; }
 

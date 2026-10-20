@@ -26,13 +26,16 @@ public class HtmlSanitizer {
             "text-align", Pattern.compile("^(left|center|right|justify)$", Pattern.CASE_INSENSITIVE),
             "vertical-align", Pattern.compile("^(top|middle|bottom)$", Pattern.CASE_INSENSITIVE),
             "width", Pattern.compile("^(\\d+(\\.\\d+)?(px|%)|auto)$", Pattern.CASE_INSENSITIVE),
-            "height", Pattern.compile("^\\d+(\\.\\d+)?px$", Pattern.CASE_INSENSITIVE));
+            "height", Pattern.compile("^\\d+(\\.\\d+)?px$", Pattern.CASE_INSENSITIVE),
+            "list-style-type", Pattern.compile("^(disc|circle|square|decimal|decimal-leading-zero|lower-alpha|upper-alpha|lower-roman|upper-roman|hangul|hangul-consonant|none)$", Pattern.CASE_INSENSITIVE));
 
     private final Safelist safelist = new Safelist()
             .addTags("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
                      "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe")
             .addAttributes("a", "href", "target", "rel", "data-role", "data-style")
             .addAttributes("img", "src", "alt", "width", "height")
+            .addAttributes("ul", "style")
+            .addAttributes("ol", "style", "start")
             .addAttributes("table", "style", "data-border")
             .addAttributes("col", "style")
             .addAttributes("tr", "style")

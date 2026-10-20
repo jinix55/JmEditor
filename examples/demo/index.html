@@ -23,6 +23,7 @@ header p{margin:0;color:var(--muted);font-size:.92rem}
 .jm-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .jm-btn.is-active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .jm-sep{width:1px;height:22px;margin:0 4px;background:var(--line)}
+.jm-btn-compact{min-width:18px;padding:0 2px;margin-left:-4px;font-size:10px}
 .jm-btn-right{margin-left:auto}
 .jm-btn:disabled{opacity:.4;cursor:default}
 .jm-container [hidden]{display:none!important}
@@ -42,7 +43,8 @@ header p{margin:0;color:var(--muted);font-size:.92rem}
 .jm-editor[data-placeholder]:has(> p:only-child > br:only-child)::before{content:attr(data-placeholder);color:var(--muted);position:absolute;pointer-events:none}
 .jm-editor p{margin:0 0 8px}.jm-editor h1{font-size:1.7em;margin:12px 0 8px}.jm-editor h2{font-size:1.4em;margin:12px 0 8px}.jm-editor h3{font-size:1.15em;margin:10px 0 6px}
 .jm-editor blockquote{margin:8px 0;padding:6px 12px;border-left:3px solid var(--accent);color:var(--muted)}
-.jm-editor ul,.jm-editor ol{margin:0 0 8px;padding-left:24px}.jm-editor img{max-width:100%;height:auto;display:block;border-radius:4px}
+.jm-editor ul,.jm-editor ol{margin:0 0 8px;padding-left:24px}
+ol[style*="hangul"]{list-style:none;counter-reset:jm-hangul}ol[style*="hangul"]>li{counter-increment:jm-hangul;position:relative}ol[style*="hangul"]>li::before{content:counter(jm-hangul,hangul) ". ";position:absolute;left:-24px}.jm-editor img{max-width:100%;height:auto;display:block;border-radius:4px}
 .jm-editor a{color:var(--accent);text-decoration:underline}
 .jm-editor table{border-collapse:collapse;width:100%;margin:0 0 8px;table-layout:fixed}
 .jm-editor td,.jm-editor th{border:1px solid var(--line);padding:6px 8px;min-width:40px;vertical-align:top}
@@ -202,7 +204,7 @@ kbd{font:11px var(--mono);border:1px solid var(--line);border-radius:3px;padding
 const ALLOWED = {
   p: [], br: [], strong: [], em: [], u: [], s: [],
   h1: [], h2: [], h3: [],
-  ul: [], ol: [], li: [],
+  ul: ['style'], ol: ['style', 'start'], li: [],
   blockquote: [],
   a: ['href', 'target', 'rel', 'data-role', 'data-style'], // data-role=button → 버튼 모양 링크
   img: ['src', 'alt', 'width', 'height'],
@@ -221,6 +223,7 @@ const ALLOWED_STYLE = {
   'vertical-align': (v) => /^(top|middle|bottom)$/i.test(v),
   'width': (v) => /^\d+(\.\d+)?(px|%)$/i.test(v) || v === 'auto',
   'height': (v) => /^\d+(\.\d+)?px$/i.test(v),
+  'list-style-type': (v) => /^(disc|circle|square|decimal|decimal-leading-zero|lower-alpha|upper-alpha|lower-roman|upper-roman|hangul|hangul-consonant|none)$/i.test(v),
 };
 
 /** 태그 이름 치환 (레거시/외부 태그 → 표준 태그) */
@@ -335,6 +338,7 @@ class Sanitizer {
       const v = node.getAttribute(attr);
       if (v == null) return;
       if ((attr === 'href' || attr === 'src') && !SAFE_URL.test(v.trim())) return;
+      if (attr === 'start' && !/^\d{1,4}$/.test(v)) return;
       if (attr === 'style') {
         const clean = Sanitizer.cleanStyle(v);
         if (clean) el.setAttribute('style', clean);
@@ -874,23 +878,31 @@ class Commands {
   // ───────────── 목록 (ul / ol) ─────────────
 
   /**
-   * 목록 토글
+   * 목록 토글 / 유형 지정
    * - 일반 블록이면 li 로 감싸 목록 생성
-   * - 이미 같은 종류 목록이면 p 로 해제, 다른 종류면 목록 타입 변경
+   * - 이미 같은 종류 목록이면: styleType 이 있으면 유형만 변경, 없으면 p 로 해제
+   * - 다른 종류 목록이면 목록 태그 변경
    * @param {'ul'|'ol'} listTag
+   * @param {string} [styleType] list-style-type 값 (disc, circle, square, decimal, lower-alpha, upper-roman, hangul …). 기본값이면 스타일 제거
    */
-  toggleList(listTag) {
+  toggleList(listTag, styleType) {
     const block = this.sel.getBlock();
     if (!block || /^(TD|TH)$/.test(block.tagName)) return; // 표 셀 안에서는 목록 미지원
+    const isDefault = !styleType || styleType === (listTag === 'ul' ? 'disc' : 'decimal');
+    const applyType = (list) => {
+      if (isDefault) list.style.removeProperty('list-style-type'); else list.style.listStyleType = styleType;
+      if (!list.getAttribute('style')?.trim()) list.removeAttribute('style');
+    };
 
     if (block.tagName === 'LI') {
       const list = block.parentNode;
       if (list.tagName.toLowerCase() === listTag) {
-        this.#removeFromList(block);
+        if (styleType) applyType(list); else this.#removeFromList(block);
       } else {
         const newList = document.createElement(listTag);
         while (list.firstChild) newList.appendChild(list.firstChild);
         list.replaceWith(newList);
+        applyType(newList);
       }
     } else {
       const list = document.createElement(listTag);
@@ -898,6 +910,7 @@ class Commands {
       while (block.firstChild) li.appendChild(block.firstChild);
       list.appendChild(li);
       block.replaceWith(list);
+      applyType(list);
       this.sel.placeCursor(li, true);
     }
     this.editor.commit();
@@ -1049,6 +1062,7 @@ class Commands {
       ...this.getStyleState(),
       block: block ? block.tagName.toLowerCase() : null,
       list: block && block.tagName === 'LI' ? block.parentNode.tagName.toLowerCase() : null,
+      listType: block && block.tagName === 'LI' ? (block.parentNode.style.listStyleType || null) : null,
     };
   }
 }
@@ -2558,8 +2572,8 @@ class JmEditor {
       h3: () => c.setBlock('h3'),
       paragraph: () => c.setBlock('p'),
       quote: () => c.setBlock('blockquote'),
-      ul: () => c.toggleList('ul'),
-      ol: () => c.toggleList('ol'),
+      ul: () => c.toggleList('ul', value),
+      ol: () => c.toggleList('ol', value),
       link: () => c.setLink(value),
       unlink: () => c.setLink(null),
       image: () => c.insertImage(value?.src, value?.alt),
@@ -3452,7 +3466,7 @@ const BUTTONS = [
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
   ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],null,
   ['h1','H1',s=>s.block==='h1'],['h2','H2',s=>s.block==='h2'],['h3','H3',s=>s.block==='h3'],['quote','❝ 인용',s=>s.block==='blockquote'],null,
-  ['ul','• 목록',s=>s.list==='ul'],['ol','1. 목록',s=>s.list==='ol'],null,
+  ['ul','• 목록',s=>s.list==='ul',false,{tip:'비순서 목록'}],['ulType','▾',()=>false,false,{tip:'비순서 목록 유형',compact:true}],['ol','1. 목록',s=>s.list==='ol',false,{tip:'순서 목록'}],['olType','▾',()=>false,false,{tip:'순서 목록 유형',compact:true}],null,
   ['link','링크',s=>s.a],['image','이미지',()=>false],['youtube','유튜브',()=>false,false,{icon:YOUTUBE_ICON,iconOnly:true}],['table','표',s=>s.table],null,
   ['undo','↶',()=>false],['redo','↷',()=>false]];
 const toolbar=document.getElementById('toolbar'), toolbarTop=document.getElementById('toolbarTop'), btns={};
@@ -3460,6 +3474,9 @@ const out=document.getElementById('html'), len=document.getElementById('len');
 const linkbar=document.getElementById('linkbar'), linkUrl=document.getElementById('linkUrl');
 const fileInput=document.getElementById('file');
 const colorPicker=new ColorPicker();
+const listMenu=new ContextMenu();
+const UL_TYPES=[['disc','● 기본'],['circle','○ 원'],['square','■ 사각']];
+const OL_TYPES=[['decimal','1. 숫자'],['decimal-leading-zero','01. 숫자(0 채움)'],['lower-alpha','a. 소문자'],['upper-alpha','A. 대문자'],['lower-roman','i. 로마 소문자'],['upper-roman','I. 로마 대문자'],['hangul','가. 한글']];
 // 서식 목록: 테스트 샘플(SAMPLE_FORMATS). 운영에서는 서식 관리 API(fetch) 로 교체
 const formatPicker=new FormatPicker({loadFormats:async()=>SAMPLE_FORMATS,onPick:f=>editor.exec('format',f.html)});
 const gridPicker=new TableGridPicker({onPick:(rows,cols)=>editor.exec('table',{rows,cols,header:true})});
@@ -3476,7 +3493,7 @@ BUTTONS.forEach(def=>{
   const [cmd,label,,tableOnly,opts={}]=def, b=document.createElement('button');
   b.type='button';b.className='jm-btn';b.title=opts.tip||cmd;b.dataset.cmd=cmd;
   if(opts.icon){b.classList.add('jm-btn-icon');b.innerHTML=opts.iconOnly?opts.icon:opts.icon+'<span>'+label+'</span>';b.setAttribute('aria-label',label);b.title=label;}else b.textContent=label;
-  if(opts.right)b.classList.add('jm-btn-right');if(opts.group)b.classList.add('jm-btn-seg');if(opts.segFirst)b.classList.add('jm-btn-seg-first');if(opts.segLast)b.classList.add('jm-btn-seg-last');
+  if(opts.right)b.classList.add('jm-btn-right');if(opts.compact)b.classList.add('jm-btn-compact');if(opts.group)b.classList.add('jm-btn-seg');if(opts.segFirst)b.classList.add('jm-btn-seg-first');if(opts.segLast)b.classList.add('jm-btn-seg-last');
   if(tableOnly)b.hidden=true; // 표 안에서만 표시
   b.addEventListener('mousedown',e=>e.preventDefault()); // 선택 영역 유지
   b.addEventListener('click',()=>run(cmd));
@@ -3493,6 +3510,7 @@ function run(cmd){
   }
   if(cmd==='image'){fileInput.click();return;}
   if(cmd==='color'||cmd==='bgColor'){const s=editor.getState();editor.sel.save();colorPicker.toggleAt(btns[cmd],c=>editor.exec(cmd,c),{current:cmd==='color'?s.color:s.bg,sampleMode:cmd==='color'?'color':'background'});return;}
+  if(cmd==='ulType'||cmd==='olType'){const tag=cmd==='ulType'?'ul':'ol';const r=btns[cmd].getBoundingClientRect();editor.sel.save();listMenu.open(r.left,r.bottom+4,(tag==='ul'?UL_TYPES:OL_TYPES).map(([v,label])=>({label,action:()=>editor.exec(tag,v)})));return;}
   if(cmd==='table'){editor.sel.save();gridPicker.toggle(btns.table);return;}
   if(cmd==='format'){editor.sel.save();formatPicker.toggle(btns.format);return;}
   if(cmd==='modeEditor'){setMode('editor');return;}
