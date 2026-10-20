@@ -12,6 +12,11 @@ export class ContextMenu {
     this.el.setAttribute('role', 'menu');
     document.body.appendChild(this.el);
     this.sub = null; // 열려 있는 하위 메뉴 요소
+    // 메뉴 끝에서 휠이 본문으로 넘어가지 않게
+    this.el.addEventListener('wheel', (e) => {
+      const el = this.el;
+      if ((el.scrollTop <= 0 && e.deltaY < 0) || (el.scrollTop + el.clientHeight >= el.scrollHeight - 1 && e.deltaY > 0)) e.preventDefault();
+    }, { passive: false });
 
     this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.sub?.contains(e.target)) this.close(); };
     this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
