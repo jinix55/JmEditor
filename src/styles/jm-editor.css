@@ -335,7 +335,15 @@ div[data-type="slider"] > img.is-current, div[data-type="slider"]:not(:has(> img
 .jm-slider-dot.is-current { background: #fff; }
 .jm-slider-bar { width: 28px; height: 4px; padding: 0; border: 0; border-radius: 2px; background: rgba(255,255,255,.5); cursor: pointer; }
 .jm-slider-bar.is-current { background: #fff; }
-.jm-slider-ind-numbers { justify-content: flex-end; right: 12px; left: auto; }
+/* 인디케이터 위치 */
+.jm-slider-pos-bottom-left, .jm-slider-pos-top-left { justify-content: flex-start; padding-left: 12px; }
+.jm-slider-pos-bottom-right, .jm-slider-pos-top-right { justify-content: flex-end; padding-right: 12px; }
+.jm-slider-pos-top-left, .jm-slider-pos-top-center, .jm-slider-pos-top-right { bottom: auto; top: 10px; }
+div[data-type="slider"] p[data-role="title"] ~ .jm-slider-pos-top-left, div[data-type="slider"] p[data-role="title"] ~ .jm-slider-pos-top-center, div[data-type="slider"] p[data-role="title"] ~ .jm-slider-pos-top-right { top: calc(10px + 1.4em + 6px); } /* 제목이 있으면 그 아래 */
+.jm-slider-pos-below { position: static; margin-top: 8px; }
+.jm-slider-pos-below .jm-slider-dot, .jm-slider-pos-below .jm-slider-bar { background: #cfd4dc; }
+.jm-slider-pos-below .jm-slider-dot.is-current, .jm-slider-pos-below .jm-slider-bar.is-current { background: #1d4ed8; }
+.jm-slider-pos-below .jm-slider-num { background: #e4e7ec; color: #344054; }
 .jm-slider-num { padding: 3px 10px; border-radius: 12px; background: rgba(0,0,0,.55); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; }
 
 /* 슬라이드 레이어 (에디터 전용) */
@@ -345,7 +353,7 @@ div[data-type="slider"] > img.is-current, div[data-type="slider"]:not(:has(> img
 .jm-slider-count { flex: 1; font-size: 11px; color: #667085; }
 .jm-slider-btn { height: 26px; padding: 0 8px; font-size: 12px; }
 .jm-slider-btn:disabled { opacity: .4; cursor: default; }
-.jm-slider-interval, .jm-slider-ratio, .jm-slider-indicator, .jm-slider-width, .jm-slider-align { height: 26px; font-size: 12px; border: 1px solid var(--jm-border); border-radius: 4px; background: #fff; }
+.jm-slider-interval, .jm-slider-ratio, .jm-slider-indicator, .jm-slider-indpos, .jm-slider-width, .jm-slider-align { height: 26px; font-size: 12px; border: 1px solid var(--jm-border); border-radius: 4px; background: #fff; }
 .jm-slider-remove { color: #b42318; }
 .jm-slider-layer div[data-type="slider"] { margin-top: 8px; margin-bottom: 8px; }
 .jm-slider-layer div[data-type="slider"][data-align="left"] { margin-left: 8px; }

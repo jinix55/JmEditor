@@ -43,7 +43,7 @@ public class HtmlSanitizer {
             .addAttributes("td", "style", "colspan", "rowspan")
             .addAttributes("th", "style", "colspan", "rowspan")
             .addAttributes("span", "style")
-            .addAttributes("div", "data-type", "data-cols", "data-auto", "data-layout", "data-align", "data-width", "data-interval", "data-ratio", "data-indicator")
+            .addAttributes("div", "data-type", "data-cols", "data-auto", "data-layout", "data-align", "data-width", "data-interval", "data-ratio", "data-indicator", "data-indicator-pos")
             .addAttributes("iframe", "src", "title", "allow", "allowfullscreen")
             .addProtocols("iframe", "src", "https")   // 이미지 갤러리 블록
             .addAttributes("p", "data-role")                                 // 갤러리 제목
@@ -108,6 +108,7 @@ public class HtmlSanitizer {
                 div.attr("data-interval", String.valueOf(iv < 0 || iv > 60000 ? 3000 : iv));
                 if (!java.util.Set.of("16:9", "4:3", "1:1", "21:9").contains(div.attr("data-ratio"))) div.attr("data-ratio", "16:9");
                 if (!java.util.Set.of("dots", "numbers", "bars", "none").contains(div.attr("data-indicator"))) div.attr("data-indicator", "dots");
+                if (!java.util.Set.of("bottom-center", "bottom-left", "bottom-right", "top-left", "top-center", "top-right", "below").contains(div.attr("data-indicator-pos"))) div.attr("data-indicator-pos", "bottom-center");
                 if (!java.util.Set.of("100", "75", "50").contains(div.attr("data-width"))) div.attr("data-width", "100");
                 String sa = div.attr("data-align");
                 if (!sa.equals("left") && !sa.equals("center") && !sa.equals("right")) div.attr("data-align", "center");
