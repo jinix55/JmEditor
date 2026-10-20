@@ -160,7 +160,7 @@ div[data-type="buttons"][data-align="center"]{justify-content:center}div[data-ty
 .jm-table-layer:hover,.jm-table-layer:focus-within{border-color:var(--accent);background:var(--accent-soft)}
 .jm-table-layer:focus-within::before{content:"표 · 우클릭하여 편집";position:absolute;top:-10px;left:8px;padding:0 6px;font-size:11px;color:var(--accent);background:var(--panel)}
 .jm-table-layer table{margin:0;background:var(--panel)}
-.jm-ctxmenu{position:fixed;z-index:1000;min-width:160px;padding:4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.jm-ctxmenu{position:fixed;z-index:1000;min-width:160px;max-height:80vh;overflow:auto;overscroll-behavior:contain;padding:4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);box-shadow:0 6px 20px rgba(0,0,0,.18)}
 .jm-ctxmenu-item{display:block;width:100%;padding:6px 10px;border:0;border-radius:4px;background:transparent;color:var(--fg);font:13px/1.4 var(--sans);text-align:left;cursor:pointer}
 .jm-ctxmenu-item:hover,.jm-ctxmenu-item:focus-visible{background:var(--accent-soft);outline:none}
 .jm-ctxmenu-divider{height:1px;margin:4px 6px;background:var(--line)}
@@ -193,7 +193,7 @@ div[data-type="buttons"][data-align="center"]{justify-content:center}div[data-ty
 .jm-colorpicker-hex{flex:1;min-width:0;padding:4px 6px;border:1px solid var(--line);border-radius:3px;background:var(--panel);color:var(--fg);font:12px var(--mono)}
 .jm-colorpicker-apply{flex:none}
 .jm-colorpicker-eye{display:inline-flex;align-items:center;justify-content:center;min-width:32px}
-.jm-formatpicker{position:fixed;z-index:1000;width:272px;max-height:60vh;overflow:auto;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.jm-formatpicker{position:fixed;z-index:1000;width:272px;max-height:60vh;overflow:auto;overscroll-behavior:contain;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);box-shadow:0 6px 20px rgba(0,0,0,.18)}
 .jm-formatpicker-msg{padding:10px;font-size:13px;color:var(--muted);text-align:center}
 .jm-formatpicker-cat{margin:8px 4px 4px;padding-bottom:4px;border-bottom:1px solid var(--line);font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
 .jm-formatpicker-cat:first-child{margin-top:2px}
