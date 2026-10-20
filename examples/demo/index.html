@@ -3501,9 +3501,10 @@ class JmEditor {
       color: () => c.setStyle('color', value ?? null),
       bgColor: () => c.setStyle('background-color', value ?? null),
       fontSize: () => c.setStyle('font-size', value ?? null),
-      alignLeft: () => c.setAlign('left'),
-      alignCenter: () => c.setAlign('center'),
-      alignRight: () => c.setAlign('right'),
+      // 정렬: 표 셀 범위 선택이 있으면 선택한 셀 전체에, 아니면 커서 블록(셀 포함)에
+      alignLeft: () => (this.table.selection ? this.table.setAlign('left') : c.setAlign('left')),
+      alignCenter: () => (this.table.selection ? this.table.setAlign('center') : c.setAlign('center')),
+      alignRight: () => (this.table.selection ? this.table.setAlign('right') : c.setAlign('right')),
       undo: () => this.history.undo(),
       redo: () => this.history.redo(),
       // 표
