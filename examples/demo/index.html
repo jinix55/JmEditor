@@ -93,6 +93,8 @@ header p{margin:0;color:var(--muted);font-size:.92rem}
 div[data-type="gallery"]:not([data-layout="justify"]) img{flex:1 1 calc((100% - 8px*(var(--jm-cols,3) - 1))/var(--jm-cols,3));min-width:0;height:180px}
 div[data-type="gallery"][data-layout="justify"] img{flex:0 0 auto}
 div[data-type="gallery"] img{object-fit:cover;border-radius:4px;margin:0}
+div[data-type="gallery"][data-align="center"]{justify-content:center}
+div[data-type="gallery"][data-align="right"]{justify-content:flex-end}
 .jm-gallery-layer{margin:0 0 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
 div[data-type="gallery"] p[data-role="title"]{flex:0 0 100%;margin:0 0 2px;font-size:15px;font-weight:600;line-height:1.4}
 .jm-gallery-layer p[data-role="title"]{outline:none;padding:4px 6px;border-radius:4px}
@@ -105,7 +107,7 @@ div[data-type="gallery"] p[data-role="title"]{flex:0 0 100%;margin:0 0 2px;font-
 .jm-gallery-count{flex:1;font-size:11px;color:var(--muted)}
 .jm-gallery-btn{height:26px;padding:0 8px;font-size:12px;background:var(--panel);border-color:var(--line)}
 .jm-gallery-btn:disabled{opacity:.4;cursor:default}
-.jm-gallery-cols,.jm-gallery-layout{height:26px;font-size:12px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
+.jm-gallery-cols,.jm-gallery-layout,.jm-gallery-align{height:26px;font-size:12px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
 .jm-gallery-remove{color:#d14343}
 .jm-gallery-layer .jm-gallery{padding:8px;min-height:60px}
 .jm-gallery-layer .jm-gallery.is-empty{display:flex;align-items:center;justify-content:center;border:2px dashed var(--line);border-radius:4px;margin:8px;color:var(--muted);font-size:13px}
@@ -235,6 +237,8 @@ class Sanitizer {
       if (node.getAttribute('data-auto') === '1') g.setAttribute('data-auto', '1');
       const layout = node.getAttribute('data-layout');
       if (layout === 'justify' || layout === 'cover') g.setAttribute('data-layout', layout);
+      const align = node.getAttribute('data-align');
+      if (align === 'center' || align === 'right') g.setAttribute('data-align', align);
       // 제목(선택): 첫 번째 p[data-role=title]. 비어 있으면 저장하지 않음
       const title = node.querySelector(':scope > p[data-role="title"]');
       if (title && title.textContent.trim()) {
@@ -1424,6 +1428,20 @@ class GalleryCommands {
     layout.addEventListener('mousedown', (e) => e.stopPropagation());
     layout.addEventListener('change', () => { gallery.dataset.layout = layout.value; this.#layout(gallery); this.editor.commit(); });
 
+    // 정렬: 가로를 다 못 채운 줄(주로 마지막 줄)을 어디에 둘지
+    const align = document.createElement('select');
+    align.className = 'jm-gallery-align';
+    align.title = '정렬';
+    [['left', '왼쪽'], ['center', '중앙'], ['right', '오른쪽']].forEach(([v, t]) => {
+      const o = document.createElement('option'); o.value = v; o.textContent = t; align.appendChild(o);
+    });
+    align.value = gallery.dataset.align || 'left';
+    align.addEventListener('mousedown', (e) => e.stopPropagation());
+    align.addEventListener('change', () => {
+      if (align.value === 'left') delete gallery.dataset.align; else gallery.dataset.align = align.value;
+      this.editor.commit();
+    });
+
     const count = document.createElement('span');
     count.className = 'jm-gallery-count';
     gallery._countEl = count;
@@ -1436,7 +1454,7 @@ class GalleryCommands {
     const remove = mk('✕', () => this.deleteGallery(gallery), 'jm-gallery-remove');
     remove.title = '갤러리 삭제';
 
-    h.append(title, count, add, delSel, delAll, cols, layout, up, down, remove);
+    h.append(title, count, add, delSel, delAll, cols, layout, align, up, down, remove);
     return h;
   }
 

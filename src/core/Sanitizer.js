@@ -80,6 +80,8 @@ export class Sanitizer {
       if (node.getAttribute('data-auto') === '1') g.setAttribute('data-auto', '1');
       const layout = node.getAttribute('data-layout');
       if (layout === 'justify' || layout === 'cover') g.setAttribute('data-layout', layout);
+      const align = node.getAttribute('data-align');
+      if (align === 'center' || align === 'right') g.setAttribute('data-align', align);
       // 제목(선택): 첫 번째 p[data-role=title]. 비어 있으면 저장하지 않음
       const title = node.querySelector(':scope > p[data-role="title"]');
       if (title && title.textContent.trim()) {

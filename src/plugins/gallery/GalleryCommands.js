@@ -135,6 +135,20 @@ export class GalleryCommands {
     layout.addEventListener('mousedown', (e) => e.stopPropagation());
     layout.addEventListener('change', () => { gallery.dataset.layout = layout.value; this.#layout(gallery); this.editor.commit(); });
 
+    // 정렬: 가로를 다 못 채운 줄(주로 마지막 줄)을 어디에 둘지
+    const align = document.createElement('select');
+    align.className = 'jm-gallery-align';
+    align.title = '정렬';
+    [['left', '왼쪽'], ['center', '중앙'], ['right', '오른쪽']].forEach(([v, t]) => {
+      const o = document.createElement('option'); o.value = v; o.textContent = t; align.appendChild(o);
+    });
+    align.value = gallery.dataset.align || 'left';
+    align.addEventListener('mousedown', (e) => e.stopPropagation());
+    align.addEventListener('change', () => {
+      if (align.value === 'left') delete gallery.dataset.align; else gallery.dataset.align = align.value;
+      this.editor.commit();
+    });
+
     const count = document.createElement('span');
     count.className = 'jm-gallery-count';
     gallery._countEl = count;
@@ -147,7 +161,7 @@ export class GalleryCommands {
     const remove = mk('✕', () => this.deleteGallery(gallery), 'jm-gallery-remove');
     remove.title = '갤러리 삭제';
 
-    h.append(title, count, add, delSel, delAll, cols, layout, up, down, remove);
+    h.append(title, count, add, delSel, delAll, cols, layout, align, up, down, remove);
     return h;
   }
 

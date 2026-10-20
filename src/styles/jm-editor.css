@@ -175,6 +175,9 @@ div[data-type="gallery"]:not([data-layout="justify"]) img { height: 180px; objec
 /* justify: 비율 유지, 줄 채움 — 폭·높이는 gallery-layout.js 가 인라인으로 지정 */
 div[data-type="gallery"][data-layout="justify"] img { flex: 0 0 auto; object-fit: cover; }
 div[data-type="gallery"] img { border-radius: 4px; margin: 0; }
+/* 정렬: flex-wrap 컨테이너라 줄 단위로 적용됨. 가로를 다 못 채운 줄에만 효과 */
+div[data-type="gallery"][data-align="center"] { justify-content: center; }
+div[data-type="gallery"][data-align="right"] { justify-content: flex-end; }
 
 /* 갤러리 제목 (저장 HTML 에도 포함, 뷰어에도 필요) */
 div[data-type="gallery"] p[data-role="title"] { flex: 0 0 100%; margin: 0 0 2px; font-size: 15px; font-weight: 600; line-height: 1.4; }
@@ -191,7 +194,7 @@ div[data-type="gallery"] p[data-role="title"] { flex: 0 0 100%; margin: 0 0 2px;
 .jm-gallery-count { flex: 1; font-size: 11px; color: #667085; }
 .jm-gallery-btn { height: 26px; padding: 0 8px; font-size: 12px; }
 .jm-gallery-btn:disabled { opacity: .4; cursor: default; }
-.jm-gallery-cols, .jm-gallery-layout { height: 26px; font-size: 12px; border: 1px solid var(--jm-border); border-radius: 4px; background: #fff; }
+.jm-gallery-cols, .jm-gallery-layout, .jm-gallery-align { height: 26px; font-size: 12px; border: 1px solid var(--jm-border); border-radius: 4px; background: #fff; }
 .jm-gallery-remove { color: #b42318; }
 .jm-gallery-layer .jm-gallery { padding: 8px; min-height: 60px; }
 .jm-gallery-layer .jm-gallery.is-empty { display: flex; align-items: center; justify-content: center; border: 2px dashed var(--jm-border); border-radius: 4px; margin: 8px; color: #98a2b3; font-size: 13px; }
