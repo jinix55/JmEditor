@@ -3489,7 +3489,7 @@ const BUTTONS = [
   ['bold','B',s=>s.strong],['italic','I',s=>s.em],['underline','U',s=>s.u],['strike','S',s=>s.s],['color','A',s=>!!s.color],['bgColor','배경',s=>!!s.bg],null,
   ['h1','H1',s=>s.block==='h1'],['h2','H2',s=>s.block==='h2'],['h3','H3',s=>s.block==='h3'],['quote','❝ 인용',s=>s.block==='blockquote'],null,
   ['ul','• 목록',s=>s.list==='ul'],['ol','1. 목록',s=>s.list==='ol'],null,
-  ['link','링크',s=>s.a],['image','이미지',()=>false],['youtube','유튜브',()=>false,false,{icon:YOUTUBE_ICON}],['table','표',s=>s.table],null,
+  ['link','링크',s=>s.a],['image','이미지',()=>false],['youtube','유튜브',()=>false,false,{icon:YOUTUBE_ICON,iconOnly:true}],['table','표',s=>s.table],null,
   ['undo','↶',()=>false],['redo','↷',()=>false]];
 const toolbar=document.getElementById('toolbar'), toolbarTop=document.getElementById('toolbarTop'), btns={};
 const out=document.getElementById('html'), len=document.getElementById('len');
@@ -3511,7 +3511,7 @@ BUTTONS.forEach(def=>{
   if(!def){const s=document.createElement('span');s.className='jm-sep';toolbar.appendChild(s);return;}
   const [cmd,label,,tableOnly,opts={}]=def, b=document.createElement('button');
   b.type='button';b.className='jm-btn';b.title=cmd;b.dataset.cmd=cmd;
-  if(opts.icon){b.classList.add('jm-btn-icon');b.innerHTML=opts.icon+'<span>'+label+'</span>';}else b.textContent=label;
+  if(opts.icon){b.classList.add('jm-btn-icon');b.innerHTML=opts.iconOnly?opts.icon:opts.icon+'<span>'+label+'</span>';b.setAttribute('aria-label',label);b.title=label;}else b.textContent=label;
   if(opts.right)b.classList.add('jm-btn-right');if(opts.group)b.classList.add('jm-btn-seg');if(opts.segFirst)b.classList.add('jm-btn-seg-first');if(opts.segLast)b.classList.add('jm-btn-seg-last');
   if(tableOnly)b.hidden=true; // 표 안에서만 표시
   b.addEventListener('mousedown',e=>e.preventDefault()); // 선택 영역 유지

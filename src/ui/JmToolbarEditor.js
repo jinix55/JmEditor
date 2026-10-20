@@ -48,7 +48,7 @@ const BUTTONS = [
   null,
   ['link', '링크', (s) => s.a],
   ['image', '이미지', () => false],
-  ['youtube', '유튜브', () => false, false, { icon: YOUTUBE_ICON }],
+  ['youtube', '유튜브', () => false, false, { icon: YOUTUBE_ICON, iconOnly: true }], // 아이콘만 표시 (라벨은 title)
   ['table', '표', (s) => s.table], // 행·열 편집은 표 레이어 우클릭 메뉴에서
   null,
   ['undo', '↶', () => false],
@@ -221,9 +221,11 @@ export class JmToolbarEditor {
       if (opts.segLast) btn.classList.add('jm-btn-seg-last');
       btn.dataset.cmd = cmd;
       if (opts.icon) {
-        // 아이콘 + 텍스트
+        // 아이콘 (+ 텍스트). iconOnly 면 라벨은 툴팁으로만
         btn.classList.add('jm-btn-icon');
-        btn.innerHTML = `${opts.icon}<span>${label}</span>`;
+        btn.innerHTML = opts.iconOnly ? opts.icon : `${opts.icon}<span>${label}</span>`;
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
       } else {
         btn.textContent = label;
       }
