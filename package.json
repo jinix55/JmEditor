@@ -6,7 +6,40 @@
   "author": "jinix55",
   "repository": "github:jinix55/JmEditor",
   "type": "module",
-  "main": "src/index.js",
-  "files": ["src", "examples", "server", "LICENSE", "README.md"],
-  "keywords": ["editor", "wysiwyg", "contenteditable", "thymeleaf", "jsp", "react", "spring-boot"]
+  "main": "dist/jm-editor.esm.js",
+  "files": [
+    "src",
+    "dist",
+    "examples",
+    "server",
+    "LICENSE",
+    "README.md"
+  ],
+  "keywords": [
+    "editor",
+    "wysiwyg",
+    "contenteditable",
+    "thymeleaf",
+    "jsp",
+    "react",
+    "spring-boot"
+  ],
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/jm-editor.esm.js",
+      "default": "./dist/jm-editor.min.js"
+    },
+    "./viewer": {
+      "import": "./dist/jm-viewer.esm.js",
+      "default": "./dist/jm-viewer.min.js"
+    },
+    "./css": "./dist/jm-editor.css",
+    "./src/*": "./src/*"
+  }
 }
