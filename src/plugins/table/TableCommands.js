@@ -100,7 +100,7 @@ export class TableCommands {
   #bindSelection(table) {
     let anchor = null;
     table.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || table._resizeHit) return; // 경계 리사이즈 시작 중이면 선택 안 함
       const cell = e.target.closest('td,th');
       if (!cell || cell.closest('table') !== table) return;
       if (e.shiftKey && this.selection?.table === table) {
@@ -112,7 +112,7 @@ export class TableCommands {
       this.clearSelection();
     });
     table.addEventListener('mousemove', (e) => {
-      if (!anchor || !(e.buttons & 1)) return;
+      if (!anchor || !(e.buttons & 1) || table._resizing) return;
       const cell = e.target.closest('td,th');
       if (!cell || cell.closest('table') !== table || cell === anchor) return;
       // 다른 셀로 넘어가면 브라우저 텍스트 선택 대신 셀 범위 선택
@@ -163,6 +163,7 @@ export class TableCommands {
     table.addEventListener('mousemove', (e) => {
       if (drag) return;
       const h = hit(e);
+      table._resizeHit = !!h; // 선택 핸들러가 참고
       table.style.cursor = h ? (h.kind === 'col' ? 'col-resize' : 'row-resize') : '';
     });
     table.addEventListener('mousedown', (e) => {
@@ -172,22 +173,42 @@ export class TableCommands {
       e.preventDefault(); e.stopPropagation();
       this.#ensureColgroup(table);
       if (h.kind === 'col') {
-        const col = table.querySelectorAll('colgroup > col')[h.index];
-        drag = { ...h, start: e.clientX, startSize: this.#colWidth(table, h.index), col };
+        // 모든 열을 현재 렌더 폭(px)으로 고정한 뒤, 당기는 열과 오른쪽 이웃 열이 폭을 주고받는다 (표 전체 폭 유지)
+        const cols = Array.from(table.querySelectorAll('colgroup > col'));
+        const widths = cols.map((_, i) => this.#colWidth(table, i));
+        cols.forEach((col, i) => { col.style.width = `${widths[i]}px`; });
+        const next = cols[h.index + 1] ? h.index + 1 : null;
+        drag = { ...h, start: e.clientX, cols, widths, next };
       } else {
         const tr = table.rows[h.index];
         drag = { ...h, start: e.clientY, startSize: tr.getBoundingClientRect().height, tr };
       }
+      table._resizing = true;
       layer.classList.add('is-resizing');
     });
+    const MIN = 30;
     const move = (e) => {
       if (!drag) return;
-      if (drag.kind === 'col') drag.col.style.width = `${Math.max(30, drag.startSize + e.clientX - drag.start)}px`;
-      else drag.tr.style.height = `${Math.max(24, drag.startSize + e.clientY - drag.start)}px`;
+      if (drag.kind === 'col') {
+        let delta = e.clientX - drag.start;
+        const w0 = drag.widths[drag.index];
+        if (drag.next != null) {
+          const w1 = drag.widths[drag.next];
+          delta = Math.max(MIN - w0, Math.min(w1 - MIN, delta)); // 양쪽 최소 폭 유지
+          drag.cols[drag.next].style.width = `${w1 - delta}px`;
+        } else {
+          delta = Math.max(MIN - w0, delta); // 마지막 열: 표 폭 자체가 늘어남
+        }
+        drag.cols[drag.index].style.width = `${w0 + delta}px`;
+      } else {
+        drag.tr.style.height = `${Math.max(24, drag.startSize + e.clientY - drag.start)}px`;
+      }
     };
     const up = () => {
       if (!drag) return;
+      if (drag.kind === 'col') this.#writeColPercents(table, this.#colPercents(table)); // px → % 로 되돌려 저장
       drag = null;
+      table._resizing = false;
       layer.classList.remove('is-resizing');
       this.editor.commit();
     };
