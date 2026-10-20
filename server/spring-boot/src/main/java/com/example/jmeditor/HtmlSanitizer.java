@@ -30,7 +30,7 @@ public class HtmlSanitizer {
             .addAttributes("td", "style", "colspan", "rowspan")
             .addAttributes("th", "style", "colspan", "rowspan")
             .addAttributes("span", "style")
-            .addAttributes("div", "data-type", "data-cols", "data-auto", "data-layout")   // 이미지 갤러리 블록
+            .addAttributes("div", "data-type", "data-cols", "data-auto", "data-layout", "data-align")   // 이미지 갤러리 블록
             .addAttributes("p", "data-role")                                 // 갤러리 제목
             .addProtocols("a", "href", "http", "https", "mailto")
             .addProtocols("img", "src", "http", "https", "data")
@@ -69,6 +69,8 @@ public class HtmlSanitizer {
             if (!"1".equals(div.attr("data-auto"))) div.removeAttr("data-auto");
             String layout = div.attr("data-layout");
             if (!layout.equals("justify") && !layout.equals("cover")) div.removeAttr("data-layout");
+            String align = div.attr("data-align");
+            if (!align.equals("center") && !align.equals("right")) div.removeAttr("data-align");
             for (Element child : div.children()) {
                 boolean isTitle = child.tagName().equals("p") && "title".equals(child.attr("data-role")) && !child.text().isBlank();
                 boolean isImg = child.tagName().equals("img");
