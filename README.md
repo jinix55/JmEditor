@@ -2,7 +2,7 @@
 
 contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라이브러리를 쓰지 않고, Thymeleaf나 JSP처럼 서버에서 렌더링하는 페이지에 `<script type="module">` 하나로 붙이는 걸 목표로 만들었습니다. React 쪽은 같은 코어를 감싸는 얇은 래퍼로 붙입니다.
 
-[데모 페이지](examples/demo/index.html)를 브라우저에서 열면 바로 눌러볼 수 있습니다. (src/ 코드를 한 파일로 합친 단독 버전이라 서버 없이 열립니다.)
+데모: https://jinix55.github.io/JmEditor/ (저장소를 받아서 [examples/demo/index.html](examples/demo/index.html) 을 열어도 됩니다.) (src/ 코드를 한 파일로 합친 단독 버전이라 서버 없이 열립니다.)
 
 ## 되는 것
 
