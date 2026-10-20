@@ -43,7 +43,7 @@ public class HtmlSanitizer {
             .addAttributes("td", "style", "colspan", "rowspan")
             .addAttributes("th", "style", "colspan", "rowspan")
             .addAttributes("span", "style")
-            .addAttributes("div", "data-type", "data-cols", "data-auto", "data-layout", "data-align", "data-width")
+            .addAttributes("div", "data-type", "data-cols", "data-auto", "data-layout", "data-align", "data-width", "data-interval", "data-ratio", "data-indicator")
             .addAttributes("iframe", "src", "title", "allow", "allowfullscreen")
             .addProtocols("iframe", "src", "https")   // 이미지 갤러리 블록
             .addAttributes("p", "data-role")                                 // 갤러리 제목
@@ -98,6 +98,21 @@ public class HtmlSanitizer {
         }
         // div 는 갤러리/유튜브/버튼 블록만 허용, 그 외는 p 로 치환
         for (Element div : doc.select("div")) {
+            if ("slider".equals(div.attr("data-type"))) {
+                for (Element child : div.children()) {
+                    boolean isTitle = child.tagName().equals("p") && "title".equals(child.attr("data-role")) && !child.text().isBlank();
+                    if (!isTitle && !child.tagName().equals("img")) child.remove();
+                }
+                div.textNodes().forEach(org.jsoup.nodes.Node::remove);
+                int iv = parseIntOr(div.attr("data-interval"), 3000);
+                div.attr("data-interval", String.valueOf(iv < 0 || iv > 60000 ? 3000 : iv));
+                if (!java.util.Set.of("16:9", "4:3", "1:1", "21:9").contains(div.attr("data-ratio"))) div.attr("data-ratio", "16:9");
+                if (!java.util.Set.of("dots", "numbers", "bars", "none").contains(div.attr("data-indicator"))) div.attr("data-indicator", "dots");
+                if (!java.util.Set.of("100", "75", "50").contains(div.attr("data-width"))) div.attr("data-width", "100");
+                String sa = div.attr("data-align");
+                if (!sa.equals("left") && !sa.equals("center") && !sa.equals("right")) div.attr("data-align", "center");
+                continue;
+            }
             if ("buttons".equals(div.attr("data-type"))) {
                 for (Element child : div.children()) if (!child.tagName().equals("a")) child.remove();
                 div.textNodes().forEach(org.jsoup.nodes.Node::remove);

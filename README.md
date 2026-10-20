@@ -9,6 +9,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 - 굵게 / 기울임 / 밑줄 / 취소선, 글자 크기(10~48px), 글자색 / 배경색 (견본 + HSV 팔레트 + HEX 입력 + 스포이드)
 - 제목 H1~H3, 인용, 순서 / 비순서 목록(● ○ ■, 1. 01. a. A. i. I. 가.), 링크, 버튼 그룹 블록(서식 — 이름·주소 입력으로 추가, 모양·크기, 그립 드래그로 순서, 정렬)
 - 이미지 삽입 (버튼, 드래그 앤 드롭, 붙여넣기)
+- 이미지 슬라이드 — 이미지가 자동으로 넘어가는 블록(서식). 간격(수동/2~8초)·비율·인디케이터(점/숫자/막대/없음)·폭·정렬, 썸네일로 선택·순서 변경. 뷰어에는 `slider-runtime.js` 필요
 - 유튜브 — 주소를 넣으면 16:9 영상 블록이 들어갑니다. 폭(100 / 75 / 50%)과 정렬 선택, ⠿ 핸들로 이동
 - 표 — 툴바에서 N×M 격자로 크기를 골라 삽입. 셀을 드래그(또는 Shift+클릭)하면 범위 선택. 우클릭 메뉴에서 행 / 열 추가·삭제·이동, 머리글 행·열 전환, 셀 병합·분할, 가로·세로 정렬, 셀·행 배경색, 표 폭·테두리. 셀 경계를 끌면 열 너비·행 높이 조절. 왼쪽 위 ⠿ 핸들을 끌어 위치 이동
 - 이미지 갤러리 블록 — 이미지만 넣는 블록. 드롭하면 원본 비율을 유지한 채 줄마다 가로를 꽉 채우도록 배치되고(세로 사진이 섞여도 줄 높이가 같습니다), 헤더에서 선택 삭제 / 전체 삭제 / 열 수 / 배치 방식(비율 유지·잘라 채움) / 정렬(왼쪽·중앙·오른쪽)을 바꿉니다. 사진은 드래그해서 순서를 바꾸고, 헤더의 ⠿ 핸들을 끌면 블록 자체가 다른 위치로 이동합니다. 제목은 선택 사항
@@ -126,12 +127,19 @@ observeGalleries(document.querySelector('.jm-content'));
 
 `data-layout="cover"` 는 CSS 만으로 동작합니다.
 
+슬라이드 블록도 조회 페이지에서 런타임을 한 번 초기화해야 돌아갑니다.
+
+```js
+import { initSliders } from '/js/jm-editor/plugins/slider/slider-runtime.js';
+initSliders(document.querySelector('.jm-content'));
+```
+
 ## 구조
 
 ```
 src/
   core/      JmEditor.js(진입점), Commands.js, SelectionUtil.js, History.js, Sanitizer.js
-  plugins/   table/, gallery/(GalleryCommands, gallery-layout) — 블록형 기능. 편집 중에만 쓰는 레이어를 씌우고 저장 시 벗김
+  plugins/   table/, gallery/, embed/(유튜브), buttons/, slider/(SliderCommands, slider-runtime) — 블록형 기능. 편집 중에만 쓰는 레이어를 씌우고 저장 시 벗김
   ui/        JmToolbarEditor.js(툴바), ColorPicker, TableGridPicker, FormatPicker, ContextMenu
   api/       JmEditorApi.js
   styles/    jm-editor.css

@@ -139,6 +139,12 @@ export const SAMPLE_FORMATS = [
     html: `<h3>확인 사항</h3><ul><li>☐ 항목 1</li><li>☐ 항목 2</li><li>☐ 항목 3</li></ul>`,
   },
   {
+    id: 'slider',
+    name: '이미지 슬라이드',
+    description: '이미지가 자동으로 넘어가는 블록. 간격·비율 선택, 썸네일로 순서 변경',
+    html: `<div data-type="slider" data-interval="3000" data-ratio="16:9"></div>`,
+  },
+  {
     id: 'buttons',
     name: '버튼',
     description: '버튼 묶음 블록. 추가·주소·모양·순서·정렬을 헤더에서 조정',

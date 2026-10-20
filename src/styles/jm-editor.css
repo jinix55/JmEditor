@@ -312,3 +312,53 @@ div[data-type="buttons"][data-align="right"] { justify-content: flex-end; }
 .jm-btn-item.drop-after { box-shadow: 4px 0 0 0 #1d4ed8; }
 .jm-buttons-layer a[data-role="button"] { outline: 2px solid transparent; outline-offset: 2px; cursor: text; }
 .jm-buttons-layer a[data-role="button"].is-selected { outline-color: #1d4ed8; }
+
+/* 이미지 슬라이드 (저장 HTML 에도 필요 — 뷰어에도 포함. 동작은 slider-runtime.js) */
+div[data-type="slider"] { --jm-ar: 16 / 9; position: relative; margin: 0 0 8px; }
+div[data-type="slider"][data-ratio="4:3"] { --jm-ar: 4 / 3; }
+div[data-type="slider"][data-ratio="1:1"] { --jm-ar: 1 / 1; }
+div[data-type="slider"][data-ratio="21:9"] { --jm-ar: 21 / 9; }
+div[data-type="slider"][data-width="100"] { width: 100%; }
+div[data-type="slider"][data-width="75"] { width: 75%; }
+div[data-type="slider"][data-width="50"] { width: 50%; }
+div[data-type="slider"][data-align="center"] { margin-left: auto; margin-right: auto; }
+div[data-type="slider"][data-align="right"] { margin-left: auto; }
+div[data-type="slider"] p[data-role="title"] { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+div[data-type="slider"]::after { content: ""; display: block; aspect-ratio: var(--jm-ar); background: #f2f4f7; border-radius: 6px; } /* 비율 상자 */
+div[data-type="slider"] > img { position: absolute; left: 0; bottom: 0; width: 100%; height: auto; aspect-ratio: var(--jm-ar); object-fit: cover; border-radius: 6px; margin: 0; opacity: 0; transition: opacity .5s; pointer-events: none; }
+div[data-type="slider"] > img.is-current, div[data-type="slider"]:not(:has(> img.is-current)) > img:first-of-type { opacity: 1; }
+.jm-slider-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border: 0; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; font-size: 16px; cursor: pointer; z-index: 2; }
+.jm-slider-prev { left: 10px; } .jm-slider-next { right: 10px; }
+.jm-slider-arrow:hover { background: rgba(0,0,0,.7); }
+.jm-slider-dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; align-items: center; gap: 6px; z-index: 2; }
+.jm-slider-dot { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%; background: rgba(255,255,255,.55); cursor: pointer; }
+.jm-slider-dot.is-current { background: #fff; }
+.jm-slider-bar { width: 28px; height: 4px; padding: 0; border: 0; border-radius: 2px; background: rgba(255,255,255,.5); cursor: pointer; }
+.jm-slider-bar.is-current { background: #fff; }
+.jm-slider-ind-numbers { justify-content: flex-end; right: 12px; left: auto; }
+.jm-slider-num { padding: 3px 10px; border-radius: 12px; background: rgba(0,0,0,.55); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* 슬라이드 레이어 (에디터 전용) */
+.jm-slider-layer { margin: 0 0 8px; border: 1px solid var(--jm-border); border-radius: 6px; background: #fff; }
+.jm-slider-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 8px; border-bottom: 1px solid var(--jm-border); background: #f8fafc; border-radius: 6px 6px 0 0; }
+.jm-slider-title { font-size: 12px; font-weight: 600; color: #344054; }
+.jm-slider-count { flex: 1; font-size: 11px; color: #667085; }
+.jm-slider-btn { height: 26px; padding: 0 8px; font-size: 12px; }
+.jm-slider-btn:disabled { opacity: .4; cursor: default; }
+.jm-slider-interval, .jm-slider-ratio, .jm-slider-indicator, .jm-slider-width, .jm-slider-align { height: 26px; font-size: 12px; border: 1px solid var(--jm-border); border-radius: 4px; background: #fff; }
+.jm-slider-remove { color: #b42318; }
+.jm-slider-layer div[data-type="slider"] { margin-top: 8px; margin-bottom: 8px; }
+.jm-slider-layer div[data-type="slider"][data-align="left"] { margin-left: 8px; }
+.jm-slider-layer div[data-type="slider"][data-align="right"] { margin-right: 8px; }
+.jm-slider-layer div[data-type="slider"] p[data-role="title"] { outline: none; padding: 4px 6px; border-radius: 4px; }
+.jm-slider-layer div[data-type="slider"] p[data-role="title"]:empty::before { content: attr(data-placeholder); color: #98a2b3; font-weight: 400; }
+.jm-slider-thumbs { display: flex; gap: 6px; flex-wrap: wrap; min-height: 56px; padding: 8px; border-top: 1px solid var(--jm-border); }
+.jm-slider-thumbs.is-empty::before { content: "이미지를 여기에 드롭하거나 「이미지 추가」를 누르세요"; color: #98a2b3; font-size: 12px; align-self: center; }
+.jm-slider-thumbs.is-dragover { background: #f0f5ff; }
+.jm-slider-thumb { width: 72px; height: 48px; border-radius: 4px; overflow: hidden; outline: 2px solid transparent; outline-offset: 1px; cursor: pointer; }
+.jm-slider-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.jm-slider-thumb:hover { outline-color: #a9c4ff; }
+.jm-slider-thumb.is-selected { outline-color: #1d4ed8; }
+.jm-slider-thumb.is-dragging { opacity: .4; }
+.jm-slider-thumb.drop-before { box-shadow: -4px 0 0 0 #1d4ed8; }
+.jm-slider-thumb.drop-after { box-shadow: 4px 0 0 0 #1d4ed8; }
