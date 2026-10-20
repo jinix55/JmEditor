@@ -245,9 +245,9 @@ div[data-type="gallery"] p[data-role="title"]{flex:0 0 100%;margin:0 0 2px;font-
 .is-block-dragging{opacity:.4}
 .jm-drop-before{box-shadow:0 -3px 0 0 var(--accent)}
 .jm-drop-after{box-shadow:0 3px 0 0 var(--accent)}
-.jm-gap-insert{position:absolute;z-index:5;transform:translate(-50%,-50%);padding:2px 10px;border:1px solid var(--accent);border-radius:10px;background:var(--panel);color:var(--accent);font-size:11px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.2)}
-.jm-gap-insert::before,.jm-gap-insert::after{content:"";position:absolute;top:50%;width:40vw;max-width:200px;height:2px;background:var(--accent);pointer-events:none}
-.jm-gap-insert::before{right:100%}.jm-gap-insert::after{left:100%}
+.jm-gap{position:absolute;z-index:5;height:0;display:flex;justify-content:center;align-items:center;pointer-events:none}
+.jm-gap::before{content:"";position:absolute;left:0;right:0;top:-1px;height:2px;background:var(--accent)}
+.jm-gap-insert{position:relative;pointer-events:auto;padding:2px 10px;border:1px solid var(--accent);border-radius:10px;background:var(--panel);color:var(--accent);font-size:11px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.2)}
 #wrap{position:relative}
 .jm-formatpicker-preview div[data-type="gallery"]{min-height:24px;border:1px dashed var(--line);border-radius:3px}
 .linkbar{display:none;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--accent-soft)}
@@ -3664,13 +3664,17 @@ class JmEditor {
    * - 경계 근처(±8px)에 마우스를 올리면 「＋ 단락 추가」 줄을 띄우고, 클릭하면 빈 단락을 넣고 커서를 옮긴다.
    */
   #bindGapInserter() {
-    const bar = document.createElement('button');
-    bar.type = 'button';
-    bar.className = 'jm-gap-insert';
-    bar.textContent = '＋ 단락 추가';
+    // 블록 폭 전체를 가로지르는 선(wrapper) + 가운데 버튼
+    const bar = document.createElement('div');
+    bar.className = 'jm-gap';
     bar.hidden = true;
-    bar.addEventListener('mousedown', (e) => e.preventDefault());
-    bar.addEventListener('click', () => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'jm-gap-insert';
+    btn.textContent = '＋ 단락 추가';
+    bar.appendChild(btn);
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', () => {
       const p = document.createElement('p');
       p.appendChild(document.createElement('br'));
       if (bar._before) this.root.insertBefore(p, bar._before); else this.root.appendChild(p);
@@ -3700,8 +3704,11 @@ class JmEditor {
       }
       if (!hit) { bar.hidden = true; return; }
       const wrapRect = wrap.getBoundingClientRect();
+      const pad = parseFloat(getComputedStyle(this.root).paddingLeft) || 0;
+      const padR = parseFloat(getComputedStyle(this.root).paddingRight) || 0;
       bar.style.top = `${hit.y - wrapRect.top + wrap.scrollTop}px`;
-      bar.style.left = `${rootRect.left - wrapRect.left + rootRect.width / 2}px`;
+      bar.style.left = `${rootRect.left - wrapRect.left + pad}px`;
+      bar.style.width = `${rootRect.width - pad - padR}px`;
       bar._before = hit.before;
       bar.hidden = false;
     };

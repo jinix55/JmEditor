@@ -346,13 +346,17 @@ export class JmEditor {
    * - 경계 근처(±8px)에 마우스를 올리면 「＋ 단락 추가」 줄을 띄우고, 클릭하면 빈 단락을 넣고 커서를 옮긴다.
    */
   #bindGapInserter() {
-    const bar = document.createElement('button');
-    bar.type = 'button';
-    bar.className = 'jm-gap-insert';
-    bar.textContent = '＋ 단락 추가';
+    // 블록 폭 전체를 가로지르는 선(wrapper) + 가운데 버튼
+    const bar = document.createElement('div');
+    bar.className = 'jm-gap';
     bar.hidden = true;
-    bar.addEventListener('mousedown', (e) => e.preventDefault());
-    bar.addEventListener('click', () => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'jm-gap-insert';
+    btn.textContent = '＋ 단락 추가';
+    bar.appendChild(btn);
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', () => {
       const p = document.createElement('p');
       p.appendChild(document.createElement('br'));
       if (bar._before) this.root.insertBefore(p, bar._before); else this.root.appendChild(p);
@@ -382,8 +386,11 @@ export class JmEditor {
       }
       if (!hit) { bar.hidden = true; return; }
       const wrapRect = wrap.getBoundingClientRect();
+      const pad = parseFloat(getComputedStyle(this.root).paddingLeft) || 0;
+      const padR = parseFloat(getComputedStyle(this.root).paddingRight) || 0;
       bar.style.top = `${hit.y - wrapRect.top + wrap.scrollTop}px`;
-      bar.style.left = `${rootRect.left - wrapRect.left + rootRect.width / 2}px`;
+      bar.style.left = `${rootRect.left - wrapRect.left + pad}px`;
+      bar.style.width = `${rootRect.width - pad - padR}px`;
       bar._before = hit.before;
       bar.hidden = false;
     };
