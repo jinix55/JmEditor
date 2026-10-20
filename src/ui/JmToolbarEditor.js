@@ -18,6 +18,11 @@ const FORMAT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none"
 /** 유튜브 버튼 아이콘 (자체 제작 SVG) */
 const YOUTUBE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3z" fill="currentColor"/></svg>';
 
+/** 정렬 버튼 아이콘 (자체 제작 SVG) */
+const ALIGN_LEFT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h12M3 18h16"/></svg>';
+const ALIGN_CENTER_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M6 12h12M4 18h16"/></svg>';
+const ALIGN_RIGHT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M9 12h12M5 18h16"/></svg>';
+
 /** 목록 버튼 아이콘 (자체 제작 SVG) */
 const UL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none"/><path d="M10 6h10M10 12h10M10 18h10"/></svg>';
 const OL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><text x="2.5" y="8" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">1</text><text x="2.5" y="14" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">2</text><text x="2.5" y="20" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">3</text></svg>';
@@ -67,6 +72,10 @@ const BUTTONS = [
   ['h2', 'H2', (s) => s.block === 'h2'],
   ['h3', 'H3', (s) => s.block === 'h3'],
   ['quote', '❝', (s) => s.block === 'blockquote'],
+  null,
+  ['alignLeft', '왼쪽 정렬', (s) => s.align === 'left', false, { tip: '왼쪽 정렬', icon: ALIGN_LEFT_ICON, iconOnly: true }],
+  ['alignCenter', '가운데 정렬', (s) => s.align === 'center', false, { tip: '가운데 정렬', icon: ALIGN_CENTER_ICON, iconOnly: true }],
+  ['alignRight', '오른쪽 정렬', (s) => s.align === 'right', false, { tip: '오른쪽 정렬', icon: ALIGN_RIGHT_ICON, iconOnly: true }],
   null,
   // 목록: 스플릿 버튼 (본 버튼 = 토글, 오른쪽 꺾쇠 = 유형 메뉴)
   ['ul', '비순서 목록', (s) => s.list === 'ul', false, { tip: '비순서 목록', icon: UL_ICON, iconOnly: true, splitMain: true }],

@@ -236,6 +236,20 @@ export class Commands {
     };
   }
 
+  // ───────────── 블록 정렬 ─────────────
+
+  /**
+   * 커서가 있는 블록(단락/제목/인용/목록 항목/표 셀)의 가로 정렬
+   * @param {'left'|'center'|'right'|'justify'} value left 면 스타일 제거
+   */
+  setAlign(value) {
+    const block = this.sel.getBlock();
+    if (!block) return;
+    if (value === 'left') block.style.removeProperty('text-align'); else block.style.textAlign = value;
+    if (!block.getAttribute('style')?.trim()) block.removeAttribute('style');
+    this.editor.commit();
+  }
+
   // ───────────── 블록 서식 (p / h1~h3 / blockquote) ─────────────
 
   /**
@@ -439,6 +453,7 @@ export class Commands {
       a: this.sel.isInside('a'),
       ...this.getStyleState(),
       block: block ? block.tagName.toLowerCase() : null,
+      align: block ? (block.style.textAlign || 'left') : 'left',
       list: block && block.tagName === 'LI' ? block.parentNode.tagName.toLowerCase() : null,
       listType: block && block.tagName === 'LI' ? (block.parentNode.style.listStyleType || null) : null,
     };
