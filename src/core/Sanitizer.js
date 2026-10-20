@@ -6,10 +6,10 @@
 
 /** 허용 태그와 각 태그에서 허용하는 속성 */
 const ALLOWED = {
-  p: [], br: [], strong: [], em: [], u: [], s: [],
-  h1: [], h2: [], h3: [],
-  ul: ['style'], ol: ['style', 'start'], li: [],
-  blockquote: [],
+  p: ['style'], br: [], strong: [], em: [], u: [], s: [],
+  h1: ['style'], h2: ['style'], h3: ['style'],
+  ul: ['style'], ol: ['style', 'start'], li: ['style'],
+  blockquote: ['style'],
   a: ['href', 'target', 'rel', 'data-role', 'data-style', 'data-size'], // data-role=button → 버튼 모양 링크
   img: ['src', 'alt', 'width', 'height'],
   table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style'],
