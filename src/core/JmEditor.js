@@ -225,7 +225,9 @@ export class JmEditor {
     };
     document.addEventListener('mousedown', onDocDown, true);
     const onSelChange = () => {
-      if (document.activeElement === r) {
+      // 루트뿐 아니라 표 셀·갤러리 제목 등 루트 안쪽 편집 영역에 포커스가 있을 때도 커서를 저장
+      const ae = document.activeElement;
+      if (ae === r || (ae && r.contains(ae))) {
         this.sel.save();
         this.options.onSelectionChange?.();
       }
