@@ -13,6 +13,7 @@ import { TableCommands, TABLE_LAYER_CLASS } from '../plugins/table/TableCommands
 import { ContextMenu } from '../ui/ContextMenu.js';
 import { GalleryCommands, GALLERY_LAYER_CLASS } from '../plugins/gallery/GalleryCommands.js';
 import { History } from './History.js';
+import { BlockDrag } from './BlockDrag.js';
 import { Sanitizer } from './Sanitizer.js';
 
 const ZWSP = '​';
@@ -41,6 +42,7 @@ export class JmEditor {
     this.commands = new Commands(this);
     this.table = new TableCommands(this);
     this.menu = new ContextMenu();
+    this.blockDrag = new BlockDrag(this); // 표·갤러리 블록 드래그 이동
     this.gallery = new GalleryCommands(this);
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
 
@@ -99,7 +101,7 @@ export class JmEditor {
 
   /** 저장용 HTML 반환 (ZWSP·표 레이어 제거) */
   getHTML() {
-    return GalleryCommands.unwrapHTML(TableCommands.unwrapHTML(this.root.innerHTML.replace(new RegExp(ZWSP, 'g'), '')));
+    return BlockDrag.cleanHTML(GalleryCommands.unwrapHTML(TableCommands.unwrapHTML(this.root.innerHTML.replace(new RegExp(ZWSP, 'g'), ''))));
   }
 
   /** HTML 로드 (sanitize 후) */
@@ -141,6 +143,7 @@ export class JmEditor {
     this.#unbind?.();
     this.menu.destroy();
     this.gallery.destroy();
+    this.blockDrag.destroy();
   }
 
   // ───────────── 내부 ─────────────
@@ -269,6 +272,7 @@ export class JmEditor {
 
   /** 드롭: 이미지 파일만 처리 */
   async #handleDrop(e) {
+    if (BlockDrag.isBlockDrag(e)) return;                       // 블록 이동은 BlockDrag 가 처리
     if (e.target.closest?.(`.${GALLERY_LAYER_CLASS}`)) return; // 갤러리 레이어가 직접 처리
     const file = Array.from(e.dataTransfer?.files || []).find((f) => f.type.startsWith('image/'));
     if (!file) return;

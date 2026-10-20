@@ -208,4 +208,14 @@ div[data-type="gallery"] p[data-role="title"] { flex: 0 0 100%; margin: 0 0 2px;
 .jm-gallery-layer .jm-gallery img.is-dragging { opacity: .4; }
 .jm-gallery-layer .jm-gallery img.drop-before { box-shadow: -4px 0 0 0 #1d4ed8; }
 .jm-gallery-layer .jm-gallery img.drop-after { box-shadow: 4px 0 0 0 #1d4ed8; }
-.jm-gallery-move { min-width: 28px; padding: 0 4px; }
+
+/* 블록 드래그 이동 (표·갤러리 공통) */
+.jm-block-handle { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; color: #98a2b3; font-size: 16px; cursor: grab; user-select: none; }
+.jm-block-handle:hover { background: #e4e7ec; color: #344054; }
+.jm-block-handle:active { cursor: grabbing; }
+.jm-table-handle { position: absolute; top: -11px; left: 8px; background: var(--jm-bg); border: 1px solid var(--jm-border); opacity: 0; transition: opacity .1s; }
+.jm-table-layer:hover .jm-table-handle, .jm-table-layer:focus-within .jm-table-handle { opacity: 1; }
+.jm-table-layer:focus-within::before { left: 36px; }
+.is-block-dragging { opacity: .4; }
+.jm-drop-before { box-shadow: 0 -3px 0 0 #1d4ed8; }
+.jm-drop-after { box-shadow: 0 3px 0 0 #1d4ed8; }

@@ -8,6 +8,7 @@
  * - 갤러리 위에 이미지 파일을 드롭하거나 헤더 「이미지 추가」로 여러 장을 넣을 수 있다.
  */
 import { layoutGallery, stampSize } from './gallery-layout.js';
+import { BlockDrag } from '../../core/BlockDrag.js';
 
 export const GALLERY_LAYER_CLASS = 'jm-gallery-layer';
 const SELECTED_CLASS = 'is-selected';
@@ -57,6 +58,7 @@ export class GalleryCommands {
     layer.contentEditable = 'false';
     gallery.parentNode.insertBefore(layer, gallery);
     layer.append(this.#buildHeader(gallery), gallery);
+    this.editor.blockDrag?.makeDraggable(gallery._handle, layer);
     gallery.classList.add('jm-gallery');
     if (!gallery.dataset.layout) gallery.dataset.layout = DEFAULT_LAYOUT;
     this.#ensureTitle(gallery);
@@ -89,6 +91,13 @@ export class GalleryCommands {
   #buildHeader(gallery) {
     const h = document.createElement('div');
     h.className = 'jm-gallery-header';
+
+    // 드래그 핸들: 끌어서 블록 위치 이동
+    const handle = document.createElement('span');
+    handle.className = 'jm-block-handle';
+    handle.title = '끌어서 이동';
+    handle.textContent = '⠿';
+    gallery._handle = handle;
 
     const title = document.createElement('span');
     title.className = 'jm-gallery-title';
@@ -153,15 +162,10 @@ export class GalleryCommands {
     count.className = 'jm-gallery-count';
     gallery._countEl = count;
 
-    const up = mk('▲', () => this.moveBlock(gallery, -1), 'jm-gallery-move');
-    up.title = '위로 이동';
-    const down = mk('▼', () => this.moveBlock(gallery, 1), 'jm-gallery-move');
-    down.title = '아래로 이동';
-
     const remove = mk('✕', () => this.deleteGallery(gallery), 'jm-gallery-remove');
     remove.title = '갤러리 삭제';
 
-    h.append(title, count, add, delSel, delAll, cols, layout, align, up, down, remove);
+    h.append(handle, title, count, add, delSel, delAll, cols, layout, align, remove);
     return h;
   }
 
@@ -189,6 +193,7 @@ export class GalleryCommands {
       dragging = null;
     });
     gallery.addEventListener('dragover', (e) => {
+      if (BlockDrag.isBlockDrag(e)) return; // 블록 이동은 BlockDrag 가 처리 (루트에서 버블링 수신)
       e.preventDefault();
       if (dragging) {
         // 마우스가 대상 이미지의 왼쪽 절반이면 앞, 오른쪽 절반이면 뒤
@@ -205,6 +210,7 @@ export class GalleryCommands {
     });
     gallery.addEventListener('dragleave', (e) => { if (!gallery.contains(e.relatedTarget)) gallery.classList.remove('is-dragover'); });
     gallery.addEventListener('drop', async (e) => {
+      if (BlockDrag.isBlockDrag(e)) return;
       e.preventDefault(); e.stopPropagation();
       gallery.classList.remove('is-dragover');
       if (dragging) {
@@ -270,21 +276,6 @@ export class GalleryCommands {
   deleteAll(gallery) {
     gallery.querySelectorAll('img').forEach((img) => img.remove());
     this.#layout(gallery);
-    this.editor.commit();
-  }
-
-  /**
-   * 갤러리 블록을 문서에서 위/아래로 한 칸 이동 (앞·뒤 형제 블록과 자리 바꿈)
-   * @param {HTMLElement} gallery
-   * @param {-1|1} dir
-   */
-  moveBlock(gallery, dir) {
-    const layer = gallery.closest(`.${GALLERY_LAYER_CLASS}`) || gallery;
-    const sibling = dir < 0 ? layer.previousElementSibling : layer.nextElementSibling;
-    if (!sibling) return;
-    if (dir < 0) layer.parentNode.insertBefore(layer, sibling);
-    else layer.parentNode.insertBefore(sibling, layer);
-    layer.scrollIntoView({ block: 'nearest' });
     this.editor.commit();
   }
 

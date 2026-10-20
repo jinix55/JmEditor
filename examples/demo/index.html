@@ -120,7 +120,15 @@ div[data-type="gallery"] p[data-role="title"]{flex:0 0 100%;margin:0 0 2px;font-
 .jm-gallery-layer .jm-gallery img.is-dragging{opacity:.4}
 .jm-gallery-layer .jm-gallery img.drop-before{box-shadow:-4px 0 0 0 var(--accent)}
 .jm-gallery-layer .jm-gallery img.drop-after{box-shadow:4px 0 0 0 var(--accent)}
-.jm-gallery-move{min-width:28px;padding:0 4px}
+.jm-block-handle{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:4px;color:var(--muted);font-size:16px;cursor:grab;user-select:none}
+.jm-block-handle:hover{background:var(--line);color:var(--fg)}
+.jm-block-handle:active{cursor:grabbing}
+.jm-table-handle{position:absolute;top:-11px;left:8px;background:var(--panel);border:1px solid var(--line);opacity:0;transition:opacity .1s}
+.jm-table-layer:hover .jm-table-handle,.jm-table-layer:focus-within .jm-table-handle{opacity:1}
+.jm-table-layer:focus-within::before{left:36px}
+.is-block-dragging{opacity:.4}
+.jm-drop-before{box-shadow:0 -3px 0 0 var(--accent)}
+.jm-drop-after{box-shadow:0 3px 0 0 var(--accent)}
 .jm-formatpicker-preview div[data-type="gallery"]{min-height:24px;border:1px dashed var(--line);border-radius:3px}
 .linkbar{display:none;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--accent-soft)}
 .linkbar.open{display:flex}
@@ -435,6 +443,116 @@ class History {
     this.undoStack.push(this.last);
     this.last = this.redoStack.pop();
     this.setState(this.last);
+  }
+}
+
+/**
+ * BlockDrag — 블록(표 레이어, 갤러리 레이어 등)을 드래그로 문서 안에서 옮기는 공통 모듈
+ * - 각 블록은 핸들 요소 하나를 등록한다(makeDraggable). 핸들을 끌면 루트 직속 블록 사이에 삽입선이 표시되고,
+ *   놓으면 그 위치로 이동한다.
+ * - 드래그 데이터 타입 MIME 으로 이미지 파일 드롭·갤러리 사진 순서 이동과 구분한다.
+ */
+const BLOCK_MIME = 'application/x-jm-block';
+const DROP_BEFORE = 'jm-drop-before';
+const DROP_AFTER = 'jm-drop-after';
+
+class BlockDrag {
+  /** @param {import('./JmEditor.js').JmEditor} editor */
+  constructor(editor) {
+    this.editor = editor;
+    this.root = editor.root;
+    this.dragging = null; // 드래그 중인 블록(루트 직속 요소)
+    this.target = null;   // 삽입 기준 블록
+    this.before = true;   // 기준 블록 앞/뒤
+
+    this.onOver = (e) => this.#over(e);
+    this.onDrop = (e) => this.#drop(e);
+    this.root.addEventListener('dragover', this.onOver);
+    this.root.addEventListener('drop', this.onDrop);
+  }
+
+  /**
+   * 핸들을 끌면 block 이 이동하도록 등록
+   * @param {HTMLElement} handle
+   * @param {HTMLElement} block 루트 직속 블록(레이어)
+   */
+  makeDraggable(handle, block) {
+    handle.draggable = true;
+    handle.addEventListener('dragstart', (e) => {
+      this.dragging = block;
+      block.classList.add('is-block-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData(BLOCK_MIME, '1');
+      e.dataTransfer.setData('text/plain', 'jm-block'); // Firefox 드래그 시작 조건
+      // 고스트 이미지는 블록 전체로
+      try { e.dataTransfer.setDragImage(block, 20, 20); } catch { /* 일부 브라우저 미지원 */ }
+      e.stopPropagation();
+    });
+    handle.addEventListener('dragend', () => this.#end());
+  }
+
+  /** 이벤트가 블록 드래그인지 */
+  static isBlockDrag(e) {
+    return Array.from(e.dataTransfer?.types || []).includes(BLOCK_MIME);
+  }
+
+  /** 마우스 Y 좌표로 루트 직속 블록과 앞/뒤를 정한다 */
+  #locate(e) {
+    const blocks = Array.from(this.root.children).filter((b) => b !== this.dragging);
+    let target = null, before = true;
+    for (const b of blocks) {
+      const r = b.getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) { target = b; before = true; break; }
+      target = b; before = false;
+    }
+    return { target, before };
+  }
+
+  #clearMarks() {
+    this.root.querySelectorAll(`.${DROP_BEFORE}, .${DROP_AFTER}`).forEach((el) => el.classList.remove(DROP_BEFORE, DROP_AFTER));
+  }
+
+  #over(e) {
+    if (!this.dragging) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const { target, before } = this.#locate(e);
+    if (target === this.target && before === this.before) return;
+    this.#clearMarks();
+    this.target = target; this.before = before;
+    if (target) target.classList.add(before ? DROP_BEFORE : DROP_AFTER);
+  }
+
+  #drop(e) {
+    if (!this.dragging) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const { target, before } = this.#locate(e);
+    if (target) this.root.insertBefore(this.dragging, before ? target : target.nextSibling);
+    else this.root.appendChild(this.dragging);
+    const moved = this.dragging;
+    this.#end();
+    moved.scrollIntoView({ block: 'nearest' });
+    this.editor.commit();
+  }
+
+  #end() {
+    this.dragging?.classList.remove('is-block-dragging');
+    this.#clearMarks();
+    this.dragging = null; this.target = null;
+  }
+
+  /** 저장용 HTML 에서 드래그 표시 클래스 제거 */
+  static cleanHTML(html) {
+    return html.replace(/\s?class="(?:[^"]*\s)?(?:jm-drop-before|jm-drop-after|is-block-dragging)(?:\s[^"]*)?"/g, (m) => {
+      const cls = m.match(/class="([^"]*)"/)[1].split(/\s+/).filter((c) => c && !/^(jm-drop-before|jm-drop-after|is-block-dragging)$/.test(c));
+      return cls.length ? ` class="${cls.join(' ')}"` : '';
+    });
+  }
+
+  destroy() {
+    this.root.removeEventListener('dragover', this.onOver);
+    this.root.removeEventListener('drop', this.onDrop);
   }
 }
 
@@ -900,8 +1018,14 @@ class TableCommands {
     layer.className = TABLE_LAYER_CLASS;
     layer.contentEditable = 'false';           // 레이어 자체는 편집 불가
     table.parentNode.insertBefore(layer, table);
-    layer.appendChild(table);
+    // 드래그 핸들 (끌어서 블록 위치 이동). 저장 시 레이어와 함께 제거됨
+    const handle = document.createElement('span');
+    handle.className = 'jm-block-handle jm-table-handle';
+    handle.title = '끌어서 이동 · 표 위에서 우클릭하면 편집 메뉴';
+    handle.textContent = '⠿';
+    layer.append(handle, table);
     table.contentEditable = 'true';            // 셀 내부만 편집 가능
+    this.editor.blockDrag?.makeDraggable(handle, layer);
     return layer;
   }
 
@@ -1350,6 +1474,7 @@ class GalleryCommands {
     layer.contentEditable = 'false';
     gallery.parentNode.insertBefore(layer, gallery);
     layer.append(this.#buildHeader(gallery), gallery);
+    this.editor.blockDrag?.makeDraggable(gallery._handle, layer);
     gallery.classList.add('jm-gallery');
     if (!gallery.dataset.layout) gallery.dataset.layout = DEFAULT_LAYOUT;
     this.#ensureTitle(gallery);
@@ -1382,6 +1507,13 @@ class GalleryCommands {
   #buildHeader(gallery) {
     const h = document.createElement('div');
     h.className = 'jm-gallery-header';
+
+    // 드래그 핸들: 끌어서 블록 위치 이동
+    const handle = document.createElement('span');
+    handle.className = 'jm-block-handle';
+    handle.title = '끌어서 이동';
+    handle.textContent = '⠿';
+    gallery._handle = handle;
 
     const title = document.createElement('span');
     title.className = 'jm-gallery-title';
@@ -1446,15 +1578,10 @@ class GalleryCommands {
     count.className = 'jm-gallery-count';
     gallery._countEl = count;
 
-    const up = mk('▲', () => this.moveBlock(gallery, -1), 'jm-gallery-move');
-    up.title = '위로 이동';
-    const down = mk('▼', () => this.moveBlock(gallery, 1), 'jm-gallery-move');
-    down.title = '아래로 이동';
-
     const remove = mk('✕', () => this.deleteGallery(gallery), 'jm-gallery-remove');
     remove.title = '갤러리 삭제';
 
-    h.append(title, count, add, delSel, delAll, cols, layout, align, up, down, remove);
+    h.append(handle, title, count, add, delSel, delAll, cols, layout, align, remove);
     return h;
   }
 
@@ -1482,6 +1609,7 @@ class GalleryCommands {
       dragging = null;
     });
     gallery.addEventListener('dragover', (e) => {
+      if (BlockDrag.isBlockDrag(e)) return; // 블록 이동은 BlockDrag 가 처리 (루트에서 버블링 수신)
       e.preventDefault();
       if (dragging) {
         // 마우스가 대상 이미지의 왼쪽 절반이면 앞, 오른쪽 절반이면 뒤
@@ -1498,6 +1626,7 @@ class GalleryCommands {
     });
     gallery.addEventListener('dragleave', (e) => { if (!gallery.contains(e.relatedTarget)) gallery.classList.remove('is-dragover'); });
     gallery.addEventListener('drop', async (e) => {
+      if (BlockDrag.isBlockDrag(e)) return;
       e.preventDefault(); e.stopPropagation();
       gallery.classList.remove('is-dragover');
       if (dragging) {
@@ -1563,21 +1692,6 @@ class GalleryCommands {
   deleteAll(gallery) {
     gallery.querySelectorAll('img').forEach((img) => img.remove());
     this.#layout(gallery);
-    this.editor.commit();
-  }
-
-  /**
-   * 갤러리 블록을 문서에서 위/아래로 한 칸 이동 (앞·뒤 형제 블록과 자리 바꿈)
-   * @param {HTMLElement} gallery
-   * @param {-1|1} dir
-   */
-  moveBlock(gallery, dir) {
-    const layer = gallery.closest(`.${GALLERY_LAYER_CLASS}`) || gallery;
-    const sibling = dir < 0 ? layer.previousElementSibling : layer.nextElementSibling;
-    if (!sibling) return;
-    if (dir < 0) layer.parentNode.insertBefore(layer, sibling);
-    else layer.parentNode.insertBefore(sibling, layer);
-    layer.scrollIntoView({ block: 'nearest' });
     this.editor.commit();
   }
 
@@ -1655,6 +1769,7 @@ class JmEditor {
     this.commands = new Commands(this);
     this.table = new TableCommands(this);
     this.menu = new ContextMenu();
+    this.blockDrag = new BlockDrag(this); // 표·갤러리 블록 드래그 이동
     this.gallery = new GalleryCommands(this);
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
 
@@ -1713,7 +1828,7 @@ class JmEditor {
 
   /** 저장용 HTML 반환 (ZWSP·표 레이어 제거) */
   getHTML() {
-    return GalleryCommands.unwrapHTML(TableCommands.unwrapHTML(this.root.innerHTML.replace(new RegExp(ZWSP, 'g'), '')));
+    return BlockDrag.cleanHTML(GalleryCommands.unwrapHTML(TableCommands.unwrapHTML(this.root.innerHTML.replace(new RegExp(ZWSP, 'g'), ''))));
   }
 
   /** HTML 로드 (sanitize 후) */
@@ -1755,6 +1870,7 @@ class JmEditor {
     this.#unbind?.();
     this.menu.destroy();
     this.gallery.destroy();
+    this.blockDrag.destroy();
   }
 
   // ───────────── 내부 ─────────────
@@ -1883,6 +1999,7 @@ class JmEditor {
 
   /** 드롭: 이미지 파일만 처리 */
   async #handleDrop(e) {
+    if (BlockDrag.isBlockDrag(e)) return;                       // 블록 이동은 BlockDrag 가 처리
     if (e.target.closest?.(`.${GALLERY_LAYER_CLASS}`)) return; // 갤러리 레이어가 직접 처리
     const file = Array.from(e.dataTransfer?.files || []).find((f) => f.type.startsWith('image/'));
     if (!file) return;
@@ -2527,7 +2644,7 @@ const SAMPLE_FORMATS = [
     id: 'image-gallery',
     name: '이미지 갤러리',
     description: '이미지만 넣는 블록. 드롭/추가 시 자동 균등 배치, 헤더에서 선택·전체 삭제',
-    html: `<div data-type="gallery" data-cols="3" data-layout="justify"><p data-role="title">현장 사진 — 사진을 드래그해 순서를 바꿔보세요</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJmNmY0ZSIvPjx0ZXh0IHg9IjQwMCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDQ6MzwvdGV4dD48L3N2Zz4=" alt="가로 4:3" width="800" height="600"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzNiNmVhNSIvPjx0ZXh0IHg9IjMwMCIgeT0iNDEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDM6NDwvdGV4dD48L3N2Zz4=" alt="세로 3:4" width="600" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjUwMCI+PHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNTAwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjAwIiB5PSIyNjIiIGZvbnQtc2l6ZT0iNjIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7tjIzrhbjrnbzrp4g8L3RleHQ+PC9zdmc+" alt="파노라마" width="1200" height="500"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NTAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNDUwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzZiNGZhMCIvPjx0ZXh0IHg9IjIyNSIgeT0iNDEyIiBmb250LXNpemU9IjU2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDk6MTY8L3RleHQ+PC9zdmc+" alt="세로 9:16" width="450" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MDAiIGhlaWdodD0iNzAwIj48cmVjdCB3aWR0aD0iNzAwIiBoZWlnaHQ9IjcwMCIgZmlsbD0iIzhhNmQzYiIvPjx0ZXh0IHg9IjM1MCIgeT0iMzYyIiBmb250LXNpemU9Ijg3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7KCV7IKs6rCBPC90ZXh0Pjwvc3ZnPg==" alt="정사각" width="700" height="700"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iOTAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJhN2Y4ZiIvPjx0ZXh0IHg9IjQ1MCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDM6MjwvdGV4dD48L3N2Zz4=" alt="가로 3:2" width="900" height="600"></div>`,
+    html: ``,
   },
   {
     id: 'divider-note',
@@ -2620,6 +2737,7 @@ function setMode(m){
 
 /* 초기 샘플 내용 */
 editor.setHTML(`<h2>공지사항 작성 샘플</h2>
+<div data-type="gallery" data-cols="3" data-layout="justify"><p data-role="title">현장 사진 — 사진은 드래그로 순서 변경, 헤더의 ⠿ 로 블록 이동</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJmNmY0ZSIvPjx0ZXh0IHg9IjQwMCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDQ6MzwvdGV4dD48L3N2Zz4=" alt="가로 4:3" width="800" height="600"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzNiNmVhNSIvPjx0ZXh0IHg9IjMwMCIgeT0iNDEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDM6NDwvdGV4dD48L3N2Zz4=" alt="세로 3:4" width="600" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjUwMCI+PHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNTAwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjAwIiB5PSIyNjIiIGZvbnQtc2l6ZT0iNjIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7tjIzrhbjrnbzrp4g8L3RleHQ+PC9zdmc+" alt="파노라마" width="1200" height="500"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NTAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNDUwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzZiNGZhMCIvPjx0ZXh0IHg9IjIyNSIgeT0iNDEyIiBmb250LXNpemU9IjU2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDk6MTY8L3RleHQ+PC9zdmc+" alt="세로 9:16" width="450" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MDAiIGhlaWdodD0iNzAwIj48cmVjdCB3aWR0aD0iNzAwIiBoZWlnaHQ9IjcwMCIgZmlsbD0iIzhhNmQzYiIvPjx0ZXh0IHg9IjM1MCIgeT0iMzYyIiBmb250LXNpemU9Ijg3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7KCV7IKs6rCBPC90ZXh0Pjwvc3ZnPg==" alt="정사각" width="700" height="700"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iOTAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJhN2Y4ZiIvPjx0ZXh0IHg9IjQ1MCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDM6MjwvdGV4dD48L3N2Zz4=" alt="가로 3:2" width="900" height="600"></div>
 <p>이 에디터는 <strong>굵게</strong>, <em>기울임</em>, <u>밑줄</u>, <s>취소선</s>, <span style="color:#d32f2f">글자색</span>, <span style="background-color:#fff9c4">배경색</span> 과 제목·인용·목록·링크·이미지를 지원합니다.</p>
 <blockquote>인용 블록에서 Enter 를 누르면 다음 줄은 일반 단락으로 빠져나옵니다.</blockquote>
 <ul><li>텍스트를 드래그한 뒤 툴바 버튼을 눌러보세요</li><li>빈 목록 항목에서 Enter 를 누르면 목록이 종료됩니다</li><li>외부 사이트 글을 붙여넣으면 허용 태그만 남습니다</li></ul>
