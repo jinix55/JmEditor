@@ -32,8 +32,14 @@ export class TableCommands {
     layer.className = TABLE_LAYER_CLASS;
     layer.contentEditable = 'false';           // 레이어 자체는 편집 불가
     table.parentNode.insertBefore(layer, table);
-    layer.appendChild(table);
+    // 드래그 핸들 (끌어서 블록 위치 이동). 저장 시 레이어와 함께 제거됨
+    const handle = document.createElement('span');
+    handle.className = 'jm-block-handle jm-table-handle';
+    handle.title = '끌어서 이동 · 표 위에서 우클릭하면 편집 메뉴';
+    handle.textContent = '⠿';
+    layer.append(handle, table);
     table.contentEditable = 'true';            // 셀 내부만 편집 가능
+    this.editor.blockDrag?.makeDraggable(handle, layer);
     return layer;
   }
 
