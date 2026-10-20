@@ -1,0 +1,12 @@
+{
+  "name": "jm-editor",
+  "version": "0.1.0",
+  "description": "의존성 없이 contenteditable로 직접 구현한 WYSIWYG 웹에디터",
+  "license": "MIT",
+  "author": "jinix55",
+  "repository": "github:jinix55/JmEditor",
+  "type": "module",
+  "main": "src/index.js",
+  "files": ["src", "examples", "server", "LICENSE", "README.md"],
+  "keywords": ["editor", "wysiwyg", "contenteditable", "thymeleaf", "jsp", "react", "spring-boot"]
+}

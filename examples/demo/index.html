@@ -1,0 +1,2423 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JmEditor Demo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono&display=swap">
+<style>
+/* 레이아웃: 상단 설명 띠 → 에디터 카드 → 결과 HTML 패널 (한 열) */
+:root{--bg:#f6f7f4;--fg:#1f2421;--muted:#6b716c;--line:#d6dad3;--panel:#ffffff;--accent:#2f6f4e;--accent-soft:#e3efe8;--code:#f0f2ee;
+  --sans:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#15181a;--fg:#e6e8e3;--muted:#9aa19b;--line:#2d3330;--panel:#1d2124;--accent:#7cc39b;--accent-soft:#213128;--code:#23282b;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#15181a;--fg:#e6e8e3;--muted:#9aa19b;--line:#2d3330;--panel:#1d2124;--accent:#7cc39b;--accent-soft:#213128;--code:#23282b;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+main{max-width:860px;margin:0 auto;display:grid;gap:20px}
+header h1{font-size:1.35rem;margin:0 0 4px;text-wrap:balance}
+header p{margin:0;color:var(--muted);font-size:.92rem}
+.jm-container{border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden}
+.jm-toolbar-top{background:var(--code)}
+.jm-toolbar{display:flex;flex-wrap:wrap;gap:4px;padding:8px 10px;border-bottom:1px solid var(--line);align-items:center}
+.jm-btn{min-width:32px;height:30px;padding:0 9px;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--fg);font:500 13px var(--sans);cursor:pointer}
+.jm-btn:hover{background:var(--accent-soft)}
+.jm-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.jm-btn.is-active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.jm-sep{width:1px;height:22px;margin:0 4px;background:var(--line)}
+.jm-btn-right{margin-left:auto}
+.jm-btn:disabled{opacity:.4;cursor:default}
+.jm-source{display:block;width:100%;min-height:260px;padding:12px 14px;border:0;outline:none;resize:vertical;font:13px/1.5 var(--mono);color:var(--fg);background:var(--code);box-sizing:border-box}
+.jm-btn-seg{border-color:var(--line);border-radius:0;margin-left:-1px}
+.jm-btn-seg-first{margin-left:0;border-radius:5px 0 0 5px}
+.jm-btn-seg-last{border-radius:0 5px 5px 0}
+.jm-btn-seg.is-active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);position:relative;z-index:1}
+.jm-preview-pane{min-height:260px;padding:14px 16px;line-height:1.6}
+.jm-content p{margin:0 0 8px}.jm-content h1{font-size:1.7em;margin:12px 0 8px}.jm-content h2{font-size:1.4em;margin:12px 0 8px}.jm-content h3{font-size:1.15em;margin:10px 0 6px}
+.jm-content blockquote{margin:8px 0;padding:6px 12px;border-left:3px solid var(--accent);color:var(--muted)}
+.jm-content ul,.jm-content ol{margin:0 0 8px;padding-left:24px}.jm-content img{max-width:100%;height:auto;display:block}.jm-content a{color:var(--accent);text-decoration:underline}
+.jm-content table{border-collapse:collapse;width:100%;margin:0 0 8px;table-layout:fixed}.jm-content td,.jm-content th{border:1px solid var(--line);padding:6px 8px;vertical-align:top}.jm-content th{background:var(--accent-soft);font-weight:600;text-align:left}
+.jm-content div[data-type="gallery"]{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
+.jm-btn-icon{display:inline-flex;align-items:center;gap:6px}
+.jm-editor{min-height:260px;padding:14px 16px;outline:none;line-height:1.65;overflow-wrap:break-word;position:relative}
+.jm-editor[data-placeholder]:has(> p:only-child > br:only-child)::before{content:attr(data-placeholder);color:var(--muted);position:absolute;pointer-events:none}
+.jm-editor p{margin:0 0 8px}.jm-editor h1{font-size:1.7em;margin:12px 0 8px}.jm-editor h2{font-size:1.4em;margin:12px 0 8px}.jm-editor h3{font-size:1.15em;margin:10px 0 6px}
+.jm-editor blockquote{margin:8px 0;padding:6px 12px;border-left:3px solid var(--accent);color:var(--muted)}
+.jm-editor ul,.jm-editor ol{margin:0 0 8px;padding-left:24px}.jm-editor img{max-width:100%;height:auto;display:block;border-radius:4px}
+.jm-editor a{color:var(--accent);text-decoration:underline}
+.jm-editor table{border-collapse:collapse;width:100%;margin:0 0 8px;table-layout:fixed}
+.jm-editor td,.jm-editor th{border:1px solid var(--line);padding:6px 8px;min-width:40px;vertical-align:top}
+.jm-editor th{background:var(--accent-soft);font-weight:600;text-align:left}
+.jm-btn[hidden]{display:none!important}
+.jm-table-layer{position:relative;margin:0 0 8px;padding:6px;border:1px dashed transparent;border-radius:4px}
+.jm-table-layer:hover,.jm-table-layer:focus-within{border-color:var(--accent);background:var(--accent-soft)}
+.jm-table-layer:focus-within::before{content:"표 · 우클릭하여 편집";position:absolute;top:-10px;left:8px;padding:0 6px;font-size:11px;color:var(--accent);background:var(--panel)}
+.jm-table-layer table{margin:0;background:var(--panel)}
+.jm-ctxmenu{position:fixed;z-index:1000;min-width:160px;padding:4px;border:1px solid var(--line);border-radius:6px;background:var(--panel);box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.jm-ctxmenu-item{display:block;width:100%;padding:6px 10px;border:0;border-radius:4px;background:transparent;color:var(--fg);font:13px/1.4 var(--sans);text-align:left;cursor:pointer}
+.jm-ctxmenu-item:hover,.jm-ctxmenu-item:focus-visible{background:var(--accent-soft);outline:none}
+.jm-ctxmenu-divider{height:1px;margin:4px 6px;background:var(--line)}
+.jm-gridpicker{position:fixed;z-index:1000;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.jm-gridpicker-grid{display:grid;gap:3px}
+.jm-gridpicker-cell{width:18px;height:18px;border:1px solid var(--line);border-radius:2px;background:var(--panel);cursor:pointer}
+.jm-gridpicker-cell.is-on{background:var(--accent-soft);border-color:var(--accent)}
+.jm-gridpicker-label{margin-top:6px;font-size:12px;text-align:center;color:var(--muted)}
+.jm-btn[data-cmd="color"],.jm-btn[data-cmd="bgColor"]{position:relative}
+.jm-btn[data-cmd="color"]::after,.jm-btn[data-cmd="bgColor"]::after{content:"";position:absolute;left:6px;right:6px;bottom:3px;height:3px;border-radius:2px;background:var(--jm-swatch,transparent)}
+.jm-colorpicker{position:fixed;z-index:1000;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.jm-colorpicker-grid{display:grid;grid-template-columns:repeat(6,22px);gap:4px}
+.jm-colorpicker-swatch{width:22px;height:22px;border:1px solid rgba(0,0,0,.15);border-radius:3px;cursor:pointer;padding:0}
+.jm-colorpicker-swatch:hover{outline:2px solid var(--accent);outline-offset:1px}
+.jm-colorpicker-foot{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:8px}
+.jm-colorpicker-custom{margin-top:8px;width:160px}
+.jm-colorpicker-svbox,.jm-colorpicker-huebox{position:relative;touch-action:none;cursor:crosshair}
+.jm-colorpicker-sv{display:block;width:160px;height:110px;border-radius:3px}
+.jm-colorpicker-hue{display:block;width:160px;height:12px;margin-top:6px;border-radius:3px}
+.jm-colorpicker-cursor{position:absolute;width:10px;height:10px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.5);transform:translate(-50%,-50%);pointer-events:none}
+.jm-colorpicker-huecursor{position:absolute;top:4px;width:4px;height:16px;border:1px solid #fff;border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.5);transform:translateX(-50%);pointer-events:none}
+.jm-colorpicker-row{display:flex;align-items:center;gap:6px;margin-top:6px}
+.jm-colorpicker-preview{width:22px;height:22px;border:1px solid rgba(0,0,0,.15);border-radius:3px;flex:none}
+.jm-colorpicker-hex{flex:1;min-width:0;padding:4px 6px;border:1px solid var(--line);border-radius:3px;background:var(--panel);color:var(--fg);font:12px var(--mono)}
+.jm-colorpicker-apply{flex:none}
+.jm-colorpicker-eye{display:inline-flex;align-items:center;justify-content:center;min-width:32px}
+.jm-formatpicker{position:fixed;z-index:1000;width:272px;max-height:60vh;overflow:auto;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel);box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.jm-formatpicker-msg{padding:10px;font-size:13px;color:var(--muted);text-align:center}
+.jm-formatpicker-item{display:block;width:100%;padding:8px;border:1px solid transparent;border-radius:5px;background:transparent;text-align:left;cursor:pointer;font:inherit;color:inherit}
+.jm-formatpicker-item:hover,.jm-formatpicker-item:focus-visible{background:var(--accent-soft);border-color:var(--line);outline:none}
+.jm-formatpicker-name{font-size:13px;font-weight:600}
+.jm-formatpicker-desc{font-size:11px;color:var(--muted);margin:2px 0 6px}
+.jm-formatpicker-preview{min-height:0;padding:6px;border:1px solid var(--line);border-radius:4px;background:var(--panel);font-size:9px;line-height:1.4;max-height:70px;overflow:hidden;pointer-events:none}
+.jm-formatpicker-preview h1,.jm-formatpicker-preview h2,.jm-formatpicker-preview h3{margin:0 0 3px;font-size:1.2em}
+.jm-formatpicker-preview p,.jm-formatpicker-preview ul,.jm-formatpicker-preview ol,.jm-formatpicker-preview table,.jm-formatpicker-preview blockquote{margin:0 0 3px}
+.jm-formatpicker-preview td,.jm-formatpicker-preview th{padding:2px 4px}
+.jm-editor div[data-type="gallery"],.jm-gallery{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
+div[data-type="gallery"] img{flex:1 1 calc((100% - 8px*(var(--jm-cols,3) - 1))/var(--jm-cols,3));min-width:0;height:180px;object-fit:cover;border-radius:4px;margin:0}
+.jm-gallery-layer{margin:0 0 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+div[data-type="gallery"] p[data-role="title"]{flex:0 0 100%;margin:0 0 2px;font-size:15px;font-weight:600;line-height:1.4}
+.jm-gallery-layer p[data-role="title"]{outline:none;padding:4px 6px;border-radius:4px}
+.jm-gallery-layer p[data-role="title"]:hover,.jm-gallery-layer p[data-role="title"]:focus{background:var(--accent-soft)}
+.jm-gallery-layer p[data-role="title"]:empty::before{content:attr(data-placeholder);color:var(--muted);font-weight:400}
+.jm-gallery-layer .jm-gallery.is-empty{flex-direction:column;gap:4px}
+.jm-gallery-layer .jm-gallery.is-empty p[data-role="title"]{flex-basis:auto;width:100%}
+.jm-gallery-header{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--accent-soft);border-radius:6px 6px 0 0}
+.jm-gallery-title{font-size:12px;font-weight:600}
+.jm-gallery-count{flex:1;font-size:11px;color:var(--muted)}
+.jm-gallery-btn{height:26px;padding:0 8px;font-size:12px;background:var(--panel);border-color:var(--line)}
+.jm-gallery-btn:disabled{opacity:.4;cursor:default}
+.jm-gallery-cols{height:26px;font-size:12px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
+.jm-gallery-remove{color:#d14343}
+.jm-gallery-layer .jm-gallery{padding:8px;min-height:60px}
+.jm-gallery-layer .jm-gallery.is-empty{display:flex;align-items:center;justify-content:center;border:2px dashed var(--line);border-radius:4px;margin:8px;color:var(--muted);font-size:13px}
+.jm-gallery-layer .jm-gallery.is-empty::before{content:"이미지를 여기에 드롭하세요"}
+.jm-gallery-layer .jm-gallery.is-dragover{outline:2px dashed var(--accent);outline-offset:-4px;background:var(--accent-soft)}
+.jm-gallery-layer .jm-gallery img{cursor:pointer;outline:3px solid transparent;outline-offset:-3px}
+.jm-gallery-layer .jm-gallery img:hover{outline-color:var(--line)}
+.jm-gallery-layer .jm-gallery img.is-selected{outline-color:var(--accent)}
+.jm-formatpicker-preview div[data-type="gallery"]{min-height:24px;border:1px dashed var(--line);border-radius:3px}
+.linkbar{display:none;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--accent-soft)}
+.linkbar.open{display:flex}
+.linkbar input{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--fg);font:14px var(--mono)}
+.out{border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.out .hd{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);font-size:.8rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.out pre{margin:0;padding:12px;background:var(--code);font:12.5px/1.5 var(--mono);white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto}
+.hint{font-size:.85rem;color:var(--muted)}
+kbd{font:11px var(--mono);border:1px solid var(--line);border-radius:3px;padding:1px 4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>JmEditor 샘플</h1>
+  <p>src/ 의 코어와 UI 를 한 파일로 합친 단독 데모입니다. 라이브러리 없이 contenteditable + Range 로 직접 구현한 코어. 툴바 버튼, Editor/HTML/미리보기 모드 전환, 글자색·배경색, 단축키(<kbd>Ctrl</kbd>+<kbd>B</kbd>/<kbd>I</kbd>/<kbd>U</kbd>/<kbd>Z</kbd>), 붙여넣기, 이미지 드롭, 「서식」 템플릿·이미지 갤러리 삽입, 표(크기 격자로 삽입, 셀에서 <kbd>Tab</kbd> 이동, 표 위에서 <strong>우클릭</strong> → 행/열 메뉴)를 바로 써볼 수 있습니다.</p>
+</header>
+<div class="jm-container" id="wrap">
+  <div class="jm-toolbar jm-toolbar-top" id="toolbarTop"></div>
+  <div class="jm-toolbar" id="toolbar"></div>
+  <div class="linkbar" id="linkbar"><input id="linkUrl" placeholder="https://" aria-label="링크 URL"><button class="jm-btn" id="linkOk" type="button">적용</button><button class="jm-btn" id="linkCancel" type="button">취소</button></div>
+  <div id="editor"></div>
+  <textarea id="source" class="jm-source" hidden spellcheck="false"></textarea>
+  <div id="preview" class="jm-preview-pane jm-content" hidden></div>
+  <input type="file" id="file" accept="image/*" hidden>
+</div>
+<section class="out">
+  <div class="hd"><span>getHTML() 결과 — 서버에 저장될 값</span><span id="len" class="hint"></span></div>
+  <pre id="html"></pre>
+</section>
+<p class="hint">이미지는 이 샘플에서는 업로드 API 없이 base64 로 삽입됩니다. 실제 적용 시 uploadImage 옵션으로 Spring Boot 업로드 API 를 연결합니다.</p>
+</main>
+<script>
+/**
+ * Sanitizer
+ * - 외부에서 들어오는 HTML(붙여넣기, setHTML)을 허용 태그/속성만 남기고 정리한다.
+ * - XSS 1차 방어. 서버 저장 시에도 반드시 별도 sanitize(jsoup 등) 할 것.
+ */
+
+/** 허용 태그와 각 태그에서 허용하는 속성 */
+const ALLOWED = {
+  p: [], br: [], strong: [], em: [], u: [], s: [],
+  h1: [], h2: [], h3: [],
+  ul: [], ol: [], li: [],
+  blockquote: [],
+  a: ['href', 'target', 'rel'],
+  img: ['src', 'alt', 'width', 'height'],
+  table: [], tbody: [], thead: [], tr: [], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'], // 병합은 서식 템플릿으로만 들어옴(UI 편집 미지원)
+  span: ['style'],
+};
+
+/** style 속성에서 허용하는 CSS 속성 (글자색·배경색만) */
+const ALLOWED_STYLE = ['color', 'background-color'];
+/** 색상 값 형식: #hex, rgb(a)(), 색 이름 */
+const SAFE_COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|[a-z]+)$/i;
+
+/** 태그 이름 치환 (레거시/외부 태그 → 표준 태그) */
+const TAG_ALIAS = { b: 'strong', i: 'em', strike: 's', div: 'p' };
+
+/** href/src 에 허용하는 프로토콜 */
+const SAFE_URL = /^(https?:|mailto:|\/|#|data:image\/)/i;
+
+class Sanitizer {
+  /**
+   * HTML 문자열을 정리하여 반환
+   * @param {string} html
+   * @returns {string}
+   */
+  static clean(html) {
+    const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+    const frag = document.createDocumentFragment();
+    Array.from(doc.body.childNodes).forEach((n) => {
+      const r = Sanitizer.#cleanNode(n);
+      if (r) frag.appendChild(r);
+    });
+    const wrap = document.createElement('div');
+    wrap.appendChild(frag);
+    return wrap.innerHTML;
+  }
+
+  /**
+   * style 문자열에서 color / background-color 만 남긴다
+   * @param {string} style
+   * @returns {string}
+   */
+  static cleanStyle(style) {
+    return style.split(';')
+      .map((d) => d.split(':').map((x) => x.trim()))
+      .filter(([k, v]) => k && v && ALLOWED_STYLE.includes(k.toLowerCase()) && SAFE_COLOR.test(v))
+      .map(([k, v]) => `${k.toLowerCase()}: ${v}`)
+      .join('; ');
+  }
+
+  /**
+   * 노드 단위 재귀 정리
+   * - 허용되지 않은 태그는 제거하되 자식 텍스트는 유지(언래핑)
+   * - script/style 등 위험 태그는 자식까지 통째로 제거
+   */
+  static #cleanNode(node) {
+    // 텍스트 노드는 그대로
+    if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent);
+    if (node.nodeType !== Node.ELEMENT_NODE) return null;
+
+    let tag = node.tagName.toLowerCase();
+    if (['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link'].includes(tag)) return null;
+
+    // 이미지 갤러리 블록: div[data-type=gallery] 만 예외 허용, 자식은 img 만
+    if (tag === 'div' && node.getAttribute('data-type') === 'gallery') {
+      const g = document.createElement('div');
+      g.setAttribute('data-type', 'gallery');
+      const cols = parseInt(node.getAttribute('data-cols'), 10);
+      g.setAttribute('data-cols', String(cols >= 1 && cols <= 6 ? cols : 3));
+      if (node.getAttribute('data-auto') === '1') g.setAttribute('data-auto', '1');
+      // 제목(선택): 첫 번째 p[data-role=title]. 비어 있으면 저장하지 않음
+      const title = node.querySelector(':scope > p[data-role="title"]');
+      if (title && title.textContent.trim()) {
+        const t = Sanitizer.#cleanNode(title);
+        if (t && t.nodeType === Node.ELEMENT_NODE) { t.setAttribute('data-role', 'title'); g.appendChild(t); }
+      }
+      node.querySelectorAll('img').forEach((img) => {
+        const r = Sanitizer.#cleanNode(img);
+        if (r) g.appendChild(r);
+      });
+      return g;
+    }
+
+    tag = TAG_ALIAS[tag] || tag;
+
+    // 허용되지 않은 태그 → 자식만 모아서 반환(언래핑)
+    if (!ALLOWED[tag]) {
+      const frag = document.createDocumentFragment();
+      Array.from(node.childNodes).forEach((c) => {
+        const r = Sanitizer.#cleanNode(c);
+        if (r) frag.appendChild(r);
+      });
+      return frag;
+    }
+
+    const el = document.createElement(tag);
+    // 허용 속성만 복사, URL 프로토콜 검사, style 은 색상 속성만
+    ALLOWED[tag].forEach((attr) => {
+      const v = node.getAttribute(attr);
+      if (v == null) return;
+      if ((attr === 'href' || attr === 'src') && !SAFE_URL.test(v.trim())) return;
+      if (attr === 'style') {
+        const clean = Sanitizer.cleanStyle(v);
+        if (clean) el.setAttribute('style', clean);
+        return;
+      }
+      el.setAttribute(attr, v);
+    });
+    // 스타일이 전부 제거된 span 은 의미가 없으므로 언래핑
+    if (tag === 'span' && !el.getAttribute('style')) {
+      const frag = document.createDocumentFragment();
+      Array.from(node.childNodes).forEach((c) => {
+        const r = Sanitizer.#cleanNode(c);
+        if (r) frag.appendChild(r);
+      });
+      return frag;
+    }
+    // 링크는 새창 + noopener 강제
+    if (tag === 'a') { el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer'); }
+
+    Array.from(node.childNodes).forEach((c) => {
+      const r = Sanitizer.#cleanNode(c);
+      if (r) el.appendChild(r);
+    });
+    return el;
+  }
+}
+
+/**
+ * SelectionUtil
+ * - window.getSelection() / Range 를 다루는 공통 유틸.
+ * - 에디터 루트 밖 선택은 무시하고, 선택 영역 저장/복원(툴바 클릭으로 포커스가 빠질 때)을 제공한다.
+ */
+class SelectionUtil {
+  /** @param {HTMLElement} root 에디터 contenteditable 루트 */
+  constructor(root) {
+    this.root = root;
+    this.saved = null; // 마지막으로 저장한 Range
+  }
+
+  /** 현재 Range 반환. 루트 밖이거나 없으면 null */
+  getRange() {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return null;
+    const range = sel.getRangeAt(0);
+    return this.root.contains(range.commonAncestorContainer) ? range : null;
+  }
+
+  /** 현재 선택을 저장 (툴바 버튼 mousedown 시점에 호출) */
+  save() {
+    const r = this.getRange();
+    if (r) this.saved = r.cloneRange();
+  }
+
+  /** 저장된 선택 복원 */
+  restore() {
+    if (!this.saved) return;
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(this.saved);
+  }
+
+  /** Range 를 선택 상태로 적용 */
+  setRange(range) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    this.saved = range.cloneRange();
+  }
+
+  /** 커서를 특정 노드의 끝(또는 시작)으로 이동 */
+  placeCursor(node, toEnd = true) {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(!toEnd);
+    this.setRange(range);
+  }
+
+  /**
+   * 현재 커서가 속한 블록 요소(p, h1~3, li, blockquote, td/th) 반환
+   * - 표 셀 안에 p 가 없으면 셀 자체가 블록 역할
+   * @returns {HTMLElement|null}
+   */
+  getBlock() {
+    const r = this.getRange();
+    if (!r) return null;
+    let node = r.startContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentNode;
+    while (node && node !== this.root) {
+      if (/^(P|H1|H2|H3|LI|BLOCKQUOTE|TD|TH)$/.test(node.tagName)) return node;
+      node = node.parentNode;
+    }
+    return null;
+  }
+
+  /** 커서가 특정 태그(strong/em 등) 안에 있는지 */
+  isInside(tagName) {
+    return !!this.closest(tagName);
+  }
+
+  /** 커서 위치에서 상위로 올라가며 tagName 요소 찾기 (루트 전까지) */
+  closest(tagName) {
+    const r = this.getRange();
+    if (!r) return null;
+    let node = r.startContainer;
+    if (node.nodeType === Node.TEXT_NODE) node = node.parentNode;
+    const tag = tagName.toUpperCase();
+    while (node && node !== this.root) {
+      if (node.tagName === tag) return node;
+      node = node.parentNode;
+    }
+    return null;
+  }
+}
+
+/**
+ * History
+ * - undo / redo 스택. HTML 스냅샷 방식(단순·안정적).
+ * - 연속 타이핑은 debounce 로 묶어서 한 단계로 기록한다.
+ */
+class History {
+  /**
+   * @param {() => string} getState  현재 HTML 반환 함수
+   * @param {(html: string) => void} setState HTML 복원 함수
+   * @param {number} limit 최대 보관 개수
+   */
+  constructor(getState, setState, limit = 100) {
+    this.getState = getState;
+    this.setState = setState;
+    this.limit = limit;
+    this.undoStack = [];
+    this.redoStack = [];
+    this.timer = null;
+    this.last = getState(); // 마지막으로 기록된 상태
+  }
+
+  /** 즉시 스냅샷 기록 (서식 적용 등 명시적 동작 후 호출) */
+  push() {
+    clearTimeout(this.timer);
+    const cur = this.getState();
+    if (cur === this.last) return;
+    this.undoStack.push(this.last);
+    if (this.undoStack.length > this.limit) this.undoStack.shift();
+    this.redoStack = [];
+    this.last = cur;
+  }
+
+  /** 타이핑용 지연 기록 (input 이벤트마다 호출) */
+  pushDebounced(delay = 400) {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.push(), delay);
+  }
+
+  undo() {
+    this.push(); // 미기록 타이핑이 있으면 먼저 반영
+    if (this.undoStack.length === 0) return;
+    this.redoStack.push(this.last);
+    this.last = this.undoStack.pop();
+    this.setState(this.last);
+  }
+
+  redo() {
+    if (this.redoStack.length === 0) return;
+    this.undoStack.push(this.last);
+    this.last = this.redoStack.pop();
+    this.setState(this.last);
+  }
+}
+
+/**
+ * Commands
+ * - 서식 명령 모음. execCommand 를 쓰지 않고 Range/DOM 조작으로 구현.
+ * - 모든 명령은 에디터 루트 안에서만 동작하며, 실행 후 editor.commit() 으로 히스토리 기록·변경 알림을 한다.
+ */
+const ZWSP = '​'; // 빈 인라인 태그에 커서를 두기 위한 zero-width space
+
+class Commands {
+  /** @param {import('./JmEditor.js').JmEditor} editor */
+  constructor(editor) {
+    this.editor = editor;
+    this.sel = editor.sel;
+    this.root = editor.root;
+  }
+
+  // ───────────── 인라인 서식 (strong / em / u / s) ─────────────
+
+  /**
+   * 인라인 서식 토글
+   * - 선택 영역이 있으면: 전부 해당 서식이면 해제, 아니면 적용
+   * - 커서만 있으면: 빈 태그를 삽입해 이후 타이핑에 적용 / 이미 안이면 태그 밖으로 빠져나감
+   * @param {'strong'|'em'|'u'|'s'} tag
+   */
+  toggleInline(tag) {
+    const range = this.sel.getRange();
+    if (!range) return;
+
+    if (range.collapsed) {
+      this.#toggleInlineCollapsed(tag, range);
+    } else {
+      this.#toggleInlineRange(tag, range);
+    }
+    this.editor.commit();
+  }
+
+  /** 커서만 있을 때의 인라인 토글 */
+  #toggleInlineCollapsed(tag, range) {
+    const inside = this.sel.closest(tag);
+    if (inside) {
+      // 태그 밖(뒤)으로 커서 이동 → 이후 입력은 서식 없음
+      const after = document.createTextNode(ZWSP);
+      inside.parentNode.insertBefore(after, inside.nextSibling);
+      const r = document.createRange();
+      r.setStart(after, 1);
+      r.collapse(true);
+      this.sel.setRange(r);
+    } else {
+      // 빈 태그 삽입 후 커서를 안에 둠
+      const el = document.createElement(tag);
+      el.appendChild(document.createTextNode(ZWSP));
+      range.insertNode(el);
+      const r = document.createRange();
+      r.setStart(el.firstChild, 1);
+      r.collapse(true);
+      this.sel.setRange(r);
+    }
+  }
+
+  /** 선택 영역이 있을 때의 인라인 토글 */
+  #toggleInlineRange(tag, range) {
+    const upper = tag.toUpperCase();
+    const allFormatted = this.#isRangeFullyInside(range, upper);
+
+    if (allFormatted) {
+      // 해제: 선택 영역을 잘라낸 뒤(경계의 태그는 자동 분할됨) 그 안의 해당 태그를 언래핑
+      const frag = range.extractContents();
+      this.#unwrapTag(frag, upper);
+      const first = frag.firstChild;
+      const last = frag.lastChild;
+
+      // 잘라낸 뒤 커서가 여전히 wrapper 안이면, wrapper 를 커서 지점에서 앞/뒤로 분할하고 그 사이에 삽입
+      const wrapper = this.#findAncestor(range.startContainer, upper);
+      if (wrapper) {
+        const tailRange = document.createRange();
+        tailRange.setStart(range.startContainer, range.startOffset);
+        tailRange.setEnd(wrapper, wrapper.childNodes.length);
+        const tailEl = wrapper.cloneNode(false);
+        tailEl.appendChild(tailRange.extractContents());
+
+        wrapper.parentNode.insertBefore(frag, wrapper.nextSibling);
+        if (last) wrapper.parentNode.insertBefore(tailEl, last.nextSibling);
+        this.#cleanEmpty(wrapper);
+        this.#cleanEmpty(tailEl);
+      } else {
+        range.insertNode(frag);
+      }
+      if (first && last) {
+        const r = document.createRange();
+        r.setStartBefore(first);
+        r.setEndAfter(last);
+        this.sel.setRange(r);
+      }
+    } else {
+      // 적용: 잘라낸 내용에서 중첩된 동일 태그 제거 후 감싸기
+      const frag = range.extractContents();
+      this.#unwrapTag(frag, upper);
+      const el = document.createElement(tag);
+      el.appendChild(frag);
+      range.insertNode(el);
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      this.sel.setRange(r);
+    }
+  }
+
+  /** range 안의 모든 텍스트가 특정 태그 안에 있는지 검사 */
+  #isRangeFullyInside(range, upper) {
+    const walker = document.createTreeWalker(range.commonAncestorContainer, NodeFilter.SHOW_TEXT);
+    let node;
+    let found = false;
+    while ((node = walker.nextNode())) {
+      if (!range.intersectsNode(node) || node.textContent === ZWSP) continue;
+      found = true;
+      if (!this.#findAncestor(node, upper)) return false;
+    }
+    return found;
+  }
+
+  /** 노드에서 루트 방향으로 올라가며 태그 찾기 */
+  #findAncestor(node, upper) {
+    let n = node.nodeType === Node.TEXT_NODE ? node.parentNode : node;
+    while (n && n !== this.root) {
+      if (n.tagName === upper) return n;
+      n = n.parentNode;
+    }
+    return null;
+  }
+
+  /** 노드 트리 안의 특정 태그를 모두 언래핑 */
+  #unwrapTag(container, upper) {
+    container.querySelectorAll(upper.toLowerCase()).forEach((el) => {
+      while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el);
+      el.remove();
+    });
+  }
+
+  /** 내용이 비었으면(ZWSP 포함) 요소 제거 */
+  #cleanEmpty(el) {
+    if (el && el.textContent.replace(ZWSP, '') === '' && !el.querySelector('img,br')) el.remove();
+  }
+
+  // ───────────── 글자색 / 배경색 (span style) ─────────────
+
+  /**
+   * 선택 영역에 색상 스타일 적용/해제
+   * @param {'color'|'background-color'} prop
+   * @param {string|null} value null 이면 해제
+   */
+  setStyle(prop, value) {
+    const range = this.sel.getRange();
+    if (!range) return;
+
+    if (range.collapsed) {
+      // 커서만 있을 때: 빈 span 을 넣어 이후 입력에 적용 (해제는 span 밖으로)
+      const inside = this.#findStyledAncestor(range.startContainer, prop);
+      if (!value) {
+        if (!inside) return;
+        const after = document.createTextNode(ZWSP);
+        inside.parentNode.insertBefore(after, inside.nextSibling);
+        const r = document.createRange(); r.setStart(after, 1); r.collapse(true); this.sel.setRange(r);
+      } else {
+        const span = document.createElement('span');
+        span.style.setProperty(prop, value);
+        span.appendChild(document.createTextNode(ZWSP));
+        range.insertNode(span);
+        const r = document.createRange(); r.setStart(span.firstChild, 1); r.collapse(true); this.sel.setRange(r);
+      }
+      this.editor.commit();
+      return;
+    }
+
+    // 선택 영역: 잘라내기 → 안쪽의 같은 속성 제거 → (적용이면) span 으로 감싸기
+    const frag = range.extractContents();
+    this.#stripStyle(frag, prop);
+    let node;
+    if (value) {
+      node = document.createElement('span');
+      node.style.setProperty(prop, value);
+      node.appendChild(frag);
+    } else {
+      node = frag;
+    }
+    const first = node.nodeType === Node.DOCUMENT_FRAGMENT_NODE ? node.firstChild : node;
+    const last = node.nodeType === Node.DOCUMENT_FRAGMENT_NODE ? node.lastChild : node;
+
+    // 잘라낸 지점이 같은 속성 span 안이면 분할해서 바깥에 삽입
+    const wrapper = this.#findStyledAncestor(range.startContainer, prop);
+    if (wrapper) {
+      const tailRange = document.createRange();
+      tailRange.setStart(range.startContainer, range.startOffset);
+      tailRange.setEnd(wrapper, wrapper.childNodes.length);
+      const tailEl = wrapper.cloneNode(false);
+      tailEl.appendChild(tailRange.extractContents());
+      wrapper.parentNode.insertBefore(node, wrapper.nextSibling);
+      if (last) wrapper.parentNode.insertBefore(tailEl, last.nextSibling);
+      this.#cleanEmpty(wrapper);
+      this.#cleanEmpty(tailEl);
+    } else {
+      range.insertNode(node);
+    }
+    if (first && last) {
+      const r = document.createRange(); r.setStartBefore(first); r.setEndAfter(last); this.sel.setRange(r);
+    }
+    this.editor.commit();
+  }
+
+  /** 노드에서 루트 방향으로 올라가며 prop 스타일을 가진 span 찾기 */
+  #findStyledAncestor(node, prop) {
+    let n = node.nodeType === Node.TEXT_NODE ? node.parentNode : node;
+    while (n && n !== this.root) {
+      if (n.tagName === 'SPAN' && n.style.getPropertyValue(prop)) return n;
+      n = n.parentNode;
+    }
+    return null;
+  }
+
+  /** 트리 안의 span 에서 prop 제거. 스타일이 남지 않는 span 은 언래핑 */
+  #stripStyle(container, prop) {
+    container.querySelectorAll('span').forEach((el) => {
+      el.style.removeProperty(prop);
+      if (!el.getAttribute('style') || el.style.length === 0) {
+        while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el);
+        el.remove();
+      }
+    });
+  }
+
+  /** 현재 커서 위치의 글자색/배경색 */
+  getStyleState() {
+    const r = this.sel.getRange();
+    if (!r) return { color: null, bg: null };
+    return {
+      color: this.#findStyledAncestor(r.startContainer, 'color')?.style.color || null,
+      bg: this.#findStyledAncestor(r.startContainer, 'background-color')?.style.backgroundColor || null,
+    };
+  }
+
+  // ───────────── 블록 서식 (p / h1~h3 / blockquote) ─────────────
+
+  /**
+   * 현재 블록을 다른 블록 태그로 교체. 같은 태그면 p 로 되돌림.
+   * @param {'p'|'h1'|'h2'|'h3'|'blockquote'} tag
+   */
+  setBlock(tag) {
+    const block = this.sel.getBlock();
+    if (!block || /^(LI|TD|TH)$/.test(block.tagName)) return; // 목록 항목·표 셀은 블록 교체 대상 아님
+    const target = block.tagName.toLowerCase() === tag ? 'p' : tag;
+    const el = document.createElement(target);
+    while (block.firstChild) el.appendChild(block.firstChild);
+    block.replaceWith(el);
+    this.sel.placeCursor(el, true);
+    this.editor.commit();
+  }
+
+  // ───────────── 목록 (ul / ol) ─────────────
+
+  /**
+   * 목록 토글
+   * - 일반 블록이면 li 로 감싸 목록 생성
+   * - 이미 같은 종류 목록이면 p 로 해제, 다른 종류면 목록 타입 변경
+   * @param {'ul'|'ol'} listTag
+   */
+  toggleList(listTag) {
+    const block = this.sel.getBlock();
+    if (!block || /^(TD|TH)$/.test(block.tagName)) return; // 표 셀 안에서는 목록 미지원
+
+    if (block.tagName === 'LI') {
+      const list = block.parentNode;
+      if (list.tagName.toLowerCase() === listTag) {
+        this.#removeFromList(block);
+      } else {
+        const newList = document.createElement(listTag);
+        while (list.firstChild) newList.appendChild(list.firstChild);
+        list.replaceWith(newList);
+      }
+    } else {
+      const list = document.createElement(listTag);
+      const li = document.createElement('li');
+      while (block.firstChild) li.appendChild(block.firstChild);
+      list.appendChild(li);
+      block.replaceWith(list);
+      this.sel.placeCursor(li, true);
+    }
+    this.editor.commit();
+  }
+
+  /** li 를 목록에서 빼내어 p 로 변환 (목록은 필요 시 분할) */
+  #removeFromList(li) {
+    const list = li.parentNode;
+    const p = document.createElement('p');
+    while (li.firstChild) p.appendChild(li.firstChild);
+
+    // li 뒤에 형제가 있으면 새 목록으로 분리
+    const after = document.createElement(list.tagName.toLowerCase());
+    while (li.nextSibling) after.appendChild(li.nextSibling);
+
+    li.remove();
+    list.parentNode.insertBefore(p, list.nextSibling);
+    if (after.childNodes.length) p.parentNode.insertBefore(after, p.nextSibling);
+    if (list.childNodes.length === 0) list.remove();
+    this.sel.placeCursor(p, true);
+  }
+
+  // ───────────── 링크 ─────────────
+
+  /**
+   * 링크 적용/해제
+   * - 커서가 링크 안이면 해제, 선택 영역이 있으면 a 태그로 감쌈
+   * @param {string|null} url null 이면 해제
+   */
+  setLink(url) {
+    const range = this.sel.getRange();
+    if (!range) return;
+    const existing = this.sel.closest('a');
+
+    if (!url || existing) {
+      if (existing) {
+        while (existing.firstChild) existing.parentNode.insertBefore(existing.firstChild, existing);
+        existing.remove();
+      }
+      if (!url) { this.editor.commit(); return; }
+    }
+    if (range.collapsed) return;
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.appendChild(range.extractContents());
+    range.insertNode(a);
+    this.sel.placeCursor(a, true);
+    this.editor.commit();
+  }
+
+  // ───────────── 이미지 / 임의 HTML 삽입 ─────────────
+
+  /**
+   * 이미지 삽입. 커서가 있는 블록 뒤에 새 p 로 삽입한다.
+   * @param {string} src
+   * @param {string} alt
+   */
+  insertImage(src, alt = '') {
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = alt;
+    const p = document.createElement('p');
+    p.appendChild(img);
+
+    const block = this.sel.getBlock();
+    if (block && /^(TD|TH)$/.test(block.tagName)) block.appendChild(p); // 셀 안이면 셀 내부에
+    else if (block) block.parentNode.insertBefore(p, block.nextSibling);
+    else this.root.appendChild(p);
+
+    // 이미지 다음에 빈 단락을 두어 계속 입력 가능하게
+    const next = document.createElement('p');
+    next.appendChild(document.createElement('br'));
+    p.parentNode.insertBefore(next, p.nextSibling);
+    this.sel.placeCursor(next, false);
+    this.editor.commit();
+  }
+
+  /**
+   * 커서 위치에 HTML 조각 삽입 (붙여넣기 등). Sanitizer 를 통과한 HTML 만 넘길 것.
+   * @param {string} html
+   */
+  insertHTML(html) {
+    const range = this.sel.getRange();
+    if (!range) return;
+    range.deleteContents();
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    const last = tpl.content.lastChild;
+    range.insertNode(tpl.content);
+    if (last) this.sel.placeCursor(last, true);
+    this.editor.commit();
+  }
+
+  /**
+   * 블록 단위 HTML 삽입 (서식/템플릿 삽입용)
+   * - 커서가 있는 블록 *뒤에* 통째로 넣는다 (표·제목 등 블록 요소가 단락 안으로 들어가지 않게).
+   * - 커서가 빈 단락에 있으면 그 단락을 대체한다.
+   * - Sanitizer 를 통과한 HTML 만 넘길 것. 삽입 뒤 빈 단락을 하나 두어 계속 입력 가능하게 한다.
+   * @param {string} html
+   */
+  insertBlockHTML(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    if (!tpl.content.childNodes.length) return;
+
+    // 표 셀 안이면 셀 밖(표 레이어 뒤)에 삽입
+    let block = this.sel.getBlock();
+    if (block && /^(TD|TH)$/.test(block.tagName)) {
+      block = block.closest('table');
+      if (block.parentNode?.classList?.contains('jm-table-layer')) block = block.parentNode;
+    }
+    // 목록 항목이면 목록 전체 뒤에 삽입
+    if (block && block.tagName === 'LI') block = block.parentNode;
+
+    const after = document.createElement('p');
+    after.appendChild(document.createElement('br'));
+    const frag = tpl.content;
+    frag.appendChild(after);
+
+    const isEmptyPara = block && block.tagName === 'P' && block.textContent.replace(ZWSP, '') === '' && !block.querySelector('img');
+    if (isEmptyPara) block.replaceWith(frag);
+    else if (block) block.parentNode.insertBefore(frag, block.nextSibling);
+    else this.root.appendChild(frag);
+
+    this.sel.placeCursor(after, false);
+    this.editor.commit();
+  }
+
+  /** 현재 커서 위치의 서식 상태(툴바 활성화 표시용) */
+  getState() {
+    const block = this.sel.getBlock();
+    return {
+      strong: this.sel.isInside('strong'),
+      em: this.sel.isInside('em'),
+      u: this.sel.isInside('u'),
+      s: this.sel.isInside('s'),
+      a: this.sel.isInside('a'),
+      ...this.getStyleState(),
+      block: block ? block.tagName.toLowerCase() : null,
+      list: block && block.tagName === 'LI' ? block.parentNode.tagName.toLowerCase() : null,
+    };
+  }
+}
+
+/**
+ * TableCommands
+ * - 표 삽입 / 행·열 추가·삭제 / 표 삭제 / Tab 셀 이동.
+ * - 셀 병합(colspan/rowspan), 열 너비 조절은 지원하지 않는다 (2차 범위).
+ * - 표는 항상 <table><tbody><tr><td>…</td></tr></tbody></table> 구조를 유지한다.
+ * - 에디터 안에서는 표를 레이어(<div class="jm-table-layer" contenteditable="false">) 로 감싸 하나의 객체처럼 다룬다.
+ *   셀 내부만 편집 가능하게 하고, 레이어 우클릭 시 표 메뉴를 띄운다. 저장 HTML 에는 레이어를 남기지 않는다.
+ */
+const TABLE_LAYER_CLASS = 'jm-table-layer';
+
+class TableCommands {
+  /** @param {import('./JmEditor.js').JmEditor} editor */
+  constructor(editor) {
+    this.editor = editor;
+    this.sel = editor.sel;
+    this.root = editor.root;
+  }
+
+  // ───────────── 레이어 ─────────────
+
+  /** 루트 안의 모든 table 을 레이어로 감싼다 (setHTML / 붙여넣기 후 호출) */
+  wrapAll() {
+    this.root.querySelectorAll('table').forEach((t) => {
+      if (t.parentNode?.classList?.contains(TABLE_LAYER_CLASS)) return;
+      this.#wrap(t);
+    });
+  }
+
+  /** table 하나를 레이어로 감싼다 */
+  #wrap(table) {
+    const layer = document.createElement('div');
+    layer.className = TABLE_LAYER_CLASS;
+    layer.contentEditable = 'false';           // 레이어 자체는 편집 불가
+    table.parentNode.insertBefore(layer, table);
+    layer.appendChild(table);
+    table.contentEditable = 'true';            // 셀 내부만 편집 가능
+    return layer;
+  }
+
+  /**
+   * 저장용 HTML 에서 레이어 제거 (getHTML 에서 호출)
+   * @param {string} html
+   * @returns {string}
+   */
+  static unwrapHTML(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll(`.${TABLE_LAYER_CLASS}`).forEach((layer) => {
+      const table = layer.querySelector('table');
+      if (table) { table.removeAttribute('contenteditable'); layer.replaceWith(table); }
+      else layer.remove();
+    });
+    return tpl.innerHTML;
+  }
+
+  /** 현재 셀 배경색 지정 (null 이면 해제) */
+  setCellBackground(color) {
+    const cell = this.getCell();
+    if (!cell) return;
+    if (color) cell.style.backgroundColor = color;
+    else { cell.style.removeProperty('background-color'); if (!cell.getAttribute('style')?.trim()) cell.removeAttribute('style'); }
+    this.editor.commit();
+  }
+
+  /** 현재 행 전체 배경색 지정 */
+  setRowBackground(color) {
+    const cell = this.getCell();
+    if (!cell) return;
+    Array.from(cell.parentNode.cells).forEach((c) => {
+      if (color) c.style.backgroundColor = color;
+      else { c.style.removeProperty('background-color'); if (!c.getAttribute('style')?.trim()) c.removeAttribute('style'); }
+    });
+    this.editor.commit();
+  }
+
+  /**
+   * 우클릭 메뉴 항목 (커서가 표 안일 때만 유효)
+   * @param {(cb: (color: string|null) => void) => void} [pickColor] 색상 선택 UI 를 띄우는 콜백 (래퍼가 주입)
+   */
+  getMenuItems(pickColor) {
+    const colorItems = pickColor ? [
+      { divider: true },
+      { label: '셀 배경색…', action: () => pickColor((c) => this.setCellBackground(c)) },
+      { label: '행 배경색…', action: () => pickColor((c) => this.setRowBackground(c)) },
+    ] : [];
+    return [
+      { label: '위에 행 추가', action: () => this.addRow(false) },
+      { label: '아래에 행 추가', action: () => this.addRow(true) },
+      { divider: true },
+      { label: '왼쪽에 열 추가', action: () => this.addColumn(false) },
+      { label: '오른쪽에 열 추가', action: () => this.addColumn(true) },
+      { divider: true },
+      { label: '행 삭제', action: () => this.deleteRow() },
+      { label: '열 삭제', action: () => this.deleteColumn() },
+      ...colorItems,
+      { divider: true },
+      { label: '표 삭제', action: () => this.deleteTable() },
+    ];
+  }
+
+  // ───────────── 조회 ─────────────
+
+  /** 커서가 속한 td/th, 없으면 null */
+  getCell() {
+    return this.sel.closest('td') || this.sel.closest('th');
+  }
+
+  /** 커서가 속한 table, 없으면 null */
+  getTable() {
+    return this.sel.closest('table');
+  }
+
+  /** 셀의 (행, 열) 인덱스 */
+  #indexOf(cell) {
+    const row = cell.parentNode;
+    return { row, rowIndex: row.rowIndex, colIndex: cell.cellIndex };
+  }
+
+  /** 빈 셀 생성 (br 을 넣어 커서가 들어갈 수 있게) */
+  #makeCell(tag = 'td') {
+    const c = document.createElement(tag);
+    c.appendChild(document.createElement('br'));
+    return c;
+  }
+
+  // ───────────── 삽입 ─────────────
+
+  /**
+   * 표 삽입. 커서가 있는 블록 뒤에 넣고, 첫 셀로 커서 이동.
+   * @param {number} rows
+   * @param {number} cols
+   * @param {boolean} header 첫 행을 th 로
+   */
+  insert(rows = 3, cols = 3, header = true) {
+    const table = document.createElement('table');
+    const tbody = document.createElement('tbody');
+    for (let r = 0; r < rows; r++) {
+      const tr = document.createElement('tr');
+      for (let c = 0; c < cols; c++) tr.appendChild(this.#makeCell(header && r === 0 ? 'th' : 'td'));
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+
+    const block = this.sel.getBlock();
+    if (block && !this.getTable()) block.parentNode.insertBefore(table, block.nextSibling);
+    else this.root.appendChild(table);
+    const layer = this.#wrap(table);
+
+    // 표 뒤에 빈 단락을 두어 계속 입력 가능하게
+    const after = document.createElement('p');
+    after.appendChild(document.createElement('br'));
+    layer.parentNode.insertBefore(after, layer.nextSibling);
+
+    this.sel.placeCursor(table.rows[0].cells[0], false);
+    this.editor.commit();
+  }
+
+  // ───────────── 행 ─────────────
+
+  /** 현재 행 위/아래에 행 추가 */
+  addRow(below = true) {
+    const cell = this.getCell();
+    if (!cell) return;
+    const { row } = this.#indexOf(cell);
+    const tr = document.createElement('tr');
+    for (let i = 0; i < row.cells.length; i++) tr.appendChild(this.#makeCell('td'));
+    row.parentNode.insertBefore(tr, below ? row.nextSibling : row);
+    this.sel.placeCursor(tr.cells[0], false);
+    this.editor.commit();
+  }
+
+  /** 현재 행 삭제. 마지막 행이면 표 삭제 */
+  deleteRow() {
+    const cell = this.getCell();
+    if (!cell) return;
+    const table = this.getTable();
+    const { row, rowIndex } = this.#indexOf(cell);
+    if (table.rows.length === 1) { this.deleteTable(); return; }
+    row.remove();
+    const next = table.rows[Math.min(rowIndex, table.rows.length - 1)];
+    this.sel.placeCursor(next.cells[0], false);
+    this.editor.commit();
+  }
+
+  // ───────────── 열 ─────────────
+
+  /** 현재 열 왼쪽/오른쪽에 열 추가 */
+  addColumn(right = true) {
+    const cell = this.getCell();
+    if (!cell) return;
+    const table = this.getTable();
+    const { colIndex } = this.#indexOf(cell);
+    Array.from(table.rows).forEach((tr) => {
+      const ref = tr.cells[colIndex];
+      const tag = ref.tagName.toLowerCase();
+      tr.insertBefore(this.#makeCell(tag), right ? ref.nextSibling : ref);
+    });
+    const target = cell.parentNode.cells[right ? colIndex + 1 : colIndex];
+    this.sel.placeCursor(target, false);
+    this.editor.commit();
+  }
+
+  /** 현재 열 삭제. 마지막 열이면 표 삭제 */
+  deleteColumn() {
+    const cell = this.getCell();
+    if (!cell) return;
+    const table = this.getTable();
+    const { row, colIndex } = this.#indexOf(cell);
+    if (row.cells.length === 1) { this.deleteTable(); return; }
+    Array.from(table.rows).forEach((tr) => tr.cells[colIndex]?.remove());
+    this.sel.placeCursor(row.cells[Math.min(colIndex, row.cells.length - 1)], false);
+    this.editor.commit();
+  }
+
+  // ───────────── 표 ─────────────
+
+  /** 표 삭제 후 그 자리에 빈 단락 */
+  deleteTable() {
+    const table = this.getTable();
+    if (!table) return;
+    const p = document.createElement('p');
+    p.appendChild(document.createElement('br'));
+    const target = table.parentNode?.classList?.contains(TABLE_LAYER_CLASS) ? table.parentNode : table;
+    target.replaceWith(p);
+    this.sel.placeCursor(p, false);
+    this.editor.commit();
+  }
+
+  // ───────────── 키 처리 ─────────────
+
+  /**
+   * Tab / Shift+Tab 으로 셀 이동. 마지막 셀에서 Tab 이면 행 추가.
+   * @returns {boolean} 처리했으면 true (호출 측에서 preventDefault)
+   */
+  handleTab(shift) {
+    const cell = this.getCell();
+    if (!cell) return false;
+    const table = this.getTable();
+    const cells = Array.from(table.querySelectorAll('td,th'));
+    const i = cells.indexOf(cell);
+    if (shift) {
+      if (i > 0) this.sel.placeCursor(cells[i - 1], true);
+    } else if (i < cells.length - 1) {
+      this.sel.placeCursor(cells[i + 1], true);
+    } else {
+      this.addRow(true);
+      return true;
+    }
+    this.editor.options.onSelectionChange?.();
+    return true;
+  }
+
+  /** 툴바 상태용 */
+  getState() {
+    return { table: !!this.getTable() };
+  }
+}
+
+/**
+ * ContextMenu
+ * - 에디터 안에서 쓰는 간단한 우클릭 메뉴. 프레임워크 독립.
+ * - 항목은 [{ label, action, divider }] 배열. 바깥 클릭/Escape/스크롤 시 닫힌다.
+ */
+class ContextMenu {
+  constructor() {
+    this.el = document.createElement('div');
+    this.el.className = 'jm-ctxmenu';
+    this.el.hidden = true;
+    this.el.setAttribute('role', 'menu');
+    document.body.appendChild(this.el);
+
+    this.onDocDown = (e) => { if (!this.el.contains(e.target)) this.close(); };
+    this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
+    this.onScroll = () => this.close();
+  }
+
+  /**
+   * 메뉴 열기
+   * @param {number} x 화면 좌표
+   * @param {number} y
+   * @param {Array<{label?: string, action?: () => void, divider?: boolean}>} items
+   */
+  open(x, y, items) {
+    this.el.innerHTML = '';
+    items.forEach((it) => {
+      if (it.divider) {
+        const d = document.createElement('div');
+        d.className = 'jm-ctxmenu-divider';
+        this.el.appendChild(d);
+        return;
+      }
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'jm-ctxmenu-item';
+      b.setAttribute('role', 'menuitem');
+      b.textContent = it.label;
+      // mousedown 에서 포커스/선택이 빠지지 않도록
+      b.addEventListener('mousedown', (e) => e.preventDefault());
+      b.addEventListener('click', () => { this.close(); it.action?.(); });
+      this.el.appendChild(b);
+    });
+
+    this.el.hidden = false;
+    // 화면 밖으로 나가지 않게 보정
+    const { innerWidth: w, innerHeight: h } = window;
+    const r = this.el.getBoundingClientRect();
+    this.el.style.left = `${Math.min(x, w - r.width - 8)}px`;
+    this.el.style.top = `${Math.min(y, h - r.height - 8)}px`;
+
+    document.addEventListener('mousedown', this.onDocDown, true);
+    document.addEventListener('keydown', this.onKey, true);
+    window.addEventListener('scroll', this.onScroll, true);
+  }
+
+  close() {
+    if (this.el.hidden) return;
+    this.el.hidden = true;
+    document.removeEventListener('mousedown', this.onDocDown, true);
+    document.removeEventListener('keydown', this.onKey, true);
+    window.removeEventListener('scroll', this.onScroll, true);
+  }
+
+  destroy() {
+    this.close();
+    this.el.remove();
+  }
+}
+
+/**
+ * GalleryCommands
+ * - 이미지 갤러리 블록: 저장 HTML 은 <div data-type="gallery" data-cols="N" data-auto="1"><p data-role="title">제목</p><img …>…</div>
+ *   제목은 선택 사항. 비어 있으면 저장 시 제거되어 뷰어에는 제목 없이 이미지만 보인다.
+ * - 에디터 안에서는 레이어(<div class="jm-gallery-layer" contenteditable="false">) 로 감싸고
+ *   헤더(이미지 추가 / 선택 삭제 / 전체 삭제 / 열 수)를 붙인다. 저장 시 레이어·헤더·선택 상태는 제거된다.
+ * - 이미지는 CSS grid 로 data-cols 열에 균등 배치. data-auto="1" 이면 개수에 따라 열 수를 자동 계산한다.
+ * - 갤러리 위에 이미지 파일을 드롭하거나 헤더 「이미지 추가」로 여러 장을 넣을 수 있다.
+ */
+const GALLERY_LAYER_CLASS = 'jm-gallery-layer';
+const SELECTED_CLASS = 'is-selected';
+const MAX_AUTO_COLS = 4;
+
+class GalleryCommands {
+  /** @param {import('./JmEditor.js').JmEditor} editor */
+  constructor(editor) {
+    this.editor = editor;
+    this.sel = editor.sel;
+    this.root = editor.root;
+
+    // 여러 장 선택용 숨김 input (레이어 공용)
+    this.fileInput = document.createElement('input');
+    this.fileInput.type = 'file';
+    this.fileInput.accept = 'image/*';
+    this.fileInput.multiple = true;
+    this.fileInput.hidden = true;
+    this.root.parentNode?.appendChild(this.fileInput) ?? document.body.appendChild(this.fileInput);
+    this.pendingGallery = null;
+    this.fileInput.addEventListener('change', async () => {
+      const files = Array.from(this.fileInput.files);
+      this.fileInput.value = '';
+      if (this.pendingGallery) await this.addFiles(this.pendingGallery, files);
+    });
+  }
+
+  // ───────────── 생성 / 레이어 ─────────────
+
+  /** 갤러리 블록 HTML (서식 삽입용) */
+  static template(cols = 3, auto = true) {
+    return `<div data-type="gallery" data-cols="${cols}"${auto ? ' data-auto="1"' : ''}></div>`;
+  }
+
+  /** 루트 안의 갤러리 요소를 모두 레이어로 감싼다 (setHTML / commit 후) */
+  wrapAll() {
+    this.root.querySelectorAll('div[data-type="gallery"]').forEach((g) => {
+      if (g.parentNode?.classList?.contains(GALLERY_LAYER_CLASS)) { this.#layout(g); return; }
+      this.#wrap(g);
+    });
+  }
+
+  #wrap(gallery) {
+    const layer = document.createElement('div');
+    layer.className = GALLERY_LAYER_CLASS;
+    layer.contentEditable = 'false';
+    gallery.parentNode.insertBefore(layer, gallery);
+    layer.append(this.#buildHeader(gallery), gallery);
+    gallery.classList.add('jm-gallery');
+    this.#ensureTitle(gallery);
+    this.#bindGallery(gallery);
+    this.#layout(gallery);
+    return layer;
+  }
+
+  /** 제목 요소 보장: 없으면 빈 제목(placeholder) 생성. 레이어는 편집 불가지만 제목만 편집 가능 */
+  #ensureTitle(gallery) {
+    let t = gallery.querySelector(':scope > p[data-role="title"]');
+    if (!t) {
+      t = document.createElement('p');
+      t.dataset.role = 'title';
+      gallery.insertBefore(t, gallery.firstChild);
+    }
+    t.setAttribute('contenteditable', 'true');
+    t.dataset.placeholder = '제목 (비워두면 표시되지 않음)';
+    // 제목에서 Enter → 줄바꿈 대신 제목 확정(포커스 해제), 입력 시 변경 기록
+    t.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); t.blur(); } });
+    t.addEventListener('input', () => this.editor.history.pushDebounced());
+    t.addEventListener('blur', () => this.editor.commit());
+  }
+
+  /** 헤더: 이미지 추가 / 선택 삭제 / 전체 삭제 / 열 수 */
+  #buildHeader(gallery) {
+    const h = document.createElement('div');
+    h.className = 'jm-gallery-header';
+
+    const title = document.createElement('span');
+    title.className = 'jm-gallery-title';
+    title.textContent = '이미지 갤러리';
+
+    const mk = (label, onClick, cls = '') => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `jm-btn jm-gallery-btn ${cls}`.trim();
+      b.textContent = label;
+      b.addEventListener('mousedown', (e) => e.preventDefault());
+      b.addEventListener('click', onClick);
+      return b;
+    };
+
+    const add = mk('＋ 이미지 추가', () => { this.pendingGallery = gallery; this.fileInput.click(); });
+    const delSel = mk('선택 삭제', () => this.deleteSelected(gallery), 'jm-gallery-delsel');
+    const delAll = mk('전체 삭제', () => this.deleteAll(gallery));
+
+    // 열 수: 자동 / 1~6
+    const cols = document.createElement('select');
+    cols.className = 'jm-gallery-cols';
+    cols.title = '열 수';
+    [['auto', '자동'], ['1', '1열'], ['2', '2열'], ['3', '3열'], ['4', '4열'], ['5', '5열'], ['6', '6열']].forEach(([v, t]) => {
+      const o = document.createElement('option'); o.value = v; o.textContent = t; cols.appendChild(o);
+    });
+    cols.value = gallery.dataset.auto === '1' ? 'auto' : (gallery.dataset.cols || '3');
+    cols.addEventListener('mousedown', (e) => e.stopPropagation());
+    cols.addEventListener('change', () => {
+      if (cols.value === 'auto') gallery.dataset.auto = '1';
+      else { delete gallery.dataset.auto; gallery.dataset.cols = cols.value; }
+      this.#layout(gallery);
+      this.editor.commit();
+    });
+
+    const count = document.createElement('span');
+    count.className = 'jm-gallery-count';
+    gallery._countEl = count;
+
+    const remove = mk('✕', () => this.deleteGallery(gallery), 'jm-gallery-remove');
+    remove.title = '갤러리 삭제';
+
+    h.append(title, count, add, delSel, delAll, cols, remove);
+    return h;
+  }
+
+  /** 갤러리 요소 이벤트: 이미지 클릭 선택 토글, 파일 드롭 */
+  #bindGallery(gallery) {
+    gallery.addEventListener('click', (e) => {
+      const img = e.target.closest('img');
+      if (!img) return;
+      img.classList.toggle(SELECTED_CLASS);
+      this.#refreshHeader(gallery);
+    });
+    gallery.addEventListener('dragover', (e) => { e.preventDefault(); gallery.classList.add('is-dragover'); });
+    gallery.addEventListener('dragleave', () => gallery.classList.remove('is-dragover'));
+    gallery.addEventListener('drop', async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      gallery.classList.remove('is-dragover');
+      const files = Array.from(e.dataTransfer?.files || []).filter((f) => f.type.startsWith('image/'));
+      if (files.length) await this.addFiles(gallery, files);
+    });
+  }
+
+  /** 열 수 계산·적용 + 빈 상태 표시 + 헤더 갱신 */
+  #layout(gallery) {
+    const n = gallery.querySelectorAll('img').length;
+    if (gallery.dataset.auto === '1') gallery.dataset.cols = String(Math.max(1, Math.min(MAX_AUTO_COLS, n)));
+    gallery.style.setProperty('--jm-cols', gallery.dataset.cols || '3');
+    gallery.classList.toggle('is-empty', n === 0);
+    this.#refreshHeader(gallery);
+  }
+
+  #refreshHeader(gallery) {
+    const n = gallery.querySelectorAll('img').length;
+    const s = gallery.querySelectorAll(`img.${SELECTED_CLASS}`).length;
+    if (gallery._countEl) gallery._countEl.textContent = n ? `${n}장${s ? ` · ${s}장 선택` : ''}` : '이미지를 드롭하거나 추가하세요';
+    const btn = gallery.parentNode?.querySelector('.jm-gallery-delsel');
+    if (btn) btn.disabled = s === 0;
+  }
+
+  // ───────────── 이미지 추가 / 삭제 ─────────────
+
+  /** 파일들을 업로드(또는 base64)하여 갤러리에 추가 */
+  async addFiles(gallery, files) {
+    for (const file of files) {
+      const src = this.editor.options.uploadImage
+        ? await this.editor.options.uploadImage(file)
+        : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = file.name;
+      gallery.appendChild(img);
+    }
+    this.#layout(gallery);
+    this.editor.commit();
+  }
+
+  deleteSelected(gallery) {
+    gallery.querySelectorAll(`img.${SELECTED_CLASS}`).forEach((img) => img.remove());
+    this.#layout(gallery);
+    this.editor.commit();
+  }
+
+  deleteAll(gallery) {
+    gallery.querySelectorAll('img').forEach((img) => img.remove());
+    this.#layout(gallery);
+    this.editor.commit();
+  }
+
+  /** 갤러리 블록 자체 삭제 → 빈 단락으로 대체 */
+  deleteGallery(gallery) {
+    const layer = gallery.closest(`.${GALLERY_LAYER_CLASS}`) || gallery;
+    const p = document.createElement('p');
+    p.appendChild(document.createElement('br'));
+    layer.replaceWith(p);
+    this.sel.placeCursor(p, false);
+    this.editor.commit();
+  }
+
+  // ───────────── 저장용 변환 ─────────────
+
+  /**
+   * 레이어·헤더·선택 상태·인라인 스타일 제거 (getHTML 에서 호출)
+   * @param {string} html
+   */
+  static unwrapHTML(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll(`.${GALLERY_LAYER_CLASS}`).forEach((layer) => {
+      const g = layer.querySelector('div[data-type="gallery"]');
+      if (!g) { layer.remove(); return; }
+      g.removeAttribute('class');
+      g.removeAttribute('style');
+      g.querySelectorAll('img').forEach((img) => img.removeAttribute('class'));
+      // 제목: 편집 속성 제거, 비어 있으면 통째로 제거
+      const t = g.querySelector(':scope > p[data-role="title"]');
+      if (t) {
+        if (!t.textContent.replace(/\u200B/g, '').trim()) t.remove();
+        else { t.removeAttribute('contenteditable'); t.removeAttribute('data-placeholder'); }
+      }
+      layer.replaceWith(g);
+    });
+    return tpl.innerHTML;
+  }
+
+  destroy() { this.fileInput.remove(); }
+}
+
+/**
+ * JmEditor (코어)
+ * - 프레임워크 독립. contenteditable 요소 하나를 받아 편집 기능을 붙인다.
+ * - 툴바/업로드 UI 는 포함하지 않는다 → Thymeleaf(바닐라)나 React 래퍼가 이 클래스를 감싼다.
+ *
+ * 사용:
+ *   const editor = new JmEditor(el, { onChange: html => ..., uploadImage: file => Promise<url> });
+ *   editor.exec('bold');  editor.getHTML();  editor.setHTML(html);  editor.destroy();
+ */
+
+
+class JmEditor {
+  /**
+   * @param {HTMLElement} root 편집 영역이 될 요소
+   * @param {object} options
+   * @param {(html: string) => void} [options.onChange]  내용 변경 콜백
+   * @param {() => void} [options.onSelectionChange] 커서 이동 콜백 (툴바 상태 갱신용)
+   * @param {(file: File) => Promise<string>} [options.uploadImage] 이미지 파일 → URL 반환. 없으면 base64 로 삽입
+   * @param {string} [options.placeholder]
+   * @param {(x: number, y: number, cb: (color: string|null) => void) => void} [options.pickColor]
+   *        색상 선택 UI 를 띄우는 콜백 (표 셀/행 배경색 메뉴에서 사용). 래퍼가 주입한다.
+   */
+  constructor(root, options = {}) {
+    this.root = root;
+    this.options = options;
+    this.composing = false; // 한글 IME 조합 중 여부
+
+    this.root.contentEditable = 'true';
+    this.root.classList.add('jm-editor');
+    if (options.placeholder) this.root.dataset.placeholder = options.placeholder;
+
+    this.sel = new SelectionUtil(root);
+    this.commands = new Commands(this);
+    this.table = new TableCommands(this);
+    this.menu = new ContextMenu();
+    this.gallery = new GalleryCommands(this);
+    this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
+
+    this.#ensureBlock();
+    this.#bind();
+  }
+
+  // ───────────── 공개 API ─────────────
+
+  /**
+   * 명령 실행. 툴바 등 외부에서 호출한다.
+   * @param {string} name bold|italic|underline|strike|h1|h2|h3|paragraph|quote|ul|ol|link|unlink|image|undo|redo
+   *                      |table|tableRowBelow|tableRowAbove|tableColRight|tableColLeft|tableDeleteRow|tableDeleteCol|tableDelete
+   *                      |color|bgColor (value: 색상 문자열, null 이면 해제)
+   *                      |format (value: 삽입할 HTML — 서식/템플릿. 내부에서 sanitize 후 블록 단위 삽입)
+   *                      |gallery (value: {cols, auto} — 이미지 갤러리 블록 삽입)
+   * @param {*} [value] link 의 url, image 의 {src, alt}, table 의 {rows, cols, header}
+   */
+  exec(name, value) {
+    this.root.focus();
+    this.sel.restore();
+    const c = this.commands;
+    const map = {
+      bold: () => c.toggleInline('strong'),
+      italic: () => c.toggleInline('em'),
+      underline: () => c.toggleInline('u'),
+      strike: () => c.toggleInline('s'),
+      h1: () => c.setBlock('h1'),
+      h2: () => c.setBlock('h2'),
+      h3: () => c.setBlock('h3'),
+      paragraph: () => c.setBlock('p'),
+      quote: () => c.setBlock('blockquote'),
+      ul: () => c.toggleList('ul'),
+      ol: () => c.toggleList('ol'),
+      link: () => c.setLink(value),
+      unlink: () => c.setLink(null),
+      image: () => c.insertImage(value?.src, value?.alt),
+      format: () => c.insertBlockHTML(Sanitizer.clean(value || '')),
+      gallery: () => c.insertBlockHTML(GalleryCommands.template(value?.cols, value?.auto ?? true)),
+      color: () => c.setStyle('color', value ?? null),
+      bgColor: () => c.setStyle('background-color', value ?? null),
+      undo: () => this.history.undo(),
+      redo: () => this.history.redo(),
+      // 표
+      table: () => this.table.insert(value?.rows, value?.cols, value?.header),
+      tableRowBelow: () => this.table.addRow(true),
+      tableRowAbove: () => this.table.addRow(false),
+      tableColRight: () => this.table.addColumn(true),
+      tableColLeft: () => this.table.addColumn(false),
+      tableDeleteRow: () => this.table.deleteRow(),
+      tableDeleteCol: () => this.table.deleteColumn(),
+      tableDelete: () => this.table.deleteTable(),
+    };
+    map[name]?.();
+  }
+
+  /** 저장용 HTML 반환 (ZWSP·표 레이어 제거) */
+  getHTML() {
+    return GalleryCommands.unwrapHTML(TableCommands.unwrapHTML(this.root.innerHTML.replace(new RegExp(ZWSP, 'g'), '')));
+  }
+
+  /** HTML 로드 (sanitize 후) */
+  setHTML(html) {
+    this.root.innerHTML = Sanitizer.clean(html || '');
+    this.table.wrapAll();
+    this.gallery.wrapAll();
+    this.#ensureBlock();
+    this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
+    this.#emitChange();
+  }
+
+  /** 이미지 파일 삽입 (툴바 파일 선택, 드롭, 붙여넣기 공통 경로) */
+  async insertImageFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const src = this.options.uploadImage
+      ? await this.options.uploadImage(file)
+      : await this.#toDataURL(file);
+    this.exec('image', { src, alt: file.name });
+  }
+
+  /** 현재 서식 상태 (툴바 활성화용) */
+  getState() {
+    return { ...this.commands.getState(), ...this.table.getState() };
+  }
+
+  /** 변경 확정: 히스토리 기록 + onChange 호출. Commands 가 명령 끝에 호출한다. */
+  commit() {
+    this.table.wrapAll(); // 붙여넣기 등으로 들어온 표도 레이어로
+    this.gallery.wrapAll();
+    this.#ensureBlock();
+    this.history.push();
+    this.#emitChange();
+    this.options.onSelectionChange?.();
+  }
+
+  /** 이벤트 해제 */
+  destroy() {
+    this.#unbind?.();
+    this.menu.destroy();
+    this.gallery.destroy();
+  }
+
+  // ───────────── 내부 ─────────────
+
+  /** 이벤트 바인딩 */
+  #bind() {
+    const r = this.root;
+    const onInput = () => {
+      if (this.composing) return; // IME 조합 중에는 기록하지 않음
+      this.#ensureBlock();
+      this.history.pushDebounced();
+      this.#emitChange();
+    };
+    const onCompStart = () => { this.composing = true; };
+    const onCompEnd = () => { this.composing = false; onInput(); };
+    const onKeydown = (e) => this.#handleKeydown(e);
+    const onPaste = (e) => this.#handlePaste(e);
+    const onDrop = (e) => this.#handleDrop(e);
+    const onDragover = (e) => e.preventDefault();
+    const onContext = (e) => this.#handleContextMenu(e);
+    const onSelChange = () => {
+      if (document.activeElement === r) {
+        this.sel.save();
+        this.options.onSelectionChange?.();
+      }
+    };
+
+    r.addEventListener('input', onInput);
+    r.addEventListener('compositionstart', onCompStart);
+    r.addEventListener('compositionend', onCompEnd);
+    r.addEventListener('keydown', onKeydown);
+    r.addEventListener('paste', onPaste);
+    r.addEventListener('drop', onDrop);
+    r.addEventListener('dragover', onDragover);
+    r.addEventListener('contextmenu', onContext);
+    document.addEventListener('selectionchange', onSelChange);
+
+    this.#unbind = () => {
+      r.removeEventListener('input', onInput);
+      r.removeEventListener('compositionstart', onCompStart);
+      r.removeEventListener('compositionend', onCompEnd);
+      r.removeEventListener('keydown', onKeydown);
+      r.removeEventListener('paste', onPaste);
+      r.removeEventListener('drop', onDrop);
+      r.removeEventListener('dragover', onDragover);
+      r.removeEventListener('contextmenu', onContext);
+      document.removeEventListener('selectionchange', onSelChange);
+    };
+  }
+  #unbind = null;
+
+  /** 우클릭: 표 레이어 위에서만 표 메뉴 표시, 그 외는 브라우저 기본 메뉴 */
+  #handleContextMenu(e) {
+    const layer = e.target.closest?.(`.${TABLE_LAYER_CLASS}`);
+    if (!layer || !this.root.contains(layer)) return;
+    e.preventDefault();
+    // 우클릭한 셀로 커서 이동 (셀 밖 레이어 여백을 눌렀으면 첫 셀)
+    const cell = e.target.closest('td,th') || layer.querySelector('td,th');
+    if (cell && !cell.contains(this.sel.getRange()?.startContainer)) this.sel.placeCursor(cell, true);
+    const pickColor = this.options.pickColor
+      ? (cb) => this.options.pickColor(e.clientX, e.clientY, cb)
+      : null;
+    this.menu.open(e.clientX, e.clientY, this.table.getMenuItems(pickColor));
+  }
+
+  /** 단축키 + Enter 처리 */
+  #handleKeydown(e) {
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod) {
+      const key = e.key.toLowerCase();
+      const map = { b: 'bold', i: 'italic', u: 'underline', z: e.shiftKey ? 'redo' : 'undo', y: 'redo' };
+      if (map[key]) { e.preventDefault(); this.exec(map[key]); return; }
+    }
+
+    // 표 셀 안에서 Tab → 셀 이동
+    if (e.key === 'Tab' && this.table.handleTab(e.shiftKey)) { e.preventDefault(); return; }
+
+    if (e.key === 'Enter' && !e.shiftKey && !this.composing) {
+      const block = this.sel.getBlock();
+      // 빈 li 에서 Enter → 목록 탈출
+      if (block?.tagName === 'LI' && block.textContent.replace(ZWSP, '') === '') {
+        e.preventDefault();
+        this.commands.toggleList(block.parentNode.tagName.toLowerCase());
+        return;
+      }
+      // 제목/인용에서 Enter → 다음 줄은 p 로 (브라우저 기본은 같은 태그를 복제함)
+      if (block && /^(H1|H2|H3|BLOCKQUOTE)$/.test(block.tagName)) {
+        const range = this.sel.getRange();
+        if (range && range.collapsed) {
+          const atEnd = (() => {
+            const test = range.cloneRange();
+            test.setEnd(block, block.childNodes.length);
+            return test.toString().replace(ZWSP, '') === '';
+          })();
+          if (atEnd) {
+            e.preventDefault();
+            const p = document.createElement('p');
+            p.appendChild(document.createElement('br'));
+            block.parentNode.insertBefore(p, block.nextSibling);
+            this.sel.placeCursor(p, false);
+            this.commit();
+          }
+        }
+      }
+    }
+  }
+
+  /** 붙여넣기: 이미지 파일이면 업로드, HTML 이면 sanitize, 아니면 텍스트 */
+  async #handlePaste(e) {
+    e.preventDefault();
+    const cd = e.clipboardData;
+    const imageItem = Array.from(cd.items || []).find((i) => i.type.startsWith('image/'));
+    if (imageItem) { await this.insertImageFile(imageItem.getAsFile()); return; }
+
+    const html = cd.getData('text/html');
+    const text = cd.getData('text/plain');
+    if (html) {
+      this.commands.insertHTML(Sanitizer.clean(html));
+    } else if (text) {
+      // 줄바꿈은 단락으로
+      const escaped = text.replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
+      const paragraphs = escaped.split(/\r?\n/).map((l) => `<p>${l || '<br>'}</p>`).join('');
+      this.commands.insertHTML(paragraphs);
+    }
+  }
+
+  /** 드롭: 이미지 파일만 처리 */
+  async #handleDrop(e) {
+    if (e.target.closest?.(`.${GALLERY_LAYER_CLASS}`)) return; // 갤러리 레이어가 직접 처리
+    const file = Array.from(e.dataTransfer?.files || []).find((f) => f.type.startsWith('image/'));
+    if (!file) return;
+    e.preventDefault();
+    await this.insertImageFile(file);
+  }
+
+  /** 루트가 비었거나 루트 직속에 텍스트/인라인만 있으면 p 로 감싼다 */
+  #ensureBlock() {
+    const r = this.root;
+    if (r.childNodes.length === 0 || (r.childNodes.length === 1 && r.firstChild.tagName === 'BR')) {
+      r.innerHTML = '<p><br></p>';
+      return;
+    }
+    Array.from(r.childNodes).forEach((n) => {
+      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.dataset?.type === 'gallery');
+      if (!isBlock) {
+        const p = document.createElement('p');
+        r.insertBefore(p, n);
+        p.appendChild(n);
+      }
+    });
+  }
+
+  /** 히스토리 복원 */
+  #restore(html) {
+    this.root.innerHTML = html;
+    this.table.wrapAll();
+    this.gallery.wrapAll();
+    this.#ensureBlock();
+    this.sel.placeCursor(this.root.lastChild || this.root, true);
+    this.#emitChange();
+  }
+
+  #emitChange() {
+    this.options.onChange?.(this.getHTML());
+  }
+
+  #toDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result);
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+  }
+}
+
+
+
+/**
+ * TableGridPicker
+ * - 툴바 「표」 버튼 아래에 N×M 격자 팝업을 띄워, 마우스로 행·열 수를 고른 뒤 클릭하면 onPick(rows, cols) 호출.
+ * - 프레임워크 독립. 키보드(방향키/Enter/Esc) 도 지원.
+ */
+class TableGridPicker {
+  /**
+   * @param {object} options
+   * @param {number} [options.maxRows=8]
+   * @param {number} [options.maxCols=10]
+   * @param {(rows: number, cols: number) => void} options.onPick
+   */
+  constructor({ maxRows = 8, maxCols = 10, onPick }) {
+    this.maxRows = maxRows;
+    this.maxCols = maxCols;
+    this.onPick = onPick;
+    this.rows = 0;
+    this.cols = 0;
+
+    this.el = document.createElement('div');
+    this.el.className = 'jm-gridpicker';
+    this.el.hidden = true;
+    this.el.setAttribute('role', 'dialog');
+
+    this.grid = document.createElement('div');
+    this.grid.className = 'jm-gridpicker-grid';
+    this.grid.style.gridTemplateColumns = `repeat(${maxCols}, 1fr)`;
+    this.cells = [];
+    for (let r = 1; r <= maxRows; r++) {
+      for (let c = 1; c <= maxCols; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'jm-gridpicker-cell';
+        cell.dataset.r = r;
+        cell.dataset.c = c;
+        cell.addEventListener('mouseenter', () => this.#highlight(r, c));
+        cell.addEventListener('mousedown', (e) => e.preventDefault()); // 에디터 선택 유지
+        cell.addEventListener('click', () => this.#pick(r, c));
+        this.grid.appendChild(cell);
+        this.cells.push(cell);
+      }
+    }
+
+    this.label = document.createElement('div');
+    this.label.className = 'jm-gridpicker-label';
+
+    this.el.append(this.grid, this.label);
+    document.body.appendChild(this.el);
+
+    this.onDocDown = (e) => { if (!this.el.contains(e.target)) this.close(); };
+    this.onKey = (e) => this.#handleKey(e);
+    this.#highlight(0, 0);
+  }
+
+  /** 버튼 기준 위치에 열기 */
+  open(anchorEl) {
+    const r = anchorEl.getBoundingClientRect();
+    this.el.hidden = false;
+    this.el.style.left = `${Math.min(r.left, window.innerWidth - this.el.offsetWidth - 8)}px`;
+    this.el.style.top = `${r.bottom + 4}px`;
+    this.#highlight(1, 1);
+    document.addEventListener('mousedown', this.onDocDown, true);
+    document.addEventListener('keydown', this.onKey, true);
+  }
+
+  close() {
+    if (this.el.hidden) return;
+    this.el.hidden = true;
+    document.removeEventListener('mousedown', this.onDocDown, true);
+    document.removeEventListener('keydown', this.onKey, true);
+  }
+
+  toggle(anchorEl) {
+    this.el.hidden ? this.open(anchorEl) : this.close();
+  }
+
+  destroy() {
+    this.close();
+    this.el.remove();
+  }
+
+  /** rows×cols 범위 강조 + 라벨 갱신 */
+  #highlight(rows, cols) {
+    this.rows = rows;
+    this.cols = cols;
+    this.cells.forEach((cell) => {
+      cell.classList.toggle('is-on', +cell.dataset.r <= rows && +cell.dataset.c <= cols);
+    });
+    this.label.textContent = rows && cols ? `${rows} × ${cols}` : '표 크기 선택';
+  }
+
+  #pick(rows, cols) {
+    this.close();
+    this.onPick?.(rows, cols);
+  }
+
+  /** 방향키로 크기 조절, Enter 로 확정, Esc 로 닫기 */
+  #handleKey(e) {
+    const map = {
+      ArrowRight: [0, 1], ArrowLeft: [0, -1], ArrowDown: [1, 0], ArrowUp: [-1, 0],
+    };
+    if (map[e.key]) {
+      e.preventDefault();
+      const [dr, dc] = map[e.key];
+      this.#highlight(
+        Math.min(this.maxRows, Math.max(1, this.rows + dr)),
+        Math.min(this.maxCols, Math.max(1, this.cols + dc)),
+      );
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      this.#pick(this.rows, this.cols);
+    } else if (e.key === 'Escape') {
+      this.close();
+    }
+  }
+}
+
+
+/**
+ * ColorPicker
+ * - 색상 견본(swatch) 격자 + 직접 선택(<input type="color">) + 「없음(해제)」.
+ * - 툴바 글자색/배경색 버튼과 표 셀 배경색 메뉴에서 공용으로 쓴다.
+ * - open(x, y, onPick) 또는 openAt(anchorEl, onPick) 으로 열고, 선택 시 onPick(color|null) 호출.
+ */
+/** 스포이드 아이콘 (자체 제작 SVG) */
+const EYEDROPPER_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>';
+
+const DEFAULT_SWATCHES = [
+  '#000000', '#424242', '#757575', '#bdbdbd', '#e0e0e0', '#ffffff',
+  '#d32f2f', '#f57c00', '#fbc02d', '#388e3c', '#1976d2', '#7b1fa2',
+  '#ffcdd2', '#ffe0b2', '#fff9c4', '#c8e6c9', '#bbdefb', '#e1bee7',
+];
+
+class ColorPicker {
+  /**
+   * @param {object} [options]
+   * @param {string[]} [options.swatches]
+   * @param {'color'|'background'} [options.sampleMode='color'] 대체 스포이드가 글자색/배경색 중 무엇을 읽을지 기본값
+   */
+  constructor({ swatches = DEFAULT_SWATCHES, sampleMode = 'color' } = {}) {
+    this.onPick = null;
+    this.sampleMode = sampleMode;
+    this.hsv = { h: 0, s: 1, v: 1 }; // 현재 팔레트 상태
+    this.dragging = null;            // 'sv' | 'hue'
+
+    this.el = document.createElement('div');
+    this.el.className = 'jm-colorpicker';
+    this.el.hidden = true;
+    this.el.setAttribute('role', 'dialog');
+
+    this.#buildSwatches(swatches);
+    this.#buildCustom();
+    this.#buildFoot();
+    document.body.appendChild(this.el);
+
+    this.onDocDown = (e) => { if (!this.el.contains(e.target)) this.close(); };
+    this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
+  }
+
+  // ───────────── UI 구성 ─────────────
+
+  /** 견본 격자 */
+  #buildSwatches(swatches) {
+    const grid = document.createElement('div');
+    grid.className = 'jm-colorpicker-grid';
+    swatches.forEach((color) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'jm-colorpicker-swatch';
+      b.style.background = color;
+      b.title = color;
+      b.addEventListener('mousedown', (e) => e.preventDefault()); // 에디터 선택 유지
+      b.addEventListener('click', () => this.#pick(color));
+      grid.appendChild(b);
+    });
+    this.el.appendChild(grid);
+  }
+
+  /** 임의 색: SV 팔레트 + 색상(hue) 띠 + HEX 입력 */
+  #buildCustom() {
+    const wrap = document.createElement('div');
+    wrap.className = 'jm-colorpicker-custom';
+
+    // 채도/명도 팔레트
+    this.sv = document.createElement('canvas');
+    this.sv.className = 'jm-colorpicker-sv';
+    this.sv.width = 160; this.sv.height = 110;
+    this.svCursor = document.createElement('div');
+    this.svCursor.className = 'jm-colorpicker-cursor';
+    const svBox = document.createElement('div');
+    svBox.className = 'jm-colorpicker-svbox';
+    svBox.append(this.sv, this.svCursor);
+
+    // 색상 띠
+    this.hue = document.createElement('canvas');
+    this.hue.className = 'jm-colorpicker-hue';
+    this.hue.width = 160; this.hue.height = 12;
+    this.hueCursor = document.createElement('div');
+    this.hueCursor.className = 'jm-colorpicker-huecursor';
+    const hueBox = document.createElement('div');
+    hueBox.className = 'jm-colorpicker-huebox';
+    hueBox.append(this.hue, this.hueCursor);
+
+    // 미리보기 + HEX 입력 + 적용
+    const row = document.createElement('div');
+    row.className = 'jm-colorpicker-row';
+    this.preview = document.createElement('span');
+    this.preview.className = 'jm-colorpicker-preview';
+    this.hex = document.createElement('input');
+    this.hex.type = 'text';
+    this.hex.className = 'jm-colorpicker-hex';
+    this.hex.maxLength = 7;
+    this.hex.placeholder = '#rrggbb';
+    this.hex.setAttribute('aria-label', 'HEX 색상');
+    this.hex.addEventListener('mousedown', (e) => e.stopPropagation());
+    this.hex.addEventListener('input', () => {
+      const v = this.hex.value.trim();
+      if (/^#[0-9a-f]{6}$/i.test(v)) { this.hsv = ColorPicker.hexToHsv(v); this.#render(false); }
+    });
+    this.hex.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.#applyCustom(); } });
+    const apply = document.createElement('button');
+    apply.type = 'button';
+    apply.className = 'jm-btn jm-colorpicker-apply';
+    apply.textContent = '적용';
+    apply.addEventListener('mousedown', (e) => e.preventDefault());
+    apply.addEventListener('click', () => this.#applyCustom());
+    row.append(this.preview, this.hex, apply);
+
+    wrap.append(svBox, hueBox, row);
+    this.el.appendChild(wrap);
+
+    // 드래그 처리 (SV / Hue 공통)
+    const start = (target) => (e) => {
+      e.preventDefault();
+      this.dragging = target;
+      this.#drag(e);
+      const move = (ev) => this.#drag(ev);
+      const up = () => { this.dragging = null; window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    };
+    svBox.addEventListener('pointerdown', start('sv'));
+    hueBox.addEventListener('pointerdown', start('hue'));
+
+    this.#drawHue();
+  }
+
+  /** 하단: 스포이드 + 없음 */
+  #buildFoot() {
+    const foot = document.createElement('div');
+    foot.className = 'jm-colorpicker-foot';
+
+    const eye = document.createElement('button');
+    eye.type = 'button';
+    eye.className = 'jm-btn jm-colorpicker-eye';
+    eye.innerHTML = EYEDROPPER_ICON;
+    eye.setAttribute('aria-label', '스포이드');
+    eye.title = window.EyeDropper ? '화면의 색을 추출' : '페이지 요소를 클릭해 색을 가져옴';
+    eye.addEventListener('mousedown', (e) => e.preventDefault());
+    eye.addEventListener('click', () => this.#eyedrop());
+
+    const none = document.createElement('button');
+    none.type = 'button';
+    none.className = 'jm-btn';
+    none.textContent = '없음';
+    none.addEventListener('mousedown', (e) => e.preventDefault());
+    none.addEventListener('click', () => this.#pick(null));
+
+    foot.append(eye, none);
+    this.el.appendChild(foot);
+  }
+
+  // ───────────── 열기/닫기 ─────────────
+
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {(color: string|null) => void} onPick
+   * @param {object} [opts]
+   * @param {string} [opts.current] 현재 색 (팔레트 초기값)
+   * @param {'color'|'background'} [opts.sampleMode] 대체 스포이드 모드
+   */
+  open(x, y, onPick, opts = {}) {
+    this.onPick = onPick;
+    if (opts.sampleMode) this.sampleMode = opts.sampleMode;
+    const cur = ColorPicker.toHex(opts.current);
+    if (cur) this.hsv = ColorPicker.hexToHsv(cur);
+    this.#render(true);
+
+    this.el.hidden = false;
+    const { innerWidth: w, innerHeight: h } = window;
+    this.el.style.left = `${Math.min(x, w - this.el.offsetWidth - 8)}px`;
+    this.el.style.top = `${Math.min(y, h - this.el.offsetHeight - 8)}px`;
+    document.addEventListener('mousedown', this.onDocDown, true);
+    document.addEventListener('keydown', this.onKey, true);
+  }
+
+  openAt(anchorEl, onPick, opts) {
+    const r = anchorEl.getBoundingClientRect();
+    this.open(r.left, r.bottom + 4, onPick, opts);
+  }
+
+  close() {
+    if (this.el.hidden) return;
+    this.el.hidden = true;
+    document.removeEventListener('mousedown', this.onDocDown, true);
+    document.removeEventListener('keydown', this.onKey, true);
+  }
+
+  destroy() { this.close(); this.el.remove(); }
+
+  #pick(color) { this.close(); this.onPick?.(color); }
+  #applyCustom() { this.#pick(ColorPicker.hsvToHex(this.hsv)); }
+
+  // ───────────── 팔레트 렌더링 ─────────────
+
+  /** 드래그 좌표 → hsv */
+  #drag(e) {
+    if (this.dragging === 'sv') {
+      const r = this.sv.getBoundingClientRect();
+      this.hsv.s = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      this.hsv.v = 1 - Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    } else if (this.dragging === 'hue') {
+      const r = this.hue.getBoundingClientRect();
+      this.hsv.h = Math.min(359, Math.max(0, ((e.clientX - r.left) / r.width) * 360));
+    }
+    this.#render(true);
+  }
+
+  /** 색상 띠는 고정이므로 1회만 그림 */
+  #drawHue() {
+    const ctx = this.hue.getContext('2d');
+    const g = ctx.createLinearGradient(0, 0, this.hue.width, 0);
+    for (let i = 0; i <= 6; i++) g.addColorStop(i / 6, `hsl(${i * 60}, 100%, 50%)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, this.hue.width, this.hue.height);
+  }
+
+  /** SV 팔레트·커서·미리보기·HEX 갱신 */
+  #render(updateHex) {
+    const { h, s, v } = this.hsv;
+    const ctx = this.sv.getContext('2d');
+    ctx.fillStyle = `hsl(${h}, 100%, 50%)`;
+    ctx.fillRect(0, 0, this.sv.width, this.sv.height);
+    const white = ctx.createLinearGradient(0, 0, this.sv.width, 0);
+    white.addColorStop(0, 'rgba(255,255,255,1)'); white.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = white; ctx.fillRect(0, 0, this.sv.width, this.sv.height);
+    const black = ctx.createLinearGradient(0, 0, 0, this.sv.height);
+    black.addColorStop(0, 'rgba(0,0,0,0)'); black.addColorStop(1, 'rgba(0,0,0,1)');
+    ctx.fillStyle = black; ctx.fillRect(0, 0, this.sv.width, this.sv.height);
+
+    this.svCursor.style.left = `${s * 100}%`;
+    this.svCursor.style.top = `${(1 - v) * 100}%`;
+    this.hueCursor.style.left = `${(h / 360) * 100}%`;
+
+    const hex = ColorPicker.hsvToHex(this.hsv);
+    this.preview.style.background = hex;
+    if (updateHex) this.hex.value = hex;
+  }
+
+  // ───────────── 스포이드 ─────────────
+
+  async #eyedrop() {
+    if (window.EyeDropper) {
+      // 네이티브: 화면 아무 곳의 픽셀 색
+      this.close();
+      try {
+        const { sRGBHex } = await new window.EyeDropper().open();
+        this.onPick?.(sRGBHex);
+      } catch { /* 사용자가 취소(Esc) */ }
+      return;
+    }
+    // 대체: 페이지 요소를 한 번 클릭해 계산된 색을 가져옴
+    this.close();
+    const mode = this.sampleMode;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.cursor = 'crosshair';
+    const finish = (color) => {
+      document.body.style.cursor = prevCursor;
+      document.removeEventListener('click', onClick, true);
+      document.removeEventListener('keydown', onKey, true);
+      if (color) this.onPick?.(color);
+    };
+    const onClick = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      finish(ColorPicker.sampleElement(e.target, mode));
+    };
+    const onKey = (e) => { if (e.key === 'Escape') finish(null); };
+    document.addEventListener('click', onClick, true);
+    document.addEventListener('keydown', onKey, true);
+  }
+
+  /**
+   * 요소의 계산된 색을 HEX 로. background 모드는 투명이면 부모로 올라가며 찾는다.
+   * @param {Element} el
+   * @param {'color'|'background'} mode
+   */
+  static sampleElement(el, mode) {
+    let n = el;
+    while (n && n !== document.documentElement) {
+      const cs = getComputedStyle(n);
+      const v = mode === 'background' ? cs.backgroundColor : cs.color;
+      const hex = ColorPicker.toHex(v);
+      if (hex) return hex;
+      if (mode !== 'background') break;
+      n = n.parentElement;
+    }
+    return mode === 'background' ? '#ffffff' : null;
+  }
+
+  // ───────────── 색 변환 유틸 ─────────────
+
+  /** 'rgb(…)' / '#abc' / '#aabbcc' → '#aabbcc'. 투명이면 null */
+  static toHex(value) {
+    if (!value) return null;
+    const v = String(value).trim();
+    let m = v.match(/^#([0-9a-f]{3})$/i);
+    if (m) return '#' + m[1].split('').map((c) => c + c).join('').toLowerCase();
+    if (/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase();
+    m = v.match(/^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)(?:[\s,/]+([\d.]+))?\s*\)$/i);
+    if (m) {
+      if (m[4] !== undefined && parseFloat(m[4]) === 0) return null; // 완전 투명
+      return '#' + [m[1], m[2], m[3]].map((x) => (+x).toString(16).padStart(2, '0')).join('');
+    }
+    return null;
+  }
+
+  static hsvToHex({ h, s, v }) {
+    const f = (n) => {
+      const k = (n + h / 60) % 6;
+      const c = v - v * s * Math.max(0, Math.min(k, 4 - k, 1));
+      return Math.round(c * 255).toString(16).padStart(2, '0');
+    };
+    return `#${f(5)}${f(3)}${f(1)}`;
+  }
+
+  static hexToHsv(hex) {
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    let h = 0;
+    if (d) {
+      if (max === r) h = ((g - b) / d) % 6;
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h = (h * 60 + 360) % 360;
+    }
+    return { h, s: max ? d / max : 0, v: max };
+  }
+}
+
+
+/**
+ * FormatPicker
+ * - 툴바 「서식」 버튼 아래에 서식(템플릿) 목록 드롭다운을 띄우고, 선택하면 onPick(format) 호출.
+ * - 목록은 loadFormats() 로 외부에서 공급한다 (서버 API / 정적 배열). 결과는 캐시하며 refresh() 로 다시 받는다.
+ * - 서식 데이터 규격: { id, name, description?, html }
+ *   → 별도 서식 관리 화면/DB 테이블(예: format_template: id, name, description, html, sort_order, use_yn)에서 관리.
+ */
+class FormatPicker {
+  /**
+   * @param {object} options
+   * @param {() => Promise<Array<{id: string|number, name: string, description?: string, html: string}>>} options.loadFormats
+   * @param {(format: object) => void} options.onPick
+   */
+  constructor({ loadFormats, onPick }) {
+    this.loadFormats = loadFormats;
+    this.onPick = onPick;
+    this.formats = null; // 캐시
+
+    this.el = document.createElement('div');
+    this.el.className = 'jm-formatpicker';
+    this.el.hidden = true;
+    this.el.setAttribute('role', 'listbox');
+    document.body.appendChild(this.el);
+
+    this.onDocDown = (e) => { if (!this.el.contains(e.target)) this.close(); };
+    this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
+  }
+
+  /** 버튼 아래에 열기. 목록이 없으면 불러온 뒤 그린다 */
+  async openAt(anchorEl) {
+    const r = anchorEl.getBoundingClientRect();
+    this.el.hidden = false;
+    this.el.style.left = `${Math.min(r.left, window.innerWidth - 280)}px`;
+    this.el.style.top = `${r.bottom + 4}px`;
+    document.addEventListener('mousedown', this.onDocDown, true);
+    document.addEventListener('keydown', this.onKey, true);
+
+    if (!this.formats) {
+      this.#renderMessage('불러오는 중…');
+      try {
+        this.formats = await this.loadFormats();
+      } catch (err) {
+        this.#renderMessage('서식을 불러오지 못했습니다');
+        return;
+      }
+    }
+    this.#renderList();
+  }
+
+  toggle(anchorEl) {
+    this.el.hidden ? this.openAt(anchorEl) : this.close();
+  }
+
+  close() {
+    if (this.el.hidden) return;
+    this.el.hidden = true;
+    document.removeEventListener('mousedown', this.onDocDown, true);
+    document.removeEventListener('keydown', this.onKey, true);
+  }
+
+  /** 서식 관리에서 변경된 뒤 다시 받도록 캐시 비움 */
+  refresh() { this.formats = null; }
+
+  destroy() { this.close(); this.el.remove(); }
+
+  #renderMessage(text) {
+    this.el.innerHTML = '';
+    const d = document.createElement('div');
+    d.className = 'jm-formatpicker-msg';
+    d.textContent = text;
+    this.el.appendChild(d);
+  }
+
+  /** 서식 목록: 이름 + 설명 + 축소 미리보기 */
+  #renderList() {
+    this.el.innerHTML = '';
+    if (!this.formats?.length) { this.#renderMessage('등록된 서식이 없습니다'); return; }
+
+    this.formats.forEach((f) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'jm-formatpicker-item';
+      item.setAttribute('role', 'option');
+      item.addEventListener('mousedown', (e) => e.preventDefault()); // 에디터 선택 유지
+      item.addEventListener('click', () => { this.close(); this.onPick?.(f); });
+
+      const name = document.createElement('div');
+      name.className = 'jm-formatpicker-name';
+      name.textContent = f.name;
+
+      const desc = document.createElement('div');
+      desc.className = 'jm-formatpicker-desc';
+      desc.textContent = f.description || '';
+
+      // 미리보기: 실제 HTML 을 축소 렌더 (편집 불가, 클릭은 항목 선택으로)
+      const preview = document.createElement('div');
+      preview.className = 'jm-formatpicker-preview jm-editor';
+      preview.contentEditable = 'false';
+      preview.innerHTML = f.html;
+
+      item.append(name, desc, preview);
+      this.el.appendChild(item);
+    });
+  }
+}
+
+/**
+ * 테스트용 샘플 서식 — 실제 운영에서는 서식 관리 API 로 대체
+ * (허용 태그: p, h1~h3, strong/em/u/s, span[style color|background-color], ul/ol, blockquote, table, a, img)
+ */
+const SAMPLE_FORMATS = [
+  {
+    id: 'notice-box',
+    name: '안내 박스',
+    description: '배경색 있는 1칸 표로 강조 안내',
+    html: `<table><tbody><tr><td style="background-color: #e8f1fb"><p><strong>📌 안내</strong></p><p>안내 내용을 입력하세요.</p></td></tr></tbody></table>`,
+  },
+  {
+    id: 'warning',
+    name: '주의 문구',
+    description: '빨간 제목 + 인용 블록',
+    html: `<h3><span style="color: #d32f2f">⚠ 주의사항</span></h3><blockquote>주의 내용을 입력하세요.</blockquote>`,
+  },
+  {
+    id: 'meeting-minutes',
+    name: '회의록',
+    description: '일시·장소·참석자·안건 표',
+    html: `<h2>회의록</h2><table><tbody>
+<tr><th style="background-color: #f2f4f7">일시</th><td>YYYY-MM-DD 00:00</td><th style="background-color: #f2f4f7">장소</th><td>회의실</td></tr>
+<tr><th style="background-color: #f2f4f7">참석자</th><td colspan="3">참석자 입력</td></tr>
+</tbody></table><h3>안건</h3><ol><li>안건 1</li><li>안건 2</li></ol><h3>결정 사항</h3><ul><li>결정 사항 입력</li></ul>`,
+  },
+  {
+    id: 'checklist',
+    name: '체크리스트',
+    description: '확인 항목 목록',
+    html: `<h3>확인 사항</h3><ul><li>☐ 항목 1</li><li>☐ 항목 2</li><li>☐ 항목 3</li></ul>`,
+  },
+  {
+    id: 'image-gallery',
+    name: '이미지 갤러리',
+    description: '이미지만 넣는 블록. 드롭/추가 시 자동 균등 배치, 헤더에서 선택·전체 삭제',
+    html: `<div data-type="gallery" data-cols="3"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iIzJmNmY0ZSIvPjx0ZXh0IHg9IjIwMCIgeT0iMTYwIiBmb250LXNpemU9IjM2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+SU1HIDE8L3RleHQ+PC9zdmc+" alt="1"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iIzNiNmVhNSIvPjx0ZXh0IHg9IjIwMCIgeT0iMTYwIiBmb250LXNpemU9IjM2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+SU1HIDI8L3RleHQ+PC9zdmc+" alt="2"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2I1NjUxZCIvPjx0ZXh0IHg9IjIwMCIgeT0iMTYwIiBmb250LXNpemU9IjM2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+SU1HIDM8L3RleHQ+PC9zdmc+" alt="3"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iIzZiNGZhMCIvPjx0ZXh0IHg9IjIwMCIgeT0iMTYwIiBmb250LXNpemU9IjM2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+SU1HIDQ8L3RleHQ+PC9zdmc+" alt="4"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iIzhhNmQzYiIvPjx0ZXh0IHg9IjIwMCIgeT0iMTYwIiBmb250LXNpemU9IjM2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+SU1HIDU8L3RleHQ+PC9zdmc+" alt="5"></div>`,
+  },
+  {
+    id: 'divider-note',
+    name: '구분 메모',
+    description: '배경색 띠 한 줄',
+    html: `<p><span style="background-color: #fff9c4">　메모: 내용을 입력하세요　</span></p>`,
+  },
+];
+
+/* ───────── 데모 툴바 (vanilla/ToolbarEditor.js 와 동일 구조, 링크 입력만 인라인 바로 대체) ───────── */
+const FORMAT_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>';
+const CODE_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 6-6 6 6 6"/><path d="m16 6 6 6-6 6"/><path d="m14 4-4 16"/></svg>';
+const PREVIEW_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+let mode='editor';
+const sourceEl=document.getElementById('source');
+const BUTTONS = [
+  ['modeEditor','Editor',s=>mode==='editor',false,{group:'mode',segFirst:true,row:'top'}],
+  ['modeHtml','HTML',s=>mode==='html',false,{icon:CODE_ICON,group:'mode',row:'top'}],
+  ['modePreview','미리보기',s=>mode==='preview',false,{icon:PREVIEW_ICON,group:'mode',segLast:true,row:'top'}],
+  ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
+  ['bold','B',s=>s.strong],['italic','I',s=>s.em],['underline','U',s=>s.u],['strike','S',s=>s.s],['color','A',s=>!!s.color],['bgColor','배경',s=>!!s.bg],null,
+  ['h1','H1',s=>s.block==='h1'],['h2','H2',s=>s.block==='h2'],['h3','H3',s=>s.block==='h3'],['quote','❝ 인용',s=>s.block==='blockquote'],null,
+  ['ul','• 목록',s=>s.list==='ul'],['ol','1. 목록',s=>s.list==='ol'],null,
+  ['link','링크',s=>s.a],['image','이미지',()=>false],['table','표',s=>s.table],null,
+  ['undo','↶',()=>false],['redo','↷',()=>false]];
+const toolbar=document.getElementById('toolbar'), toolbarTop=document.getElementById('toolbarTop'), btns={};
+const out=document.getElementById('html'), len=document.getElementById('len');
+const linkbar=document.getElementById('linkbar'), linkUrl=document.getElementById('linkUrl');
+const fileInput=document.getElementById('file');
+const colorPicker=new ColorPicker();
+// 서식 목록: 테스트 샘플(SAMPLE_FORMATS). 운영에서는 서식 관리 API(fetch) 로 교체
+const formatPicker=new FormatPicker({loadFormats:async()=>SAMPLE_FORMATS,onPick:f=>editor.exec('format',f.html)});
+const gridPicker=new TableGridPicker({onPick:(rows,cols)=>editor.exec('table',{rows,cols,header:true})});
+
+const editor=new JmEditor(document.getElementById('editor'),{
+  placeholder:'내용을 입력하세요',
+  onChange:h=>{out.textContent=h; len.textContent=h.length+' chars';},
+  onSelectionChange:refresh,
+  pickColor:(x,y,cb)=>colorPicker.open(x,y,cb,{sampleMode:'background'}), // 표 셀/행 배경색 메뉴용
+});
+
+BUTTONS.forEach(def=>{
+  if(!def){const s=document.createElement('span');s.className='jm-sep';toolbar.appendChild(s);return;}
+  const [cmd,label,,tableOnly,opts={}]=def, b=document.createElement('button');
+  b.type='button';b.className='jm-btn';b.title=cmd;b.dataset.cmd=cmd;
+  if(opts.icon){b.classList.add('jm-btn-icon');b.innerHTML=opts.icon+'<span>'+label+'</span>';}else b.textContent=label;
+  if(opts.right)b.classList.add('jm-btn-right');if(opts.group)b.classList.add('jm-btn-seg');if(opts.segFirst)b.classList.add('jm-btn-seg-first');if(opts.segLast)b.classList.add('jm-btn-seg-last');
+  if(tableOnly)b.hidden=true; // 표 안에서만 표시
+  b.addEventListener('mousedown',e=>e.preventDefault()); // 선택 영역 유지
+  b.addEventListener('click',()=>run(cmd));
+  (opts.row==='top'?toolbarTop:toolbar).appendChild(b);btns[cmd]=b;
+});
+function run(cmd){
+  if(cmd==='link'){
+    if(editor.getState().a){editor.exec('unlink');return;}
+    editor.sel.save(); linkbar.classList.add('open'); linkUrl.value='https://'; linkUrl.focus(); return;
+  }
+  if(cmd==='image'){fileInput.click();return;}
+  if(cmd==='color'||cmd==='bgColor'){const s=editor.getState();editor.sel.save();colorPicker.openAt(btns[cmd],c=>editor.exec(cmd,c),{current:cmd==='color'?s.color:s.bg,sampleMode:cmd==='color'?'color':'background'});return;}
+  if(cmd==='table'){editor.sel.save();gridPicker.toggle(btns.table);return;}
+  if(cmd==='format'){editor.sel.save();formatPicker.toggle(btns.format);return;}
+  if(cmd==='modeEditor'){setMode('editor');return;}
+  if(cmd==='modeHtml'){setMode('html');return;}
+  if(cmd==='modePreview'){setMode('preview');return;}
+  if(mode!=='editor')return;
+  editor.exec(cmd);
+}
+document.getElementById('linkOk').addEventListener('click',()=>{linkbar.classList.remove('open');if(linkUrl.value)editor.exec('link',linkUrl.value);});
+document.getElementById('linkCancel').addEventListener('click',()=>{linkbar.classList.remove('open');editor.root.focus();editor.sel.restore();});
+linkUrl.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('linkOk').click();if(e.key==='Escape')document.getElementById('linkCancel').click();});
+fileInput.addEventListener('change',()=>{editor.insertImageFile(fileInput.files[0]);fileInput.value='';});
+function refresh(){if(mode!=='editor')return;const s=editor.getState();BUTTONS.forEach(d=>{if(!d)return;btns[d[0]].classList.toggle('is-active',!!d[2](s));if(d[3])btns[d[0]].hidden=!s.table;});
+  btns.color.style.setProperty('--jm-swatch',s.color||'transparent');btns.bgColor.style.setProperty('--jm-swatch',s.bg||'transparent');}
+
+/* 모드 전환: editor / html / preview. html 모드에서 나갈 때 textarea 내용을 setHTML 로 반영 */
+function prettify(html){return html.replace(/<(p|h1|h2|h3|ul|ol|li|blockquote|table|tbody|thead|tr|div)(\s[^>]*)?>/g,'\n<$1$2>').replace(/<\/(p|h1|h2|h3|ul|ol|blockquote|table|tbody|thead|tr|div)>/g,'</$1>\n').replace(/\n{2,}/g,'\n').trim();}
+const previewEl=document.getElementById('preview');
+function setMode(m){
+  if(m===mode)return;
+  if(mode==='html')editor.setHTML(sourceEl.value);
+  mode=m;
+  const area=document.getElementById('editor');
+  area.hidden=m!=='editor';sourceEl.hidden=m!=='html';previewEl.hidden=m!=='preview';
+  if(m==='html'){sourceEl.value=prettify(editor.getHTML());sourceEl.focus();}
+  else if(m==='preview'){previewEl.innerHTML=editor.getHTML();}
+  else area.focus();
+  BUTTONS.forEach(d=>{if(!d)return;const [c,,act,,o={}]=d;if(o.group==='mode')btns[c].classList.toggle('is-active',!!act());else btns[c].disabled=m!=='editor';});
+  toolbar.hidden=m!=='editor';
+}
+
+/* 초기 샘플 내용 */
+editor.setHTML(`<h2>공지사항 작성 샘플</h2>
+<p>이 에디터는 <strong>굵게</strong>, <em>기울임</em>, <u>밑줄</u>, <s>취소선</s>, <span style="color:#d32f2f">글자색</span>, <span style="background-color:#fff9c4">배경색</span> 과 제목·인용·목록·링크·이미지를 지원합니다.</p>
+<blockquote>인용 블록에서 Enter 를 누르면 다음 줄은 일반 단락으로 빠져나옵니다.</blockquote>
+<ul><li>텍스트를 드래그한 뒤 툴바 버튼을 눌러보세요</li><li>빈 목록 항목에서 Enter 를 누르면 목록이 종료됩니다</li><li>외부 사이트 글을 붙여넣으면 허용 태그만 남습니다</li></ul>
+<table><tbody><tr><th>항목</th><th>담당</th><th>기한</th></tr><tr><td>표 위에서 우클릭 → 행/열 메뉴</td><td>개발</td><td>10/24</td></tr><tr><td>우클릭 → 셀 배경색… / 행 배경색…</td><td style="background-color:#e1bee7">기획</td><td>10/27</td></tr></tbody></table>
+<h3>현장 사진</h3><div data-type="gallery" data-cols="3" data-auto="1"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iIzJmNmY0ZSIvPjx0ZXh0IHg9IjIwMCIgeT0iMTYwIiBmb250LXNpemU9IjM2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+SU1HIDE8L3RleHQ+PC9zdmc+" alt="1"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iIzNiNmVhNSIvPjx0ZXh0IHg9IjIwMCIgeT0iMTYwIiBmb250LXNpemU9IjM2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+SU1HIDI8L3RleHQ+PC9zdmc+" alt="2"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2I1NjUxZCIvPjx0ZXh0IHg9IjIwMCIgeT0iMTYwIiBmb250LXNpemU9IjM2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+SU1HIDM8L3RleHQ+PC9zdmc+" alt="3"></div>
+<p>참고 링크: <a href="https://developer.mozilla.org/ko/docs/Web/API/Range">MDN Range API</a></p>`);
+</script>
+</body>
+</html>
