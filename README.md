@@ -20,51 +20,70 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 
 동시편집은 아직 없습니다.
 
-## 쓰는 법
+## 시작하기
 
-### Thymeleaf / JSP
+필요한 건 `dist/` 의 파일 세 개입니다. 빌드할 필요 없이 그대로 복사해서 씁니다.
 
-`src/` 를 정적 리소스로 서빙하고(예: `static/js/jm-editor/`), 컨테이너 하나를 둡니다.
+| 파일 | 용도 |
+|---|---|
+| `dist/jm-editor.css` | 편집 화면·조회 화면 공통 스타일 |
+| `dist/jm-editor.min.js` | 에디터 전체 (전역 `JmEditor.*`). ES Module 이 필요하면 `jm-editor.esm.js` |
+| `dist/jm-viewer.min.js` | 조회 화면용 런타임 (갤러리 배치·슬라이드 전환). ESM 은 `jm-viewer.esm.js` |
+
+### 편집 화면
 
 ```html
 <link rel="stylesheet" href="/css/jm-editor.css">
 <div id="editor"></div>
-
-<script type="module">
-  import { JmToolbarEditor } from '/js/jm-editor/ui/JmToolbarEditor.js';
-
-  const editor = new JmToolbarEditor(document.getElementById('editor'), {
+<script src="/js/jm-editor.min.js"></script>
+<script>
+  const editor = new JmEditor.JmToolbarEditor(document.getElementById('editor'), {
     placeholder: '내용을 입력하세요',
     api: { baseUrl: '', headers: () => ({ 'X-CSRF-TOKEN': token }) },
-    contentId,          // 수정 화면이면 id. 생성 직후 자동 조회
+    contentId,   // 수정 화면이면 id, 등록이면 null
   });
 
   // 저장: contentId 가 없으면 등록, 있으면 수정
-  await editor.save({ title: '제목' });
+  saveButton.onclick = () => editor.save({ title: titleInput.value });
 </script>
 ```
 
-전체 예시는 [examples/thymeleaf/notice-form.html](examples/thymeleaf/notice-form.html)에 있습니다. JSP도 템플릿 문법만 다르고 같습니다.
+Thymeleaf, JSP 모두 이 형태 그대로입니다. 전체 예시는 [examples/thymeleaf/notice-form.html](examples/thymeleaf/notice-form.html).
 
 API 없이 폼으로만 보낼 거면 `api` 옵션을 빼고 submit 직전에 `editor.getHTML()` 을 hidden input 에 넣으면 됩니다.
 
+ES Module 로 쓰려면:
+
+```html
+<script type="module">
+  import { JmToolbarEditor } from '/js/jm-editor.esm.js';
+</script>
+```
+
+### 조회 화면
+
+저장된 HTML 을 `.jm-content` 안에 그대로 출력하고 뷰어 런타임을 한 번 초기화합니다.
+
+```html
+<link rel="stylesheet" href="/css/jm-editor.css">
+<div class="jm-content" th:utext="${content}"></div>
+<script src="/js/jm-viewer.min.js"></script>
+<script>JmViewer.initViewer(document.querySelector('.jm-content'));</script>
+```
+
+표·버튼·유튜브는 CSS 만으로 보이고, 갤러리 비율 배치와 슬라이드 전환이 런타임을 씁니다.
+
 ### React / Next.js
 
-[examples/react/JmEditor.jsx](examples/react/JmEditor.jsx) 가 코어를 감싼 컴포넌트입니다. Next.js App Router 에서는 `'use client'` 가 필요합니다.
+`npm i github:jinix55/JmEditor` 또는 저장소를 받아 `import { JmEditor } from 'jm-editor'` (ESM 번들). 컴포넌트 예시는 [examples/react/JmEditor.jsx](examples/react/JmEditor.jsx), Next.js App Router 에서는 `'use client'` 가 필요합니다.
 
-```jsx
-<JmEditor value={html} onChange={setHtml} uploadImage={uploadFn} />
-```
+### 서버
 
-### 코어만 쓰기
+[server/spring-boot](server/spring-boot) 의 Spring Boot 구현(조회·등록·수정·이미지 업로드·서식 목록)을 패키지에 맞춰 넣고, `schema-postgresql.sql` 로 테이블을 만듭니다. 저장 전 `HtmlSanitizer` 를 반드시 거칩니다.
 
-툴바 없이 편집 영역만 필요하면 `src/core/JmEditor.js` 를 직접 씁니다.
+### 소스로 쓰기 / 직접 빌드
 
-```js
-import { JmEditor } from '/js/jm-editor/core/JmEditor.js';
-const ed = new JmEditor(el, { onChange: html => {} });
-ed.exec('bold');  ed.exec('table', { rows: 3, cols: 3 });  ed.getHTML();
-```
+`src/` 를 그대로 서빙해 `src/ui/JmToolbarEditor.js` 를 import 해도 됩니다(15개 파일). 배포본을 다시 만들려면 `npm install && npm run build` (esbuild).
 
 ## API 규약
 
