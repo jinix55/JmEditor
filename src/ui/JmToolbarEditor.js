@@ -229,7 +229,7 @@ export class JmToolbarEditor {
     if (cmd === 'color' || cmd === 'bgColor') {
       this.editor.sel.save();
       const state = this.editor.getState();
-      this.colorPicker.openAt(this.buttons[cmd], (color) => this.editor.exec(cmd, color), {
+      this.colorPicker.toggleAt(this.buttons[cmd], (color) => this.editor.exec(cmd, color), {
         current: cmd === 'color' ? state.color : state.bg,
         sampleMode: cmd === 'color' ? 'color' : 'background',
       });

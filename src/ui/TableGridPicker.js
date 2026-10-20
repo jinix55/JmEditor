@@ -46,13 +46,15 @@ export class TableGridPicker {
     this.el.append(this.grid, this.label);
     document.body.appendChild(this.el);
 
-    this.onDocDown = (e) => { if (!this.el.contains(e.target)) this.close(); };
+    this.anchor = null;
+    this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.anchor?.contains(e.target)) this.close(); };
     this.onKey = (e) => this.#handleKey(e);
     this.#highlight(0, 0);
   }
 
   /** 버튼 기준 위치에 열기 */
   open(anchorEl) {
+    this.anchor = anchorEl;
     const r = anchorEl.getBoundingClientRect();
     this.el.hidden = false;
     this.el.style.left = `${Math.min(r.left, window.innerWidth - this.el.offsetWidth - 8)}px`;

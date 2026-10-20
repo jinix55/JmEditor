@@ -22,12 +22,14 @@ export class FormatPicker {
     this.el.setAttribute('role', 'listbox');
     document.body.appendChild(this.el);
 
-    this.onDocDown = (e) => { if (!this.el.contains(e.target)) this.close(); };
+    this.anchor = null; // 팝업을 연 버튼 — 그 버튼 클릭은 '바깥 클릭'으로 보지 않음 (토글 동작)
+    this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.anchor?.contains(e.target)) this.close(); };
     this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
   }
 
   /** 버튼 아래에 열기. 목록이 없으면 불러온 뒤 그린다 */
   async openAt(anchorEl) {
+    this.anchor = anchorEl;
     const r = anchorEl.getBoundingClientRect();
     this.el.hidden = false;
     this.el.style.left = `${Math.min(r.left, window.innerWidth - 280)}px`;
