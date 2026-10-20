@@ -258,7 +258,7 @@ export class JmToolbarEditor {
   #onCommand(cmd) {
     if (cmd === 'link') {
       const a = this.editor.sel.closest('a');
-      if (a) this.#openInput('링크 URL (비우면 해제)', a.getAttribute('href') || '', (v) => { this.editor.exec(v ? 'link' : 'unlink', v); return true; });
+      if (a) this.#openInput('링크 URL (비우면 해제)', JmEditor.getHref(a), (v) => { this.editor.exec(v ? 'link' : 'unlink', v); return true; });
       else this.#openInput('링크 URL', 'https://', (v) => { if (v) this.editor.exec('link', v); return true; });
       return;
     }

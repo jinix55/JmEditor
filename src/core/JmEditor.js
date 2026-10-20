@@ -20,7 +20,14 @@ import { Sanitizer } from './Sanitizer.js';
 
 const ZWSP = '​';
 
+const HREF_ATTR = 'data-jm-href'; // 편집 중 링크 주소 보관 속성 (href 는 제거해 어떤 환경에서도 열리지 않게)
+
 export class JmEditor {
+  /** 편집 DOM 의 링크 주소 읽기 (href 또는 보관 속성) */
+  static getHref(a) { return a?.getAttribute(HREF_ATTR) ?? a?.getAttribute('href') ?? ''; }
+  /** 편집 DOM 의 링크 주소 쓰기 (href 는 두지 않음) */
+  static setHref(a, url) { a.setAttribute(HREF_ATTR, url); a.removeAttribute('href'); }
+
   /**
    * @param {HTMLElement} root 편집 영역이 될 요소
    * @param {object} options
@@ -114,6 +121,7 @@ export class JmEditor {
     html = GalleryCommands.unwrapHTML(html);
     html = EmbedCommands.unwrapHTML(html);
     html = ButtonsCommands.unwrapHTML(html);
+    html = JmEditor.#restoreLinks(html);
     return BlockDrag.cleanHTML(html);
   }
 
@@ -124,6 +132,7 @@ export class JmEditor {
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
+    this.#neutralizeLinks();
     this.#ensureBlock();
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
     this.#emitChange();
@@ -149,6 +158,7 @@ export class JmEditor {
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
+    this.#neutralizeLinks();
     this.#ensureBlock();
     this.history.push();
     this.#emitChange();
@@ -318,6 +328,19 @@ export class JmEditor {
     await this.insertImageFile(file);
   }
 
+  /** 편집 중 링크가 열리지 않도록 href 를 보관 속성으로 옮긴다 (setHTML / commit / restore 후 호출) */
+  #neutralizeLinks() {
+    this.root.querySelectorAll('a[href]').forEach((a) => JmEditor.setHref(a, a.getAttribute('href')));
+  }
+
+  /** 저장용 HTML 에서 보관 속성을 href 로 되돌린다 */
+  static #restoreLinks(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll(`a[${HREF_ATTR}]`).forEach((a) => { a.setAttribute('href', a.getAttribute(HREF_ATTR)); a.removeAttribute(HREF_ATTR); });
+    return tpl.innerHTML;
+  }
+
   /** 루트가 비었거나 루트 직속에 텍스트/인라인만 있으면 p 로 감싼다 */
   #ensureBlock() {
     const r = this.root;
@@ -342,6 +365,7 @@ export class JmEditor {
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
+    this.#neutralizeLinks();
     this.#ensureBlock();
     this.sel.placeCursor(this.root.lastChild || this.root, true);
     this.#emitChange();
