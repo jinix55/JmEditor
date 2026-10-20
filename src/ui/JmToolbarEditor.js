@@ -9,12 +9,17 @@ import { ColorPicker } from './ColorPicker.js';
 import { FormatPicker, SAMPLE_FORMATS } from './FormatPicker.js';
 import { JmEditorApi } from '../api/JmEditorApi.js';
 import { observeGalleries } from '../plugins/gallery/gallery-layout.js';
+import { ContextMenu } from './ContextMenu.js';
 
 /** 서식 버튼 아이콘 (자체 제작 SVG) */
 const FORMAT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>';
 
 /** 유튜브 버튼 아이콘 (자체 제작 SVG) */
 const YOUTUBE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3z" fill="currentColor"/></svg>';
+
+/** 목록 유형 (list-style-type) */
+const UL_TYPES = [['disc', '● 기본'], ['circle', '○ 원'], ['square', '■ 사각']];
+const OL_TYPES = [['decimal', '1. 숫자'], ['decimal-leading-zero', '01. 숫자(0 채움)'], ['lower-alpha', 'a. 소문자'], ['upper-alpha', 'A. 대문자'], ['lower-roman', 'i. 로마 소문자'], ['upper-roman', 'I. 로마 대문자'], ['hangul', '가. 한글']];
 
 /** 코드 보기 / 미리보기 아이콘 (자체 제작 SVG) */
 const CODE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 6-6 6 6 6"/><path d="m16 6 6 6-6 6"/><path d="m14 4-4 16"/></svg>';
@@ -44,8 +49,10 @@ const BUTTONS = [
   ['h3', 'H3', (s) => s.block === 'h3'],
   ['quote', '❝', (s) => s.block === 'blockquote'],
   null,
-  ['ul', '• 목록', (s) => s.list === 'ul'],
-  ['ol', '1. 목록', (s) => s.list === 'ol'],
+  ['ul', '• 목록', (s) => s.list === 'ul', false, { tip: '비순서 목록' }],
+  ['ulType', '▾', () => false, false, { tip: '비순서 목록 유형', compact: true }],
+  ['ol', '1. 목록', (s) => s.list === 'ol', false, { tip: '순서 목록' }],
+  ['olType', '▾', () => false, false, { tip: '순서 목록 유형', compact: true }],
   null,
   ['link', '링크', (s) => s.a],
   ['image', '이미지', () => false],
@@ -141,6 +148,9 @@ export class JmToolbarEditor {
       onPick: (f) => this.editor.exec('format', f.html),
     });
 
+    // 목록 유형 메뉴
+    this.listMenu = new ContextMenu();
+
     // 색상 선택 팝업 (툴바 글자색/배경색 + 표 셀 배경색 공용)
     this.colorPicker = new ColorPicker();
 
@@ -222,6 +232,7 @@ export class JmToolbarEditor {
       if (opts.segLast) btn.classList.add('jm-btn-seg-last');
       btn.dataset.cmd = cmd;
       if (opts.tip) btn.title = opts.tip;
+      if (opts.compact) btn.classList.add('jm-btn-compact');
       if (opts.icon) {
         // 아이콘 (+ 텍스트). iconOnly 면 라벨은 툴팁으로만
         btn.classList.add('jm-btn-icon');
@@ -263,6 +274,15 @@ export class JmToolbarEditor {
         current: cmd === 'color' ? state.color : state.bg,
         sampleMode: cmd === 'color' ? 'color' : 'background',
       });
+      return;
+    }
+    if (cmd === 'ulType' || cmd === 'olType') {
+      const tag = cmd === 'ulType' ? 'ul' : 'ol';
+      const r = this.buttons[cmd].getBoundingClientRect();
+      this.editor.sel.save();
+      this.listMenu.open(r.left, r.bottom + 4, (tag === 'ul' ? UL_TYPES : OL_TYPES).map(([v, label]) => ({
+        label, action: () => this.editor.exec(tag, v),
+      })));
       return;
     }
     if (cmd === 'table') { this.editor.sel.save(); this.gridPicker.toggle(this.buttons.table); return; }
@@ -368,5 +388,5 @@ export class JmToolbarEditor {
   setHTML(html) { this.editor.setHTML(html); if (this.mode === 'html') this.source.value = JmToolbarEditor.prettify(html); if (this.mode === 'preview') this.previewPane.innerHTML = this.editor.getHTML(); }
   /** 서식 관리에서 변경 후 호출하면 다음 열 때 다시 불러옴 */
   refreshFormats() { this.formatPicker.refresh(); }
-  destroy() { this.gridPicker.destroy(); this.colorPicker.destroy(); this.formatPicker.destroy(); this.editor.destroy(); }
+  destroy() { this.gridPicker.destroy(); this.colorPicker.destroy(); this.formatPicker.destroy(); this.listMenu.destroy(); this.editor.destroy(); }
 }

@@ -8,7 +8,7 @@
 const ALLOWED = {
   p: [], br: [], strong: [], em: [], u: [], s: [],
   h1: [], h2: [], h3: [],
-  ul: [], ol: [], li: [],
+  ul: ['style'], ol: ['style', 'start'], li: [],
   blockquote: [],
   a: ['href', 'target', 'rel', 'data-role', 'data-style'], // data-role=button → 버튼 모양 링크
   img: ['src', 'alt', 'width', 'height'],
@@ -27,6 +27,7 @@ const ALLOWED_STYLE = {
   'vertical-align': (v) => /^(top|middle|bottom)$/i.test(v),
   'width': (v) => /^\d+(\.\d+)?(px|%)$/i.test(v) || v === 'auto',
   'height': (v) => /^\d+(\.\d+)?px$/i.test(v),
+  'list-style-type': (v) => /^(disc|circle|square|decimal|decimal-leading-zero|lower-alpha|upper-alpha|lower-roman|upper-roman|hangul|hangul-consonant|none)$/i.test(v),
 };
 
 /** 태그 이름 치환 (레거시/외부 태그 → 표준 태그) */
@@ -141,6 +142,7 @@ export class Sanitizer {
       const v = node.getAttribute(attr);
       if (v == null) return;
       if ((attr === 'href' || attr === 'src') && !SAFE_URL.test(v.trim())) return;
+      if (attr === 'start' && !/^\d{1,4}$/.test(v)) return;
       if (attr === 'style') {
         const clean = Sanitizer.cleanStyle(v);
         if (clean) el.setAttribute('style', clean);
