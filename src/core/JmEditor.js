@@ -14,6 +14,7 @@ import { ContextMenu } from '../ui/ContextMenu.js';
 import { GalleryCommands, GALLERY_LAYER_CLASS } from '../plugins/gallery/GalleryCommands.js';
 import { EmbedCommands, EMBED_LAYER_CLASS } from '../plugins/embed/EmbedCommands.js';
 import { ButtonsCommands, BUTTONS_LAYER_CLASS } from '../plugins/buttons/ButtonsCommands.js';
+import { SliderCommands, SLIDER_LAYER_CLASS } from '../plugins/slider/SliderCommands.js';
 import { History } from './History.js';
 import { BlockDrag } from './BlockDrag.js';
 import { Sanitizer } from './Sanitizer.js';
@@ -55,6 +56,7 @@ export class JmEditor {
     this.gallery = new GalleryCommands(this);
     this.embed = new EmbedCommands(this);
     this.buttons = new ButtonsCommands(this);
+    this.slider = new SliderCommands(this);
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
 
     this.#ensureBlock();
@@ -73,6 +75,7 @@ export class JmEditor {
    *                      |gallery (value: {cols, auto} — 이미지 갤러리 블록 삽입)
    *                      |youtube (value: 유튜브 주소 또는 동영상 ID)
    *                      |buttons (value: {align} — 버튼 그룹 블록 삽입)
+   *                      |slider (value: {interval, ratio} — 이미지 슬라이드 블록 삽입)
    * @param {*} [value] link 의 url, image 의 {src, alt}, table 의 {rows, cols, header}
    */
   exec(name, value) {
@@ -98,6 +101,7 @@ export class JmEditor {
       gallery: () => c.insertBlockHTML(GalleryCommands.template(value?.cols, value?.auto ?? true)),
       youtube: () => this.embed.insertYouTube(value),
       buttons: () => c.insertBlockHTML(ButtonsCommands.template(value?.align)),
+      slider: () => c.insertBlockHTML(SliderCommands.template(value?.interval, value?.ratio)),
       color: () => c.setStyle('color', value ?? null),
       bgColor: () => c.setStyle('background-color', value ?? null),
       fontSize: () => c.setStyle('font-size', value ?? null),
@@ -123,6 +127,7 @@ export class JmEditor {
     html = GalleryCommands.unwrapHTML(html);
     html = EmbedCommands.unwrapHTML(html);
     html = ButtonsCommands.unwrapHTML(html);
+    html = SliderCommands.unwrapHTML(html);
     html = JmEditor.#restoreLinks(html);
     return BlockDrag.cleanHTML(html);
   }
@@ -134,6 +139,7 @@ export class JmEditor {
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
+    this.slider.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
@@ -160,6 +166,7 @@ export class JmEditor {
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
+    this.slider.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.history.push();
@@ -172,6 +179,7 @@ export class JmEditor {
     this.#unbind?.();
     this.menu.destroy();
     this.gallery.destroy();
+    this.slider.destroy();
     this.blockDrag.destroy();
   }
 
@@ -351,7 +359,7 @@ export class JmEditor {
       return;
     }
     Array.from(r.childNodes).forEach((n) => {
-      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || ['gallery', 'youtube', 'buttons'].includes(n.dataset?.type));
+      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider'].includes(n.dataset?.type));
       if (!isBlock) {
         const p = document.createElement('p');
         r.insertBefore(p, n);
@@ -367,6 +375,7 @@ export class JmEditor {
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
+    this.slider.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.sel.placeCursor(this.root.lastChild || this.root, true);

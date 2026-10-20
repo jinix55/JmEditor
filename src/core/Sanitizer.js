@@ -105,6 +105,29 @@ export class Sanitizer {
       return g;
     }
 
+    // 슬라이드 블록: div[data-type=slider] 안에는 제목 p 와 img 만
+    if (tag === 'div' && node.getAttribute('data-type') === 'slider') {
+      const b = document.createElement('div');
+      b.setAttribute('data-type', 'slider');
+      const iv = parseInt(node.getAttribute('data-interval'), 10);
+      b.setAttribute('data-interval', String(iv >= 0 && iv <= 60000 ? iv : 3000));
+      const ratio = node.getAttribute('data-ratio');
+      b.setAttribute('data-ratio', ['16:9', '4:3', '1:1', '21:9'].includes(ratio) ? ratio : '16:9');
+      const ind = node.getAttribute('data-indicator');
+      b.setAttribute('data-indicator', ['dots', 'numbers', 'bars', 'none'].includes(ind) ? ind : 'dots');
+      const w = node.getAttribute('data-width');
+      b.setAttribute('data-width', ['100', '75', '50'].includes(w) ? w : '100');
+      const al = node.getAttribute('data-align');
+      b.setAttribute('data-align', ['left', 'center', 'right'].includes(al) ? al : 'center');
+      const title = node.querySelector(':scope > p[data-role="title"]');
+      if (title && title.textContent.trim()) {
+        const t = Sanitizer.#cleanNode(title);
+        if (t && t.nodeType === Node.ELEMENT_NODE) { t.setAttribute('data-role', 'title'); b.appendChild(t); }
+      }
+      node.querySelectorAll(':scope > img').forEach((img) => { const r = Sanitizer.#cleanNode(img); if (r) b.appendChild(r); });
+      return b;
+    }
+
     // 버튼 그룹 블록: div[data-type=buttons] 안에는 a[data-role=button] 만
     if (tag === 'div' && node.getAttribute('data-type') === 'buttons') {
       const b = document.createElement('div');

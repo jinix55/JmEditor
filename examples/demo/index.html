@@ -79,6 +79,52 @@ a[data-role="button"][data-style="outline"]{background:transparent;color:var(--a
 a[data-role="button"][data-style="gray"]{background:var(--line);color:var(--fg)!important}
 a[data-role="button"][data-size="sm"]{padding:5px 12px;font-size:13px}
 a[data-role="button"][data-size="lg"]{padding:12px 26px;font-size:17px}
+div[data-type="slider"] { --jm-ar: 16 / 9; position: relative; margin: 0 0 8px; }
+div[data-type="slider"][data-ratio="4:3"] { --jm-ar: 4 / 3; }
+div[data-type="slider"][data-ratio="1:1"] { --jm-ar: 1 / 1; }
+div[data-type="slider"][data-ratio="21:9"] { --jm-ar: 21 / 9; }
+div[data-type="slider"][data-width="100"] { width: 100%; }
+div[data-type="slider"][data-width="75"] { width: 75%; }
+div[data-type="slider"][data-width="50"] { width: 50%; }
+div[data-type="slider"][data-align="center"] { margin-left: auto; margin-right: auto; }
+div[data-type="slider"][data-align="right"] { margin-left: auto; }
+div[data-type="slider"] p[data-role="title"] { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+div[data-type="slider"]::after { content: ""; display: block; aspect-ratio: var(--jm-ar); background: var(--code); border-radius: 6px; }
+div[data-type="slider"] > img { position: absolute; left: 0; bottom: 0; width: 100%; height: auto; aspect-ratio: var(--jm-ar); object-fit: cover; border-radius: 6px; margin: 0; opacity: 0; transition: opacity .5s; pointer-events: none; }
+div[data-type="slider"] > img.is-current, div[data-type="slider"]:not(:has(> img.is-current)) > img:first-of-type { opacity: 1; }
+.jm-slider-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border: 0; border-radius: 50%; background: rgba(0,0,0,.45); color: var(--panel); font-size: 16px; cursor: pointer; z-index: 2; }
+.jm-slider-prev { left: 10px; } .jm-slider-next { right: 10px; }
+.jm-slider-arrow:hover { background: rgba(0,0,0,.7); }
+.jm-slider-dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; align-items: center; gap: 6px; z-index: 2; }
+.jm-slider-dot { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%; background: rgba(255,255,255,.55); cursor: pointer; }
+.jm-slider-dot.is-current { background: var(--panel); }
+.jm-slider-bar { width: 28px; height: 4px; padding: 0; border: 0; border-radius: 2px; background: rgba(255,255,255,.5); cursor: pointer; }
+.jm-slider-bar.is-current { background: var(--panel); }
+.jm-slider-ind-numbers { justify-content: flex-end; right: 12px; left: auto; }
+.jm-slider-num { padding: 3px 10px; border-radius: 12px; background: rgba(0,0,0,.55); color: var(--panel); font-size: 12px; font-variant-numeric: tabular-nums; }
+.jm-slider-layer { margin: 0 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.jm-slider-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--accent-soft); border-radius: 6px 6px 0 0; }
+.jm-slider-title { font-size: 12px; font-weight: 600; color: var(--fg); }
+.jm-slider-count { flex: 1; font-size: 11px; color: var(--muted); }
+.jm-slider-btn { height: 26px; padding: 0 8px; font-size: 12px; }
+.jm-slider-btn:disabled { opacity: .4; cursor: default; }
+.jm-slider-interval, .jm-slider-ratio, .jm-slider-indicator, .jm-slider-width, .jm-slider-align { height: 26px; font-size: 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+.jm-slider-remove { color: #d14343; }
+.jm-slider-layer div[data-type="slider"] { margin-top: 8px; margin-bottom: 8px; }
+.jm-slider-layer div[data-type="slider"][data-align="left"] { margin-left: 8px; }
+.jm-slider-layer div[data-type="slider"][data-align="right"] { margin-right: 8px; }
+.jm-slider-layer div[data-type="slider"] p[data-role="title"] { outline: none; padding: 4px 6px; border-radius: 4px; }
+.jm-slider-layer div[data-type="slider"] p[data-role="title"]:empty::before { content: attr(data-placeholder); color: var(--muted); font-weight: 400; }
+.jm-slider-thumbs { display: flex; gap: 6px; flex-wrap: wrap; min-height: 56px; padding: 8px; border-top: 1px solid var(--line); }
+.jm-slider-thumbs.is-empty::before { content: "이미지를 여기에 드롭하거나 「이미지 추가」를 누르세요"; color: var(--muted); font-size: 12px; align-self: center; }
+.jm-slider-thumbs.is-dragover { background: var(--accent-soft); }
+.jm-slider-thumb { width: 72px; height: 48px; border-radius: 4px; overflow: hidden; outline: 2px solid transparent; outline-offset: 1px; cursor: pointer; }
+.jm-slider-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.jm-slider-thumb:hover { outline-color: var(--line); }
+.jm-slider-thumb.is-selected { outline-color: var(--accent); }
+.jm-slider-thumb.is-dragging { opacity: .4; }
+.jm-slider-thumb.drop-before { box-shadow: -4px 0 0 0 var(--accent); }
+.jm-slider-thumb.drop-after { box-shadow: 4px 0 0 0 var(--accent); }
 div[data-type="buttons"]{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
 div[data-type="buttons"][data-align="center"]{justify-content:center}div[data-type="buttons"][data-align="right"]{justify-content:flex-end}
 .jm-buttons-layer{margin:0 0 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
@@ -208,7 +254,7 @@ kbd{font:11px var(--mono);border:1px solid var(--line);border-radius:3px;padding
 <main>
 <header>
   <h1>JmEditor 샘플</h1>
-  <p>src/ 의 코어와 UI 를 한 파일로 합친 단독 데모입니다. 라이브러리 없이 contenteditable + Range 로 직접 구현한 코어. 툴바 버튼, Editor/HTML/미리보기 모드 전환, 글자색·배경색, 단축키(<kbd>Ctrl</kbd>+<kbd>B</kbd>/<kbd>I</kbd>/<kbd>U</kbd>/<kbd>Z</kbd>), 붙여넣기, 이미지 드롭, 「서식」 템플릿·이미지 갤러리·유튜브 삽입, 표(셀 드래그로 범위 선택, <strong>우클릭</strong> → 행/열/병합/정렬 메뉴, 셀 경계 끌어 너비·높이 조절)를 바로 써볼 수 있습니다.</p>
+  <p>src/ 의 코어와 UI 를 한 파일로 합친 단독 데모입니다. 라이브러리 없이 contenteditable + Range 로 직접 구현한 코어. 툴바 버튼, Editor/HTML/미리보기 모드 전환, 글자색·배경색, 단축키(<kbd>Ctrl</kbd>+<kbd>B</kbd>/<kbd>I</kbd>/<kbd>U</kbd>/<kbd>Z</kbd>), 붙여넣기, 이미지 드롭, 「서식」 템플릿·이미지 갤러리·슬라이드·유튜브 삽입, 표(셀 드래그로 범위 선택, <strong>우클릭</strong> → 행/열/병합/정렬 메뉴, 셀 경계 끌어 너비·높이 조절)를 바로 써볼 수 있습니다.</p>
 </header>
 <div class="jm-container" id="wrap">
   <div class="jm-toolbar jm-toolbar-top" id="toolbarTop"></div>
@@ -331,6 +377,29 @@ class Sanitizer {
         if (r) g.appendChild(r);
       });
       return g;
+    }
+
+    // 슬라이드 블록: div[data-type=slider] 안에는 제목 p 와 img 만
+    if (tag === 'div' && node.getAttribute('data-type') === 'slider') {
+      const b = document.createElement('div');
+      b.setAttribute('data-type', 'slider');
+      const iv = parseInt(node.getAttribute('data-interval'), 10);
+      b.setAttribute('data-interval', String(iv >= 0 && iv <= 60000 ? iv : 3000));
+      const ratio = node.getAttribute('data-ratio');
+      b.setAttribute('data-ratio', ['16:9', '4:3', '1:1', '21:9'].includes(ratio) ? ratio : '16:9');
+      const ind = node.getAttribute('data-indicator');
+      b.setAttribute('data-indicator', ['dots', 'numbers', 'bars', 'none'].includes(ind) ? ind : 'dots');
+      const w = node.getAttribute('data-width');
+      b.setAttribute('data-width', ['100', '75', '50'].includes(w) ? w : '100');
+      const al = node.getAttribute('data-align');
+      b.setAttribute('data-align', ['left', 'center', 'right'].includes(al) ? al : 'center');
+      const title = node.querySelector(':scope > p[data-role="title"]');
+      if (title && title.textContent.trim()) {
+        const t = Sanitizer.#cleanNode(title);
+        if (t && t.nodeType === Node.ELEMENT_NODE) { t.setAttribute('data-role', 'title'); b.appendChild(t); }
+      }
+      node.querySelectorAll(':scope > img').forEach((img) => { const r = Sanitizer.#cleanNode(img); if (r) b.appendChild(r); });
+      return b;
     }
 
     // 버튼 그룹 블록: div[data-type=buttons] 안에는 a[data-role=button] 만
@@ -2863,6 +2932,374 @@ class ButtonsCommands {
 }
 
 /**
+ * slider-runtime — 이미지 슬라이드 블록 동작 (에디터·뷰어 공용)
+ * - div[data-type="slider"] 안의 img 들을 한 장씩 보여주며 data-interval(ms, 0 이면 수동) 간격으로 자동 전환한다.
+ * - 화살표·인디케이터는 런타임이 붙이는 UI(.jm-slider-ui) 로, 저장 HTML 에는 포함되지 않는다.
+ * - data-indicator: dots(점) | numbers(현재/전체) | bars(막대) | none
+ * - 마우스를 올리면 자동 전환을 멈춘다.
+ *
+ * 뷰어 페이지:
+ *   import { initSliders } from '/js/jm-editor/plugins/slider/slider-runtime.js';
+ *   initSliders(document.querySelector('.jm-content'));
+ */
+const UI = 'jm-slider-ui';
+
+/**
+ * 슬라이더 하나 초기화. 이미 초기화돼 있으면 새로 고침만 한다
+ * @param {HTMLElement} block
+ * @returns {{ go: (i:number)=>void, next: ()=>void, prev: ()=>void, refresh: ()=>void, destroy: ()=>void, index: ()=>number }}
+ */
+function initSlider(block) {
+  if (block._slider) { block._slider.refresh(); return block._slider; }
+
+  let index = 0, timer = null, paused = false;
+  const imgs = () => Array.from(block.querySelectorAll(':scope > img'));
+
+  // UI: 화살표 + 점
+  const prev = document.createElement('button');
+  prev.type = 'button'; prev.className = `${UI} jm-slider-arrow jm-slider-prev`; prev.setAttribute('aria-label', '이전'); prev.innerHTML = '&#10094;';
+  const next = document.createElement('button');
+  next.type = 'button'; next.className = `${UI} jm-slider-arrow jm-slider-next`; next.setAttribute('aria-label', '다음'); next.innerHTML = '&#10095;';
+  const dots = document.createElement('div');
+  dots.className = `${UI} jm-slider-dots`;
+  [prev, next, dots].forEach((el) => el.addEventListener('mousedown', (e) => e.stopPropagation()));
+  prev.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); api.prev(); });
+  next.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); api.next(); });
+  block.append(prev, next, dots);
+
+  const render = () => {
+    const list = imgs();
+    if (!list.length) { index = 0; dots.innerHTML = ''; return; }
+    index = ((index % list.length) + list.length) % list.length;
+    list.forEach((img, i) => img.classList.toggle('is-current', i === index));
+    dots.innerHTML = '';
+    const kind = block.dataset.indicator || 'dots';
+    dots.className = `${UI} jm-slider-dots jm-slider-ind-${kind}`;
+    if (kind === 'numbers') {
+      const n = document.createElement('span');
+      n.className = 'jm-slider-num';
+      n.textContent = `${index + 1} / ${list.length}`;
+      dots.appendChild(n);
+    } else if (kind !== 'none') {
+      list.forEach((_, i) => {
+        const d = document.createElement('button');
+        d.type = 'button'; d.className = (kind === 'bars' ? 'jm-slider-bar' : 'jm-slider-dot') + (i === index ? ' is-current' : ''); d.setAttribute('aria-label', `${i + 1}번`);
+        d.addEventListener('mousedown', (e) => e.stopPropagation());
+        d.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); api.go(i); });
+        dots.appendChild(d);
+      });
+    }
+    const single = list.length < 2;
+    prev.hidden = single; next.hidden = single; dots.hidden = single || kind === 'none';
+  };
+
+  const interval = () => Math.max(0, parseInt(block.dataset.interval, 10) || 0);
+  const start = () => {
+    stop();
+    const ms = interval();
+    if (ms > 0 && imgs().length > 1) timer = setInterval(() => { if (!paused) api.next(); }, ms);
+  };
+  const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+  const onEnter = () => { paused = true; };
+  const onLeave = () => { paused = false; };
+  block.addEventListener('mouseenter', onEnter);
+  block.addEventListener('mouseleave', onLeave);
+
+  const api = {
+    go: (i) => { index = i; render(); start(); },
+    next: () => api.go(index + 1),
+    prev: () => api.go(index - 1),
+    index: () => index,
+    refresh: () => { render(); start(); },
+    destroy: () => {
+      stop();
+      block.removeEventListener('mouseenter', onEnter);
+      block.removeEventListener('mouseleave', onLeave);
+      block.querySelectorAll(`.${UI}`).forEach((el) => el.remove());
+      imgs().forEach((img) => img.classList.remove('is-current'));
+      delete block._slider;
+    },
+  };
+  block._slider = api;
+  render();
+  start();
+  return api;
+}
+
+/** root 아래 모든 슬라이드 블록 초기화 */
+function initSliders(root = document) {
+  root.querySelectorAll('div[data-type="slider"]').forEach(initSlider);
+}
+
+/** 저장용: 런타임 UI 와 상태 클래스 제거 (문자열 HTML) */
+function stripSliderUI(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  tpl.content.querySelectorAll(`.${UI}`).forEach((el) => el.remove());
+  tpl.content.querySelectorAll('div[data-type="slider"] > img').forEach((img) => { img.classList.remove('is-current'); if (!img.className) img.removeAttribute('class'); });
+  return tpl.innerHTML;
+}
+
+/**
+ * SliderCommands — 이미지 슬라이드 블록 (자동 로테이션)
+ * - 저장 HTML: <div data-type="slider" data-interval="3000" data-ratio="16:9" data-indicator="dots" data-width="100" data-align="center">
+ *               <p data-role="title">제목</p><img …>…</div>
+ *   제목은 선택. 동작(전환·화살표·점)은 slider-runtime.js, 모양은 CSS. 뷰어에는 둘 다 필요.
+ * - 에디터에서는 레이어(jm-slider-layer)로 감싸 헤더(이미지 추가 / 선택 삭제 / 전체 삭제 / 전환 간격 / 비율 / 삭제)와
+ *   썸네일 줄(클릭 선택, 드래그 순서 변경, 파일 드롭 추가)을 붙인다. 본 화면은 런타임으로 실제처럼 돌아간다.
+ */
+
+const SLIDER_LAYER_CLASS = 'jm-slider-layer';
+const SLIDER_SELECTED = 'is-selected';
+
+class SliderCommands {
+  /** @param {import('../../core/JmEditor.js').JmEditor} editor */
+  constructor(editor) {
+    this.editor = editor;
+    this.sel = editor.sel;
+    this.root = editor.root;
+
+    this.fileInput = document.createElement('input');
+    this.fileInput.type = 'file'; this.fileInput.accept = 'image/*'; this.fileInput.multiple = true; this.fileInput.hidden = true;
+    (this.root.parentNode || document.body).appendChild(this.fileInput);
+    this.pending = null;
+    this.fileInput.addEventListener('change', async () => {
+      const files = Array.from(this.fileInput.files);
+      this.fileInput.value = '';
+      if (this.pending) await this.addFiles(this.pending, files);
+    });
+  }
+
+  static template(interval = 3000, ratio = '16:9') {
+    return `<div data-type="slider" data-interval="${interval}" data-ratio="${ratio}" data-indicator="dots" data-width="100" data-align="center"></div>`;
+  }
+
+  // ───────────── 레이어 ─────────────
+
+  wrapAll() {
+    this.root.querySelectorAll('div[data-type="slider"]').forEach((b) => {
+      if (b.parentNode?.classList?.contains(SLIDER_LAYER_CLASS)) { initSlider(b); this.#refreshThumbs(b); return; }
+      this.#wrap(b);
+    });
+  }
+
+  #wrap(block) {
+    const layer = document.createElement('div');
+    layer.className = SLIDER_LAYER_CLASS;
+    layer.contentEditable = 'false';
+    block.parentNode.insertBefore(layer, block);
+
+    const thumbs = document.createElement('div');
+    thumbs.className = 'jm-slider-thumbs';
+    block._thumbs = thumbs;
+
+    layer.append(this.#buildHeader(block), block, thumbs);
+    this.#ensureTitle(block);
+    block.querySelectorAll('img').forEach(stampSize);
+    initSlider(block);
+    this.#bindThumbs(block);
+    this.#refreshThumbs(block);
+    this.editor.blockDrag?.makeDraggable(block._handle, layer);
+    return layer;
+  }
+
+  #buildHeader(block) {
+    const h = document.createElement('div');
+    h.className = 'jm-slider-header';
+    const mk = (label, onClick, cls = '', tip = '') => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = `jm-btn jm-slider-btn ${cls}`.trim(); b.textContent = label; if (tip) b.title = tip;
+      b.addEventListener('mousedown', (e) => e.preventDefault());
+      b.addEventListener('click', onClick);
+      return b;
+    };
+    const mkSelect = (cls, opts, cur, onChange, tip) => {
+      const s = document.createElement('select');
+      s.className = cls; s.title = tip;
+      opts.forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; s.appendChild(o); });
+      s.value = cur;
+      s.addEventListener('mousedown', (e) => e.stopPropagation());
+      s.addEventListener('change', () => { onChange(s.value); this.editor.commit(); });
+      return s;
+    };
+    const handle = document.createElement('span');
+    handle.className = 'jm-block-handle'; handle.title = '끌어서 이동'; handle.textContent = '⠿';
+    block._handle = handle;
+    const title = document.createElement('span'); title.className = 'jm-slider-title'; title.textContent = '슬라이드';
+    const count = document.createElement('span'); count.className = 'jm-slider-count'; block._countEl = count;
+
+    const add = mk('＋ 이미지 추가', () => { this.pending = block; this.fileInput.click(); });
+    const delSel = mk('선택 삭제', () => this.deleteSelected(block), 'jm-slider-delsel');
+    const delAll = mk('전체 삭제', () => this.deleteAll(block));
+    const interval = mkSelect('jm-slider-interval', [['0', '수동'], ['2000', '2초'], ['3000', '3초'], ['5000', '5초'], ['8000', '8초']], String(parseInt(block.dataset.interval, 10) || 0), (v) => { block.dataset.interval = v; block._slider?.refresh(); }, '자동 전환 간격');
+    const ratio = mkSelect('jm-slider-ratio', [['16:9', '16:9'], ['4:3', '4:3'], ['1:1', '1:1'], ['21:9', '21:9']], block.dataset.ratio || '16:9', (v) => { block.dataset.ratio = v; }, '화면 비율');
+    const indicator = mkSelect('jm-slider-indicator', [['dots', '점'], ['numbers', '숫자'], ['bars', '막대'], ['none', '표시 없음']], block.dataset.indicator || 'dots', (v) => { block.dataset.indicator = v; block._slider?.refresh(); }, '인디케이터');
+    const width = mkSelect('jm-slider-width', [['100', '폭 100%'], ['75', '폭 75%'], ['50', '폭 50%']], block.dataset.width || '100', (v) => { block.dataset.width = v; }, '본문에서 보이는 폭');
+    const align = mkSelect('jm-slider-align', [['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']], block.dataset.align || 'center', (v) => { block.dataset.align = v; }, '정렬');
+    const remove = mk('✕', () => this.#deleteBlock(block), 'jm-slider-remove', '슬라이드 삭제');
+    h.append(handle, title, count, add, delSel, delAll, interval, ratio, indicator, width, align, remove);
+    return h;
+  }
+
+  /** 제목(선택) — 갤러리와 같은 규칙 */
+  #ensureTitle(block) {
+    let t = block.querySelector(':scope > p[data-role="title"]');
+    if (!t) { t = document.createElement('p'); t.dataset.role = 'title'; block.insertBefore(t, block.firstChild); }
+    t.setAttribute('contenteditable', 'true');
+    t.dataset.placeholder = '제목 (비워두면 표시되지 않음)';
+    t.addEventListener('mousedown', (e) => e.stopPropagation());
+    t.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); t.blur(); } });
+    t.addEventListener('blur', () => this.editor.commit());
+  }
+
+  // ───────────── 썸네일 줄: 선택 / 드래그 순서 / 파일 드롭 ─────────────
+
+  #bindThumbs(block) {
+    const thumbs = block._thumbs;
+    let dragging = null;
+    thumbs.addEventListener('click', (e) => {
+      const t = e.target.closest('.jm-slider-thumb');
+      if (!t) return;
+      thumbs.querySelectorAll(`.${SLIDER_SELECTED}`).forEach((x) => x.classList.remove(SLIDER_SELECTED));
+      t.classList.add(SLIDER_SELECTED);
+      block._slider?.go(+t.dataset.index);
+      this.#refreshHeader(block);
+    });
+    thumbs.addEventListener('dragstart', (e) => {
+      const t = e.target.closest?.('.jm-slider-thumb');
+      if (!t) return;
+      dragging = t; t.classList.add('is-dragging');
+      e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'jm-slider-reorder');
+    });
+    thumbs.addEventListener('dragend', () => { dragging?.classList.remove('is-dragging'); dragging = null; thumbs.querySelectorAll('.drop-before, .drop-after').forEach((x) => x.classList.remove('drop-before', 'drop-after')); });
+    thumbs.addEventListener('dragover', (e) => {
+      if (BlockDrag.isBlockDrag(e)) return;
+      e.preventDefault();
+      if (!dragging) { thumbs.classList.add('is-dragover'); return; }
+      thumbs.querySelectorAll('.drop-before, .drop-after').forEach((x) => x.classList.remove('drop-before', 'drop-after'));
+      const over = e.target.closest?.('.jm-slider-thumb');
+      if (over && over !== dragging) { const r = over.getBoundingClientRect(); over.classList.add(e.clientX < r.left + r.width / 2 ? 'drop-before' : 'drop-after'); }
+    });
+    thumbs.addEventListener('dragleave', (e) => { if (!thumbs.contains(e.relatedTarget)) thumbs.classList.remove('is-dragover'); });
+    thumbs.addEventListener('drop', async (e) => {
+      if (BlockDrag.isBlockDrag(e)) return;
+      e.preventDefault(); e.stopPropagation();
+      thumbs.classList.remove('is-dragover');
+      if (dragging) {
+        const imgs = Array.from(block.querySelectorAll(':scope > img'));
+        const from = imgs[+dragging.dataset.index];
+        const over = e.target.closest?.('.jm-slider-thumb');
+        let ref = null;
+        if (over && over !== dragging) { const r = over.getBoundingClientRect(); const to = imgs[+over.dataset.index]; ref = e.clientX < r.left + r.width / 2 ? to : to.nextElementSibling; }
+        else { const others = Array.from(thumbs.querySelectorAll('.jm-slider-thumb')).filter((t) => t !== dragging); for (const t of others) { const r = t.getBoundingClientRect(); if (e.clientX < r.left + r.width / 2) { ref = imgs[+t.dataset.index]; break; } } }
+        // ref 가 img 가 아닌 경우(끝) 처리
+        if (ref && ref.tagName !== 'IMG') ref = null;
+        block.insertBefore(from, ref);
+        dragging = null;
+        this.#after(block);
+        return;
+      }
+      const files = Array.from(e.dataTransfer?.files || []).filter((f) => f.type.startsWith('image/'));
+      if (files.length) await this.addFiles(block, files);
+    });
+    // 본 화면에 드롭해도 추가
+    block.addEventListener('dragover', (e) => { if (!BlockDrag.isBlockDrag(e)) e.preventDefault(); });
+    block.addEventListener('drop', async (e) => {
+      if (BlockDrag.isBlockDrag(e)) return;
+      const files = Array.from(e.dataTransfer?.files || []).filter((f) => f.type.startsWith('image/'));
+      if (!files.length) return;
+      e.preventDefault(); e.stopPropagation();
+      await this.addFiles(block, files);
+    });
+  }
+
+  #refreshThumbs(block) {
+    const thumbs = block._thumbs;
+    if (!thumbs) return;
+    const selIdx = thumbs.querySelector(`.${SLIDER_SELECTED}`)?.dataset.index;
+    thumbs.innerHTML = '';
+    const imgs = Array.from(block.querySelectorAll(':scope > img'));
+    imgs.forEach((img, i) => {
+      const t = document.createElement('div');
+      t.className = 'jm-slider-thumb' + (String(i) === selIdx ? ` ${SLIDER_SELECTED}` : '');
+      t.draggable = true; t.dataset.index = i; t.title = '클릭: 보기 · 드래그: 순서';
+      const im = document.createElement('img'); im.src = img.src; im.alt = ''; im.draggable = false;
+      t.appendChild(im);
+      thumbs.appendChild(t);
+    });
+    thumbs.classList.toggle('is-empty', imgs.length === 0);
+    this.#refreshHeader(block);
+  }
+
+  #refreshHeader(block) {
+    const n = block.querySelectorAll(':scope > img').length;
+    const s = block._thumbs?.querySelector(`.${SLIDER_SELECTED}`);
+    if (block._countEl) block._countEl.textContent = n ? `${n}장` : '이미지를 추가하세요';
+    const btn = block.parentNode?.querySelector('.jm-slider-delsel');
+    if (btn) btn.disabled = !s;
+  }
+
+  // ───────────── 이미지 추가 / 삭제 ─────────────
+
+  async addFiles(block, files) {
+    for (const file of files) {
+      const src = this.editor.options.uploadImage
+        ? await this.editor.options.uploadImage(file)
+        : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+      const img = document.createElement('img');
+      img.alt = file.name;
+      await new Promise((resolve) => { img.onload = () => { stampSize(img); resolve(); }; img.onerror = resolve; img.src = src; });
+      block.appendChild(img);
+    }
+    this.#after(block);
+  }
+
+  deleteSelected(block) {
+    const t = block._thumbs?.querySelector(`.${SLIDER_SELECTED}`);
+    if (!t) return;
+    block.querySelectorAll(':scope > img')[+t.dataset.index]?.remove();
+    this.#after(block);
+  }
+
+  deleteAll(block) {
+    block.querySelectorAll(':scope > img').forEach((i) => i.remove());
+    this.#after(block);
+  }
+
+  #deleteBlock(block) {
+    block._slider?.destroy();
+    const layer = block.closest(`.${SLIDER_LAYER_CLASS}`) || block;
+    const p = document.createElement('p'); p.appendChild(document.createElement('br'));
+    layer.replaceWith(p);
+    this.sel.placeCursor(p, false);
+    this.editor.commit();
+  }
+
+  #after(block) {
+    block._slider?.refresh();
+    this.#refreshThumbs(block);
+    this.editor.commit();
+  }
+
+  // ───────────── 저장용 변환 ─────────────
+
+  static unwrapHTML(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll(`.${SLIDER_LAYER_CLASS}`).forEach((layer) => {
+      const block = layer.querySelector('div[data-type="slider"]');
+      if (!block) { layer.remove(); return; }
+      const t = block.querySelector(':scope > p[data-role="title"]');
+      if (t) { if (!t.textContent.replace(/​/g, '').trim()) t.remove(); else { t.removeAttribute('contenteditable'); t.removeAttribute('data-placeholder'); } }
+      layer.replaceWith(block);
+    });
+    return stripSliderUI(tpl.innerHTML);
+  }
+
+  destroy() { this.fileInput.remove(); }
+}
+
+/**
  * JmEditor (코어)
  * - 프레임워크 독립. contenteditable 요소 하나를 받아 편집 기능을 붙인다.
  * - 툴바/업로드 UI 는 포함하지 않는다 → Thymeleaf(바닐라)나 React 래퍼가 이 클래스를 감싼다.
@@ -2908,6 +3345,7 @@ class JmEditor {
     this.gallery = new GalleryCommands(this);
     this.embed = new EmbedCommands(this);
     this.buttons = new ButtonsCommands(this);
+    this.slider = new SliderCommands(this);
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
 
     this.#ensureBlock();
@@ -2926,6 +3364,7 @@ class JmEditor {
    *                      |gallery (value: {cols, auto} — 이미지 갤러리 블록 삽입)
    *                      |youtube (value: 유튜브 주소 또는 동영상 ID)
    *                      |buttons (value: {align} — 버튼 그룹 블록 삽입)
+   *                      |slider (value: {interval, ratio} — 이미지 슬라이드 블록 삽입)
    * @param {*} [value] link 의 url, image 의 {src, alt}, table 의 {rows, cols, header}
    */
   exec(name, value) {
@@ -2951,6 +3390,7 @@ class JmEditor {
       gallery: () => c.insertBlockHTML(GalleryCommands.template(value?.cols, value?.auto ?? true)),
       youtube: () => this.embed.insertYouTube(value),
       buttons: () => c.insertBlockHTML(ButtonsCommands.template(value?.align)),
+      slider: () => c.insertBlockHTML(SliderCommands.template(value?.interval, value?.ratio)),
       color: () => c.setStyle('color', value ?? null),
       bgColor: () => c.setStyle('background-color', value ?? null),
       fontSize: () => c.setStyle('font-size', value ?? null),
@@ -2976,6 +3416,7 @@ class JmEditor {
     html = GalleryCommands.unwrapHTML(html);
     html = EmbedCommands.unwrapHTML(html);
     html = ButtonsCommands.unwrapHTML(html);
+    html = SliderCommands.unwrapHTML(html);
     html = JmEditor.#restoreLinks(html);
     return BlockDrag.cleanHTML(html);
   }
@@ -2987,6 +3428,7 @@ class JmEditor {
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
+    this.slider.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
@@ -3013,6 +3455,7 @@ class JmEditor {
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
+    this.slider.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.history.push();
@@ -3025,6 +3468,7 @@ class JmEditor {
     this.#unbind?.();
     this.menu.destroy();
     this.gallery.destroy();
+    this.slider.destroy();
     this.blockDrag.destroy();
   }
 
@@ -3204,7 +3648,7 @@ class JmEditor {
       return;
     }
     Array.from(r.childNodes).forEach((n) => {
-      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || ['gallery', 'youtube', 'buttons'].includes(n.dataset?.type));
+      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider'].includes(n.dataset?.type));
       if (!isBlock) {
         const p = document.createElement('p');
         r.insertBefore(p, n);
@@ -3220,6 +3664,7 @@ class JmEditor {
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
+    this.slider.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.sel.placeCursor(this.root.lastChild || this.root, true);
@@ -3838,6 +4283,12 @@ const SAMPLE_FORMATS = [
     html: `<h3>확인 사항</h3><ul><li>☐ 항목 1</li><li>☐ 항목 2</li><li>☐ 항목 3</li></ul>`,
   },
   {
+    id: 'slider',
+    name: '이미지 슬라이드',
+    description: '이미지가 자동으로 넘어가는 블록. 간격·비율 선택, 썸네일로 순서 변경',
+    html: `<div data-type="slider" data-interval="3000" data-ratio="16:9"></div>`,
+  },
+  {
     id: 'buttons',
     name: '버튼',
     description: '버튼 묶음 블록. 추가·주소·모양·순서·정렬을 헤더에서 조정',
@@ -3957,7 +4408,7 @@ function setMode(m){
   const area=document.getElementById('editor');
   area.hidden=m!=='editor';sourceEl.hidden=m!=='html';previewEl.hidden=m!=='preview';
   if(m==='html'){sourceEl.value=prettify(editor.getHTML());sourceEl.focus();}
-  else if(m==='preview'){previewEl.innerHTML=editor.getHTML();stopPreview?.();stopPreview=observeGalleries(previewEl);}
+  else if(m==='preview'){previewEl.innerHTML=editor.getHTML();stopPreview?.();stopPreview=observeGalleries(previewEl);initSliders(previewEl);}
   else area.focus();
   BUTTONS.forEach(d=>{if(!d)return;const [c,,act,,o={}]=d;if(o.group==='mode')btns[c].classList.toggle('is-active',!!act());else btns[c].disabled=m!=='editor';});
   toolbar.hidden=m!=='editor';
@@ -3975,6 +4426,7 @@ editor.setHTML(`<h2>공지사항 작성 샘플</h2>
 <tr><td>셀 경계를 끌어 열 너비·행 높이 조절</td><td>10/22</td><td>10/25</td></tr>
 <tr><td>우클릭 → 셀 배경색… / 행 배경색…</td><td style="background-color:#e1bee7">기획</td><td>10/23</td><td style="text-align:right">10/27</td></tr>
 </tbody></table>
+<div data-type="slider" data-interval="3000" data-ratio="16:9" data-indicator="dots" data-width="75" data-align="center"><p data-role="title">행사 사진 — 3초마다 자동 전환</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjMmY2ZjRlIi8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMTwvdGV4dD48L3N2Zz4=" alt="슬라이드 1" width="1280" height="720"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjM2I2ZWE1Ii8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMjwvdGV4dD48L3N2Zz4=" alt="슬라이드 2" width="1280" height="720"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMzwvdGV4dD48L3N2Zz4=" alt="슬라이드 3" width="1280" height="720"></div>
 <div data-type="youtube" data-width="75" data-align="center"><iframe src="https://www.youtube-nocookie.com/embed/M2lu8RiZhW0" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
 <div data-type="gallery" data-cols="3" data-layout="justify"><p data-role="title">현장 사진 — 사진은 드래그로 순서 변경, 헤더의 ⠿ 로 블록 이동</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJmNmY0ZSIvPjx0ZXh0IHg9IjQwMCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDQ6MzwvdGV4dD48L3N2Zz4=" alt="가로 4:3" width="800" height="600"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzNiNmVhNSIvPjx0ZXh0IHg9IjMwMCIgeT0iNDEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDM6NDwvdGV4dD48L3N2Zz4=" alt="세로 3:4" width="600" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjUwMCI+PHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNTAwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjAwIiB5PSIyNjIiIGZvbnQtc2l6ZT0iNjIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7tjIzrhbjrnbzrp4g8L3RleHQ+PC9zdmc+" alt="파노라마" width="1200" height="500"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NTAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNDUwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzZiNGZhMCIvPjx0ZXh0IHg9IjIyNSIgeT0iNDEyIiBmb250LXNpemU9IjU2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDk6MTY8L3RleHQ+PC9zdmc+" alt="세로 9:16" width="450" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MDAiIGhlaWdodD0iNzAwIj48cmVjdCB3aWR0aD0iNzAwIiBoZWlnaHQ9IjcwMCIgZmlsbD0iIzhhNmQzYiIvPjx0ZXh0IHg9IjM1MCIgeT0iMzYyIiBmb250LXNpemU9Ijg3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7KCV7IKs6rCBPC90ZXh0Pjwvc3ZnPg==" alt="정사각" width="700" height="700"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iOTAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJhN2Y4ZiIvPjx0ZXh0IHg9IjQ1MCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDM6MjwvdGV4dD48L3N2Zz4=" alt="가로 3:2" width="900" height="600"></div>
 <div data-type="buttons" data-align="center"><a href="https://github.com/jinix55/JmEditor" data-role="button" data-style="primary">GitHub 저장소</a><a href="https://jinix55.github.io/JmEditor/" data-role="button" data-style="outline">데모 페이지</a></div>

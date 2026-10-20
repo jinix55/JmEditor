@@ -9,6 +9,7 @@ import { ColorPicker } from './ColorPicker.js';
 import { FormatPicker, SAMPLE_FORMATS } from './FormatPicker.js';
 import { JmEditorApi } from '../api/JmEditorApi.js';
 import { observeGalleries } from '../plugins/gallery/gallery-layout.js';
+import { initSliders } from '../plugins/slider/slider-runtime.js';
 import { ContextMenu } from './ContextMenu.js';
 
 /** 서식 버튼 아이콘 (자체 제작 SVG) */
@@ -392,6 +393,7 @@ export class JmToolbarEditor {
       this.previewPane.innerHTML = this.editor.getHTML();
       this.#stopPreviewLayout?.();
       this.#stopPreviewLayout = observeGalleries(this.previewPane); // 갤러리 저스티파이드 배치 (뷰어와 동일)
+      initSliders(this.previewPane);                                  // 슬라이드 자동 전환
     }
     else this.area.focus();
 
