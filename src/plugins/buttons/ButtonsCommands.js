@@ -199,7 +199,11 @@ export class ButtonsCommands {
       if (over && over !== dragging) {
         const r = over.getBoundingClientRect();
         block.insertBefore(dragging, e.clientX < r.left + r.width / 2 ? over : over.nextSibling);
-      } else if (!over) block.appendChild(dragging);
+      } else if (!over) {
+        // 빈 곳에 놓으면 커서 좌표(같은 줄 우선, 그 다음 X)에 가장 가까운 위치로
+        const ref = ButtonsCommands.nearestAfter(Array.from(block.querySelectorAll(':scope > .jm-btn-item')).filter((i) => i !== dragging), e.clientX, e.clientY);
+        block.insertBefore(dragging, ref);
+      }
       dragging.classList.remove('is-dragging');
       block.querySelectorAll('.drop-before, .drop-after').forEach((el) => el.classList.remove('drop-before', 'drop-after'));
       dragging = null;
@@ -284,6 +288,18 @@ export class ButtonsCommands {
       layer.replaceWith(block);
     });
     return tpl.innerHTML;
+  }
+
+  /**
+   * 좌표 뒤에 와야 할 첫 항목 (삽입 기준). 줄(Y) 을 먼저 비교하고 같은 줄이면 중심 X 로 비교. 없으면 null(맨 뒤)
+   */
+  static nearestAfter(items, x, y) {
+    for (const it of items) {
+      const r = it.getBoundingClientRect();
+      if (y < r.top) return it;                                   // 위 줄에 놓음 → 이 항목 앞
+      if (y <= r.bottom && x < r.left + r.width / 2) return it;   // 같은 줄, 왼쪽 절반 → 이 항목 앞
+    }
+    return null;
   }
 
   static isBlockDrag(e) { return BlockDrag.isBlockDrag(e); }
