@@ -3591,8 +3591,11 @@ class JmEditor {
       e.stopImmediatePropagation();
     };
     const onDocDown = (e) => {
-      // 표 밖을 클릭하면 셀 범위 선택 해제
-      if (this.table.selection && !this.table.selection.table.contains(e.target)) this.table.clearSelection();
+      // 표 밖을 클릭하면 셀 범위 선택 해제 (우클릭 메뉴·색상 팝업 등 편집 UI 클릭은 제외 — 선택을 쓰는 명령이므로)
+      if (!this.table.selection) return;
+      if (this.table.selection.table.contains(e.target)) return;
+      if (e.target.closest?.('.jm-ctxmenu, .jm-colorpicker, .jm-toolbar, .jm-toolbar-top')) return;
+      this.table.clearSelection();
     };
     document.addEventListener('mousedown', onDocDown, true);
     const onSelChange = () => {
