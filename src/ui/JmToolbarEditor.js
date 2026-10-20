@@ -31,12 +31,13 @@ const BUTTONS = [
   ['modePreview', '미리보기', (s) => s.mode === 'preview', false, { icon: PREVIEW_ICON, group: 'mode', segLast: true, row: 'top' }],
   ['format', '서식', () => false, false, { icon: FORMAT_ICON, right: true, row: 'top' }],
   // ── 하단 줄: 서식 메뉴 ──
-  ['bold', 'B', (s) => s.strong],
-  ['italic', 'I', (s) => s.em],
-  ['underline', 'U', (s) => s.u],
-  ['strike', 'S', (s) => s.s],
-  ['color', 'A', (s) => !!s.color],      // 글자색 (버튼 하단 색 띠로 현재 색 표시)
-  ['bgColor', '배경', (s) => !!s.bg],    // 글자 배경색
+  // 글자 서식 버튼: 라벨 자체를 해당 서식으로 렌더 (CSS .jm-btn[data-cmd=…])
+  ['bold', 'B', (s) => s.strong, false, { tip: '굵게 (Ctrl+B)' }],
+  ['italic', 'I', (s) => s.em, false, { tip: '기울임 (Ctrl+I)' }],
+  ['underline', 'U', (s) => s.u, false, { tip: '밑줄 (Ctrl+U)' }],
+  ['strike', 'S', (s) => s.s, false, { tip: '취소선' }],
+  ['color', 'A', (s) => !!s.color, false, { tip: '글자색' }],     // 버튼 하단 색 띠로 현재 색 표시
+  ['bgColor', 'A', (s) => !!s.bg, false, { tip: '글자 배경색' }],
   null, // 구분선
   ['h1', 'H1', (s) => s.block === 'h1'],
   ['h2', 'H2', (s) => s.block === 'h2'],
@@ -220,6 +221,7 @@ export class JmToolbarEditor {
       if (opts.segFirst) btn.classList.add('jm-btn-seg-first');
       if (opts.segLast) btn.classList.add('jm-btn-seg-last');
       btn.dataset.cmd = cmd;
+      if (opts.tip) btn.title = opts.tip;
       if (opts.icon) {
         // 아이콘 (+ 텍스트). iconOnly 면 라벨은 툴팁으로만
         btn.classList.add('jm-btn-icon');

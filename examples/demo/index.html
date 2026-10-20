@@ -90,6 +90,12 @@ a[data-role="button"][data-style="gray"]{background:var(--line);color:var(--fg)!
 .jm-gridpicker-cell{width:18px;height:18px;border:1px solid var(--line);border-radius:2px;background:var(--panel);cursor:pointer}
 .jm-gridpicker-cell.is-on{background:var(--accent-soft);border-color:var(--accent)}
 .jm-gridpicker-label{margin-top:6px;font-size:12px;text-align:center;color:var(--muted)}
+.jm-btn[data-cmd="bold"]{font-weight:800;font-size:14px}
+.jm-btn[data-cmd="italic"]{font-style:italic;font-family:Georgia,"Times New Roman",serif;font-size:15px}
+.jm-btn[data-cmd="underline"]{text-decoration:underline;text-underline-offset:2px}
+.jm-btn[data-cmd="strike"]{text-decoration:line-through}
+.jm-btn[data-cmd="color"]{font-weight:700}
+.jm-btn[data-cmd="bgColor"]{font-weight:700;background:var(--code)}
 .jm-btn[data-cmd="color"],.jm-btn[data-cmd="bgColor"]{position:relative}
 .jm-btn[data-cmd="color"]::after,.jm-btn[data-cmd="bgColor"]::after{content:"";position:absolute;left:6px;right:6px;bottom:3px;height:3px;border-radius:2px;background:var(--jm-swatch,transparent)}
 .jm-colorpicker{position:fixed;z-index:1000;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);box-shadow:0 6px 20px rgba(0,0,0,.18)}
@@ -3486,7 +3492,7 @@ const BUTTONS = [
   ['modeHtml','HTML',s=>mode==='html',false,{icon:CODE_ICON,group:'mode',row:'top'}],
   ['modePreview','미리보기',s=>mode==='preview',false,{icon:PREVIEW_ICON,group:'mode',segLast:true,row:'top'}],
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
-  ['bold','B',s=>s.strong],['italic','I',s=>s.em],['underline','U',s=>s.u],['strike','S',s=>s.s],['color','A',s=>!!s.color],['bgColor','배경',s=>!!s.bg],null,
+  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],null,
   ['h1','H1',s=>s.block==='h1'],['h2','H2',s=>s.block==='h2'],['h3','H3',s=>s.block==='h3'],['quote','❝ 인용',s=>s.block==='blockquote'],null,
   ['ul','• 목록',s=>s.list==='ul'],['ol','1. 목록',s=>s.list==='ol'],null,
   ['link','링크',s=>s.a],['image','이미지',()=>false],['youtube','유튜브',()=>false,false,{icon:YOUTUBE_ICON,iconOnly:true}],['table','표',s=>s.table],null,
@@ -3510,7 +3516,7 @@ const editor=new JmEditor(document.getElementById('editor'),{
 BUTTONS.forEach(def=>{
   if(!def){const s=document.createElement('span');s.className='jm-sep';toolbar.appendChild(s);return;}
   const [cmd,label,,tableOnly,opts={}]=def, b=document.createElement('button');
-  b.type='button';b.className='jm-btn';b.title=cmd;b.dataset.cmd=cmd;
+  b.type='button';b.className='jm-btn';b.title=opts.tip||cmd;b.dataset.cmd=cmd;
   if(opts.icon){b.classList.add('jm-btn-icon');b.innerHTML=opts.iconOnly?opts.icon:opts.icon+'<span>'+label+'</span>';b.setAttribute('aria-label',label);b.title=label;}else b.textContent=label;
   if(opts.right)b.classList.add('jm-btn-right');if(opts.group)b.classList.add('jm-btn-seg');if(opts.segFirst)b.classList.add('jm-btn-seg-first');if(opts.segLast)b.classList.add('jm-btn-seg-last');
   if(tableOnly)b.hidden=true; // 표 안에서만 표시

@@ -132,6 +132,14 @@
 .jm-gridpicker-cell.is-on { background: #e6efff; border-color: #a9c4ff; }
 .jm-gridpicker-label { margin-top: 6px; font-size: 12px; text-align: center; color: #475467; }
 
+/* 글자 서식 버튼: 라벨을 해당 서식 모양으로 */
+.jm-btn[data-cmd="bold"] { font-weight: 800; font-size: 14px; }
+.jm-btn[data-cmd="italic"] { font-style: italic; font-family: Georgia, "Times New Roman", serif; font-size: 15px; }
+.jm-btn[data-cmd="underline"] { text-decoration: underline; text-underline-offset: 2px; }
+.jm-btn[data-cmd="strike"] { text-decoration: line-through; }
+.jm-btn[data-cmd="color"] { font-weight: 700; }
+.jm-btn[data-cmd="bgColor"] { font-weight: 700; background: #f2f4f7; }
+
 /* 색상 버튼: 하단에 현재 색 띠 */
 .jm-btn[data-cmd="color"], .jm-btn[data-cmd="bgColor"] { position: relative; }
 .jm-btn[data-cmd="color"]::after, .jm-btn[data-cmd="bgColor"]::after {
