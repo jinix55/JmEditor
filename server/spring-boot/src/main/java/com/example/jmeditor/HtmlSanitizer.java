@@ -27,12 +27,13 @@ public class HtmlSanitizer {
             "vertical-align", Pattern.compile("^(top|middle|bottom)$", Pattern.CASE_INSENSITIVE),
             "width", Pattern.compile("^(\\d+(\\.\\d+)?(px|%)|auto)$", Pattern.CASE_INSENSITIVE),
             "height", Pattern.compile("^\\d+(\\.\\d+)?px$", Pattern.CASE_INSENSITIVE),
+            "font-size", Pattern.compile("^([89]|[1-8]\\d|9[0-6])px$"),
             "list-style-type", Pattern.compile("^(disc|circle|square|decimal|decimal-leading-zero|lower-alpha|upper-alpha|lower-roman|upper-roman|hangul|hangul-consonant|none)$", Pattern.CASE_INSENSITIVE));
 
     private final Safelist safelist = new Safelist()
             .addTags("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
                      "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe")
-            .addAttributes("a", "href", "target", "rel", "data-role", "data-style")
+            .addAttributes("a", "href", "target", "rel", "data-role", "data-style", "data-size")
             .addAttributes("img", "src", "alt", "width", "height")
             .addAttributes("ul", "style")
             .addAttributes("ol", "style", "start")
@@ -77,8 +78,11 @@ public class HtmlSanitizer {
 
         // 버튼 링크: data-role=button 일 때만 data-style 허용
         for (Element a : doc.select("a")) {
-            if (!"button".equals(a.attr("data-role"))) { a.removeAttr("data-role"); a.removeAttr("data-style"); }
-            else if (!java.util.Set.of("primary", "outline", "gray").contains(a.attr("data-style"))) a.attr("data-style", "primary");
+            if (!"button".equals(a.attr("data-role"))) { a.removeAttr("data-role"); a.removeAttr("data-style"); a.removeAttr("data-size"); }
+            else {
+                if (!java.util.Set.of("primary", "outline", "gray").contains(a.attr("data-style"))) a.attr("data-style", "primary");
+                if (!java.util.Set.of("sm", "lg").contains(a.attr("data-size"))) a.removeAttr("data-size");
+            }
         }
         // iframe 은 유튜브 블록 안의 embed 주소만 허용
         Pattern yt = Pattern.compile("^https://www\\.(youtube|youtube-nocookie)\\.com/embed/([A-Za-z0-9_-]{11})([?#].*)?$");

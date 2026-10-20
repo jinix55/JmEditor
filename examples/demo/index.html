@@ -12,7 +12,7 @@
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#15181a;--fg:#e6e8e3;--muted:#9aa19b;--line:#2d3330;--panel:#1d2124;--accent:#7cc39b;--accent-soft:#213128;--code:#23282b;color-scheme:dark}}
 :root[data-theme="dark"]{--bg:#15181a;--fg:#e6e8e3;--muted:#9aa19b;--line:#2d3330;--panel:#1d2124;--accent:#7cc39b;--accent-soft:#213128;--code:#23282b;color-scheme:dark}
 body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
-main{max-width:860px;margin:0 auto;display:grid;gap:20px}
+main{max-width:1120px;margin:0 auto;display:grid;gap:20px}
 header h1{font-size:1.35rem;margin:0 0 4px;text-wrap:balance}
 header p{margin:0;color:var(--muted);font-size:.92rem}
 .jm-container{border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden}
@@ -23,6 +23,8 @@ header p{margin:0;color:var(--muted);font-size:.92rem}
 .jm-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .jm-btn.is-active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .jm-sep{width:1px;height:22px;margin:0 4px;background:var(--line)}
+.jm-select{height:30px;padding:0 6px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--fg);font:13px var(--sans)}
+.jm-select:disabled{opacity:.4}
 .jm-btn-compact{min-width:18px;padding:0 2px;margin-left:-4px;font-size:10px}
 .jm-btn-right{margin-left:auto}
 .jm-btn:disabled{opacity:.4;cursor:default}
@@ -72,6 +74,8 @@ a[data-role="button"]{display:inline-block;padding:8px 18px;border-radius:6px;fo
 a[data-role="button"][data-style="primary"]{background:var(--accent);color:#fff!important}
 a[data-role="button"][data-style="outline"]{background:transparent;color:var(--accent)!important;border-color:var(--accent)}
 a[data-role="button"][data-style="gray"]{background:var(--line);color:var(--fg)!important}
+a[data-role="button"][data-size="sm"]{padding:5px 12px;font-size:13px}
+a[data-role="button"][data-size="lg"]{padding:12px 26px;font-size:17px}
 div[data-type="buttons"]{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
 div[data-type="buttons"][data-align="center"]{justify-content:center}div[data-type="buttons"][data-align="right"]{justify-content:flex-end}
 .jm-buttons-layer{margin:0 0 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
@@ -81,7 +85,17 @@ div[data-type="buttons"][data-align="center"]{justify-content:center}div[data-ty
 .jm-buttons-btn:disabled{opacity:.4;cursor:default}
 .jm-buttons-url{width:220px;height:26px;padding:0 8px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg);font:12px var(--mono)}
 .jm-buttons-url:disabled{opacity:.4}
-.jm-buttons-style,.jm-buttons-align{height:26px;font-size:12px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
+.jm-buttons-size:disabled{opacity:.4}
+.jm-buttons-addrow{display:flex;gap:6px;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--panel)}
+.jm-buttons-addrow input{height:26px;padding:0 8px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg);font-size:12px}
+.jm-buttons-addname{width:140px}.jm-buttons-addurl{flex:1;min-width:0;font-family:var(--mono)}
+.jm-btn-item{display:inline-flex;align-items:center;gap:2px}
+.jm-btn-grip{color:var(--muted);cursor:grab;font-size:14px;padding:0 2px;user-select:none}
+.jm-btn-grip:hover{color:var(--fg)}
+.jm-btn-item.is-dragging{opacity:.4}
+.jm-btn-item.drop-before{box-shadow:-4px 0 0 0 var(--accent)}
+.jm-btn-item.drop-after{box-shadow:4px 0 0 0 var(--accent)}
+.jm-buttons-style,.jm-buttons-size,.jm-buttons-align{height:26px;font-size:12px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
 .jm-buttons-style:disabled{opacity:.4}
 .jm-buttons-remove{color:#d14343}
 .jm-buttons-layer div[data-type="buttons"]{padding:10px}
@@ -221,7 +235,7 @@ const ALLOWED = {
   h1: [], h2: [], h3: [],
   ul: ['style'], ol: ['style', 'start'], li: [],
   blockquote: [],
-  a: ['href', 'target', 'rel', 'data-role', 'data-style'], // data-role=button → 버튼 모양 링크
+  a: ['href', 'target', 'rel', 'data-role', 'data-style', 'data-size'], // data-role=button → 버튼 모양 링크
   img: ['src', 'alt', 'width', 'height'],
   table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style'],
   tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
@@ -238,6 +252,7 @@ const ALLOWED_STYLE = {
   'vertical-align': (v) => /^(top|middle|bottom)$/i.test(v),
   'width': (v) => /^\d+(\.\d+)?(px|%)$/i.test(v) || v === 'auto',
   'height': (v) => /^\d+(\.\d+)?px$/i.test(v),
+  'font-size': (v) => { const m = v.match(/^(\d+)px$/i); return !!m && +m[1] >= 8 && +m[1] <= 96; },
   'list-style-type': (v) => /^(disc|circle|square|decimal|decimal-leading-zero|lower-alpha|upper-alpha|lower-roman|upper-roman|hangul|hangul-consonant|none)$/i.test(v),
 };
 
@@ -386,8 +401,11 @@ class Sanitizer {
     // 링크는 새창 + noopener 강제. 버튼 링크 속성은 허용 값만
     if (tag === 'a') {
       el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer');
-      if (el.getAttribute('data-role') !== 'button') { el.removeAttribute('data-role'); el.removeAttribute('data-style'); }
-      else if (!['primary', 'outline', 'gray'].includes(el.getAttribute('data-style'))) el.setAttribute('data-style', 'primary');
+      if (el.getAttribute('data-role') !== 'button') { el.removeAttribute('data-role'); el.removeAttribute('data-style'); el.removeAttribute('data-size'); }
+      else {
+        if (!['primary', 'outline', 'gray'].includes(el.getAttribute('data-style'))) el.setAttribute('data-style', 'primary');
+        if (!['sm', 'lg'].includes(el.getAttribute('data-size'))) el.removeAttribute('data-size');
+      }
     }
 
     Array.from(node.childNodes).forEach((c) => {
@@ -879,10 +897,11 @@ class Commands {
   /** 현재 커서 위치의 글자색/배경색 */
   getStyleState() {
     const r = this.sel.getRange();
-    if (!r) return { color: null, bg: null };
+    if (!r) return { color: null, bg: null, fontSize: null };
     return {
       color: this.#findStyledAncestor(r.startContainer, 'color')?.style.color || null,
       bg: this.#findStyledAncestor(r.startContainer, 'background-color')?.style.backgroundColor || null,
+      fontSize: this.#findStyledAncestor(r.startContainer, 'font-size')?.style.fontSize || null,
     };
   }
 
@@ -2533,7 +2552,7 @@ class EmbedCommands {
 /**
  * ButtonsCommands — 버튼 그룹 블록
  * - 저장 HTML: <div data-type="buttons" data-align="left|center|right">
- *               <a href="…" data-role="button" data-style="primary|outline|gray" target="_blank" rel="noopener noreferrer">텍스트</a> …</div>
+ *               <a href="…" data-role="button" data-style="primary|outline|gray" data-size="sm|md|lg" target="_blank" rel="noopener noreferrer">텍스트</a> …</div>
  *   뷰어는 CSS 만 있으면 된다.
  * - 에디터에서는 레이어(jm-buttons-layer, contenteditable=false)로 감싸고 헤더에서 버튼 추가 / 주소 / 스타일 / 순서 / 삭제 / 정렬을 다룬다.
  *   각 버튼은 contenteditable 로 글자를 바로 고치고, 클릭하면 선택(헤더 조작 대상)된다.
@@ -2542,6 +2561,7 @@ class EmbedCommands {
 const BUTTONS_LAYER_CLASS = 'jm-buttons-layer';
 const SELECTED = 'is-selected';
 const STYLES = [['primary', '채움'], ['outline', '외곽선'], ['gray', '회색']];
+const SIZES = [['sm', '작게'], ['md', '보통'], ['lg', '크게']];
 
 class ButtonsCommands {
   /**
@@ -2575,8 +2595,9 @@ class ButtonsCommands {
     layer.className = BUTTONS_LAYER_CLASS;
     layer.contentEditable = 'false';
     block.parentNode.insertBefore(layer, block);
-    layer.append(this.#buildHeader(block), block);
+    layer.append(this.#buildHeader(block), this.#buildAddRow(block), block);
     this.#bindButtons(block);
+    this.#bindReorder(block);
     this.editor.blockDrag?.makeDraggable(block._handle, layer);
     return layer;
   }
@@ -2607,7 +2628,7 @@ class ButtonsCommands {
     title.className = 'jm-buttons-title'; title.textContent = '버튼';
     const spacer = document.createElement('span'); spacer.className = 'jm-buttons-spacer';
 
-    const add = mk('＋ 버튼 추가', () => this.addButton(block));
+    const add = mk('＋ 버튼 추가', () => this.#toggleAddRow(block));
     // 주소 입력란: 선택한 버튼의 href 를 레이어 안에서 바로 편집
     const url = document.createElement('input');
     url.type = 'text';
@@ -2621,22 +2642,66 @@ class ButtonsCommands {
     block._urlInput = url;
     const style = mkSelect('jm-buttons-style needs-sel', STYLES, (v) => this.setStyle(block, v));
     style.title = '선택한 버튼의 모양';
-    const left = mk('◀', () => this.move(block, -1), 'needs-sel', '선택한 버튼을 앞으로');
-    const right = mk('▶', () => this.move(block, 1), 'needs-sel', '선택한 버튼을 뒤로');
+    const size = mkSelect('jm-buttons-size needs-sel', SIZES, (v) => this.setSize(block, v));
+    size.title = '선택한 버튼의 크기';
     const del = mk('선택 삭제', () => this.deleteSelected(block), 'needs-sel');
     const align = mkSelect('jm-buttons-align', [['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']], (v) => { block.dataset.align = v; this.editor.commit(); });
     align.value = block.dataset.align || 'center';
     const remove = mk('✕', () => this.#deleteBlock(block), 'jm-buttons-remove', '블록 삭제');
 
-    h.append(handle, title, spacer, add, url, style, left, right, del, align, remove);
+    h.append(handle, title, spacer, add, url, style, size, del, align, remove);
     block._header = h;
     return h;
   }
 
-  /** 각 버튼: 글자 편집 가능, 클릭 시 선택 */
+  /** 「버튼 추가」 입력줄: 이름 + 주소 → 추가 */
+  #buildAddRow(block) {
+    const row = document.createElement('div');
+    row.className = 'jm-buttons-addrow';
+    row.hidden = true;
+    row.innerHTML = '<input type="text" class="jm-buttons-addname" placeholder="버튼 이름"><input type="text" class="jm-buttons-addurl" placeholder="https://…"><button type="button" class="jm-btn jm-buttons-btn jm-buttons-addok">추가</button><button type="button" class="jm-btn jm-buttons-btn jm-buttons-addcancel">취소</button>';
+    const name = row.querySelector('.jm-buttons-addname'), url = row.querySelector('.jm-buttons-addurl');
+    [name, url].forEach((i) => i.addEventListener('mousedown', (e) => e.stopPropagation()));
+    const submit = () => {
+      const text = name.value.trim();
+      if (!text) { name.focus(); return; }
+      this.addButton(block, text, url.value.trim() || '#');
+      row.hidden = true;
+    };
+    row.querySelector('.jm-buttons-addok').addEventListener('mousedown', (e) => e.preventDefault());
+    row.querySelector('.jm-buttons-addok').addEventListener('click', submit);
+    row.querySelector('.jm-buttons-addcancel').addEventListener('mousedown', (e) => e.preventDefault());
+    row.querySelector('.jm-buttons-addcancel').addEventListener('click', () => { row.hidden = true; });
+    [name, url].forEach((i) => i.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } if (e.key === 'Escape') row.hidden = true; }));
+    block._addRow = row;
+    return row;
+  }
+
+  #toggleAddRow(block) {
+    const row = block._addRow;
+    if (!row) return;
+    row.hidden = !row.hidden;
+    if (!row.hidden) {
+      row.querySelector('.jm-buttons-addname').value = '';
+      row.querySelector('.jm-buttons-addurl').value = 'https://';
+      row.querySelector('.jm-buttons-addname').focus();
+    }
+  }
+
+  /** 각 버튼: 편집용 래퍼(span.jm-btn-item = 그립 + a) 로 감싸고, 글자 편집 가능, 클릭 시 선택 */
   #bindButtons(block) {
     block.querySelectorAll(':scope > a').forEach((a) => {
-      if (a._bound) return;
+      // 래퍼: 드래그 그립 + 버튼. 저장 시 unwrapHTML 에서 제거
+      const item = document.createElement('span');
+      item.className = 'jm-btn-item';
+      item.draggable = true;
+      const grip = document.createElement('span');
+      grip.className = 'jm-btn-grip';
+      grip.title = '끌어서 순서 변경';
+      grip.textContent = '⠿';
+      grip.addEventListener('mousedown', (e) => e.stopPropagation());
+      block.insertBefore(item, a);
+      item.append(grip, a);
       a._bound = true;
       a.setAttribute('contenteditable', 'true');
       a.addEventListener('mousedown', () => this.#select(block, a));
@@ -2649,33 +2714,78 @@ class ButtonsCommands {
     this.#refreshHeader(block);
   }
 
+  /** 그립 드래그로 버튼 순서 변경 */
+  #bindReorder(block) {
+    let dragging = null;
+    block.addEventListener('dragstart', (e) => {
+      const item = e.target.closest?.('.jm-btn-item');
+      if (!item || !e.target.closest('.jm-btn-grip') && e.target !== item) { e.preventDefault(); return; } // 글자 선택 드래그는 막고 그립에서만
+      dragging = item;
+      item.classList.add('is-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', 'jm-button-reorder');
+      e.stopPropagation();
+    });
+    block.addEventListener('dragend', () => {
+      dragging?.classList.remove('is-dragging');
+      block.querySelectorAll('.drop-before, .drop-after').forEach((el) => el.classList.remove('drop-before', 'drop-after'));
+      dragging = null;
+    });
+    block.addEventListener('dragover', (e) => {
+      if (!dragging) return;
+      e.preventDefault(); e.stopPropagation();
+      e.dataTransfer.dropEffect = 'move';
+      block.querySelectorAll('.drop-before, .drop-after').forEach((el) => el.classList.remove('drop-before', 'drop-after'));
+      const over = e.target.closest?.('.jm-btn-item');
+      if (over && over !== dragging) {
+        const r = over.getBoundingClientRect();
+        over.classList.add(e.clientX < r.left + r.width / 2 ? 'drop-before' : 'drop-after');
+      }
+    });
+    block.addEventListener('drop', (e) => {
+      if (!dragging) return;
+      e.preventDefault(); e.stopPropagation();
+      const over = e.target.closest?.('.jm-btn-item');
+      if (over && over !== dragging) {
+        const r = over.getBoundingClientRect();
+        block.insertBefore(dragging, e.clientX < r.left + r.width / 2 ? over : over.nextSibling);
+      } else if (!over) block.appendChild(dragging);
+      dragging.classList.remove('is-dragging');
+      block.querySelectorAll('.drop-before, .drop-after').forEach((el) => el.classList.remove('drop-before', 'drop-after'));
+      dragging = null;
+      this.editor.commit();
+    });
+  }
+
   #select(block, a) {
-    block.querySelectorAll(`:scope > a.${SELECTED}`).forEach((x) => x.classList.remove(SELECTED));
+    block.querySelectorAll(`a.${SELECTED}`).forEach((x) => x.classList.remove(SELECTED));
     a.classList.add(SELECTED);
     this.#refreshHeader(block);
   }
 
-  #selected(block) { return block.querySelector(`:scope > a.${SELECTED}`); }
+  #selected(block) { return block.querySelector(`a.${SELECTED}`); }
 
   #refreshHeader(block) {
     const sel = this.#selected(block);
     block._header?.querySelectorAll('.needs-sel').forEach((el) => { el.disabled = !sel; });
     const style = block._header?.querySelector('.jm-buttons-style');
     if (style && sel) style.value = sel.dataset.style || 'primary';
+    const size = block._header?.querySelector('.jm-buttons-size');
+    if (size && sel) size.value = sel.dataset.size || 'md';
     if (block._urlInput) block._urlInput.value = sel ? this.editor.constructor.getHref(sel) : '';
   }
 
   // ───────────── 조작 ─────────────
 
-  addButton(block) {
-    const tpl = document.createElement('template');
-    tpl.innerHTML = ButtonsCommands.buttonHTML('버튼', 'https://example.com', 'primary');
-    const a = tpl.content.firstChild;
-    this.editor.constructor.setHref(a, a.getAttribute('href'));
+  addButton(block, text = '버튼', href = '#') {
+    const a = document.createElement('a');
+    a.textContent = text;
+    a.setAttribute('data-role', 'button'); a.setAttribute('data-style', 'primary');
+    a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer');
+    this.editor.constructor.setHref(a, href);
     block.appendChild(a);
     this.#bindButtons(block);
     this.#select(block, a);
-    a.focus();
     this.editor.commit();
   }
 
@@ -2686,20 +2796,18 @@ class ButtonsCommands {
     this.editor.commit();
   }
 
-  move(block, dir) {
+  setSize(block, size) {
     const a = this.#selected(block);
     if (!a) return;
-    const sib = dir < 0 ? a.previousElementSibling : a.nextElementSibling;
-    if (!sib) return;
-    if (dir < 0) block.insertBefore(a, sib); else block.insertBefore(sib, a);
+    if (size === 'md') delete a.dataset.size; else a.dataset.size = size;
     this.editor.commit();
   }
 
   deleteSelected(block) {
     const a = this.#selected(block);
     if (!a) return;
-    a.remove();
-    if (!block.querySelector(':scope > a')) { this.#deleteBlock(block); return; }
+    (a.closest('.jm-btn-item') || a).remove();
+    if (!block.querySelector('a')) { this.#deleteBlock(block); return; }
     this.#refreshHeader(block);
     this.editor.commit();
   }
@@ -2721,6 +2829,7 @@ class ButtonsCommands {
     tpl.content.querySelectorAll(`.${BUTTONS_LAYER_CLASS}`).forEach((layer) => {
       const block = layer.querySelector('div[data-type="buttons"]');
       if (!block) { layer.remove(); return; }
+      block.querySelectorAll('.jm-btn-item').forEach((item) => { const a = item.querySelector('a'); if (a) item.replaceWith(a); else item.remove(); });
       block.querySelectorAll('a').forEach((a) => { a.removeAttribute('contenteditable'); a.classList.remove(SELECTED); if (!a.className) a.removeAttribute('class'); });
       layer.replaceWith(block);
     });
@@ -2789,6 +2898,7 @@ class JmEditor {
    * @param {string} name bold|italic|underline|strike|h1|h2|h3|paragraph|quote|ul|ol|link|unlink|image|undo|redo
    *                      |table|tableRowBelow|tableRowAbove|tableColRight|tableColLeft|tableDeleteRow|tableDeleteCol|tableDelete
    *                      |color|bgColor (value: 색상 문자열, null 이면 해제)
+   *                      |fontSize (value: '14px' 등, null 이면 해제)
    *                      |format (value: 삽입할 HTML — 서식/템플릿. 내부에서 sanitize 후 블록 단위 삽입)
    *                      |gallery (value: {cols, auto} — 이미지 갤러리 블록 삽입)
    *                      |youtube (value: 유튜브 주소 또는 동영상 ID)
@@ -2820,6 +2930,7 @@ class JmEditor {
       buttons: () => c.insertBlockHTML(ButtonsCommands.template(value?.align)),
       color: () => c.setStyle('color', value ?? null),
       bgColor: () => c.setStyle('background-color', value ?? null),
+      fontSize: () => c.setStyle('font-size', value ?? null),
       undo: () => this.history.undo(),
       redo: () => this.history.redo(),
       // 표
@@ -3732,12 +3843,13 @@ const sourceEl=document.getElementById('source');
 const YOUTUBE_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3z" fill="currentColor"/></svg>';
 const UL_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none"/><path d="M10 6h10M10 12h10M10 18h10"/></svg>';
 const OL_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><text x="2.5" y="8" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">1</text><text x="2.5" y="14" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">2</text><text x="2.5" y="20" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">3</text></svg>';
+const FONT_SIZES=[10,11,12,13,14,15,16,18,20,24,28,32,36,48];
 const BUTTONS = [
   ['modeEditor','Editor',s=>mode==='editor',false,{group:'mode',segFirst:true,row:'top'}],
   ['modeHtml','HTML',s=>mode==='html',false,{icon:CODE_ICON,group:'mode',row:'top'}],
   ['modePreview','미리보기',s=>mode==='preview',false,{icon:PREVIEW_ICON,group:'mode',segLast:true,row:'top'}],
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
-  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],null,
+  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),selectDefault:['','기본']}],null,
   ['h1','H1',s=>s.block==='h1'],['h2','H2',s=>s.block==='h2'],['h3','H3',s=>s.block==='h3'],['quote','❝ 인용',s=>s.block==='blockquote'],null,
   ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true}],['ulType','▾',()=>false,false,{tip:'비순서 목록 유형',compact:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true}],['olType','▾',()=>false,false,{tip:'순서 목록 유형',compact:true}],null,
   ['link','링크',s=>s.a],['image','이미지',()=>false],['youtube','유튜브',()=>false,false,{icon:YOUTUBE_ICON,iconOnly:true}],['table','표',s=>s.table],null,
@@ -3763,7 +3875,9 @@ const editor=new JmEditor(document.getElementById('editor'),{
 
 BUTTONS.forEach(def=>{
   if(!def){const s=document.createElement('span');s.className='jm-sep';toolbar.appendChild(s);return;}
-  const [cmd,label,,tableOnly,opts={}]=def, b=document.createElement('button');
+  const [cmd,label,,tableOnly,opts={}]=def;
+  if(opts.select){const sel=document.createElement('select');sel.className='jm-select';sel.dataset.cmd=cmd;sel.title=opts.tip||'';[opts.selectDefault,...opts.select].filter(Boolean).forEach(([v,tx])=>{const o=document.createElement('option');o.value=v;o.textContent=tx;sel.appendChild(o);});sel.addEventListener('mousedown',()=>editor.sel.save());sel.addEventListener('change',()=>editor.exec(cmd,sel.value||null));(opts.row==='top'?toolbarTop:toolbar).appendChild(sel);btns[cmd]=sel;return;}
+  const b=document.createElement('button');
   b.type='button';b.className='jm-btn';b.title=opts.tip||cmd;b.dataset.cmd=cmd;
   if(opts.icon){b.classList.add('jm-btn-icon');b.innerHTML=opts.iconOnly?opts.icon:opts.icon+'<span>'+label+'</span>';b.setAttribute('aria-label',label);b.title=label;}else b.textContent=label;
   if(opts.right)b.classList.add('jm-btn-right');if(opts.compact)b.classList.add('jm-btn-compact');if(opts.group)b.classList.add('jm-btn-seg');if(opts.segFirst)b.classList.add('jm-btn-seg-first');if(opts.segLast)b.classList.add('jm-btn-seg-last');
@@ -3803,6 +3917,7 @@ document.getElementById('linkCancel').addEventListener('click',closeInput);
 linkUrl.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('linkOk').click();if(e.key==='Escape')document.getElementById('linkCancel').click();});
 fileInput.addEventListener('change',()=>{editor.insertImageFile(fileInput.files[0]);fileInput.value='';});
 function refresh(){if(mode!=='editor')return;const s=editor.getState();BUTTONS.forEach(d=>{if(!d)return;btns[d[0]].classList.toggle('is-active',!!d[2](s));if(d[3])btns[d[0]].hidden=!s.table;});
+  if(btns.fontSize)btns.fontSize.value=FONT_SIZES.map(n=>n+'px').includes(s.fontSize)?s.fontSize:'';
   btns.color.style.setProperty('--jm-swatch',s.color||'transparent');btns.bgColor.style.setProperty('--jm-swatch',s.bg||'transparent');}
 
 /* 모드 전환: editor / html / preview. html 모드에서 나갈 때 textarea 내용을 setHTML 로 반영 */
