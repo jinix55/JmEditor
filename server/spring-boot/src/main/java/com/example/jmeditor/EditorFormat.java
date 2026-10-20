@@ -18,6 +18,9 @@ public class EditorFormat {
     @Column(nullable = false, length = 100)
     private String name;
 
+    @Column(length = 50)
+    private String category;
+
     @Column(length = 300)
     private String description;
 

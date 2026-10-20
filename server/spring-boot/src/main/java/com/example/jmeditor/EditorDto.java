@@ -27,9 +27,9 @@ public final class EditorDto {
     public record UploadResponse(String url) {}
 
     /** 서식 목록 응답 */
-    public record FormatResponse(Long id, String name, String description, String html) {
+    public record FormatResponse(Long id, String name, String category, String description, String html) {
         public static FormatResponse from(EditorFormat f) {
-            return new FormatResponse(f.getId(), f.getName(), f.getDescription(), f.getHtml());
+            return new FormatResponse(f.getId(), f.getName(), f.getCategory(), f.getDescription(), f.getHtml());
         }
     }
 

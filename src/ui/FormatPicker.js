@@ -2,7 +2,7 @@
  * FormatPicker
  * - 툴바 「서식」 버튼 아래에 서식(템플릿) 목록 드롭다운을 띄우고, 선택하면 onPick(format) 호출.
  * - 목록은 loadFormats() 로 외부에서 공급한다 (서버 API / 정적 배열). 결과는 캐시하며 refresh() 로 다시 받는다.
- * - 서식 데이터 규격: { id, name, description?, html }
+ * - 서식 데이터 규격: { id, name, description?, html, category? }  category 로 묶어 보여준다 (없으면 '기타')
  *   → 별도 서식 관리 화면/DB 테이블(예: format_template: id, name, description, html, sort_order, use_yn)에서 관리.
  */
 export class FormatPicker {
@@ -73,12 +73,25 @@ export class FormatPicker {
     this.el.appendChild(d);
   }
 
-  /** 서식 목록: 이름 + 설명 + 축소 미리보기 */
+  /** 서식 목록: 카테고리 헤더 + 카드(이름 + 설명 + 축소 미리보기) */
   #renderList() {
     this.el.innerHTML = '';
     if (!this.formats?.length) { this.#renderMessage('등록된 서식이 없습니다'); return; }
 
-    this.formats.forEach((f) => {
+    // 카테고리별 묶기 (등장 순서 유지)
+    const groups = new Map();
+    this.formats.forEach((f) => { const k = f.category || '기타'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); });
+    groups.forEach((list, cat) => {
+      const head = document.createElement('div');
+      head.className = 'jm-formatpicker-cat';
+      head.textContent = cat;
+      this.el.appendChild(head);
+      list.forEach((f) => this.#renderItem(f));
+    });
+  }
+
+  #renderItem(f) {
+    {
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'jm-formatpicker-item';
@@ -102,7 +115,7 @@ export class FormatPicker {
 
       item.append(name, desc, preview);
       this.el.appendChild(item);
-    });
+    }
   }
 }
 
@@ -113,18 +126,21 @@ export class FormatPicker {
 export const SAMPLE_FORMATS = [
   {
     id: 'notice-box',
+    category: '텍스트',
     name: '안내 박스',
     description: '배경색 있는 1칸 표로 강조 안내',
     html: `<table><tbody><tr><td style="background-color: #e8f1fb"><p><strong>📌 안내</strong></p><p>안내 내용을 입력하세요.</p></td></tr></tbody></table>`,
   },
   {
     id: 'warning',
+    category: '텍스트',
     name: '주의 문구',
     description: '빨간 제목 + 인용 블록',
     html: `<h3><span style="color: #d32f2f">⚠ 주의사항</span></h3><blockquote>주의 내용을 입력하세요.</blockquote>`,
   },
   {
     id: 'meeting-minutes',
+    category: '문서',
     name: '회의록',
     description: '일시·장소·참석자·안건 표',
     html: `<h2>회의록</h2><table><tbody>
@@ -134,30 +150,35 @@ export const SAMPLE_FORMATS = [
   },
   {
     id: 'checklist',
+    category: '텍스트',
     name: '체크리스트',
     description: '확인 항목 목록',
     html: `<h3>확인 사항</h3><ul><li>☐ 항목 1</li><li>☐ 항목 2</li><li>☐ 항목 3</li></ul>`,
   },
   {
     id: 'slider',
+    category: '미디어',
     name: '이미지 슬라이드',
     description: '이미지가 자동으로 넘어가는 블록. 간격·비율 선택, 썸네일로 순서 변경',
     html: `<div data-type="slider" data-interval="3000" data-ratio="16:9"></div>`,
   },
   {
     id: 'buttons',
+    category: '블록',
     name: '버튼',
     description: '버튼 묶음 블록. 추가·주소·모양·순서·정렬을 헤더에서 조정',
     html: `<div data-type="buttons" data-align="center"><a href="https://example.com" data-role="button" data-style="primary">자세히 보기</a><a href="https://example.com" data-role="button" data-style="outline">신청하기</a></div>`,
   },
   {
     id: 'image-gallery',
+    category: '미디어',
     name: '이미지 갤러리',
     description: '이미지만 넣는 블록. 드롭/추가 시 자동 균등 배치, 헤더에서 선택·전체 삭제',
     html: `<div data-type="gallery" data-cols="3" data-auto="1"></div>`,
   },
   {
     id: 'divider-note',
+    category: '텍스트',
     name: '구분 메모',
     description: '배경색 띠 한 줄',
     html: `<p><span style="background-color: #fff9c4">　메모: 내용을 입력하세요　</span></p>`,
