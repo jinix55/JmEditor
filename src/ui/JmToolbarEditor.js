@@ -24,6 +24,9 @@ const OL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" str
 /** 글자 크기 선택지 (px) */
 const FONT_SIZES = [10, 11, 12, 13, 14, 15, 16, 18, 20, 24, 28, 32, 36, 48];
 
+/** 스플릿 버튼 꺾쇠 아이콘 */
+const CHEVRON_ICON = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+
 /** 목록 유형 (list-style-type) */
 const UL_TYPES = [['disc', '● 기본'], ['circle', '○ 원'], ['square', '■ 사각']];
 const OL_TYPES = [['decimal', '1. 숫자'], ['decimal-leading-zero', '01. 숫자(0 채움)'], ['lower-alpha', 'a. 소문자'], ['upper-alpha', 'A. 대문자'], ['lower-roman', 'i. 로마 소문자'], ['upper-roman', 'I. 로마 대문자'], ['hangul', '가. 한글']];
@@ -57,10 +60,11 @@ const BUTTONS = [
   ['h3', 'H3', (s) => s.block === 'h3'],
   ['quote', '❝', (s) => s.block === 'blockquote'],
   null,
-  ['ul', '비순서 목록', (s) => s.list === 'ul', false, { tip: '비순서 목록', icon: UL_ICON, iconOnly: true }],
-  ['ulType', '▾', () => false, false, { tip: '비순서 목록 유형', compact: true }],
-  ['ol', '순서 목록', (s) => s.list === 'ol', false, { tip: '순서 목록', icon: OL_ICON, iconOnly: true }],
-  ['olType', '▾', () => false, false, { tip: '순서 목록 유형', compact: true }],
+  // 목록: 스플릿 버튼 (본 버튼 = 토글, 오른쪽 꺾쇠 = 유형 메뉴)
+  ['ul', '비순서 목록', (s) => s.list === 'ul', false, { tip: '비순서 목록', icon: UL_ICON, iconOnly: true, splitMain: true }],
+  ['ulType', '비순서 목록 유형', () => false, false, { tip: '비순서 목록 유형', icon: CHEVRON_ICON, iconOnly: true, splitArrow: true }],
+  ['ol', '순서 목록', (s) => s.list === 'ol', false, { tip: '순서 목록', icon: OL_ICON, iconOnly: true, splitMain: true }],
+  ['olType', '순서 목록 유형', () => false, false, { tip: '순서 목록 유형', icon: CHEVRON_ICON, iconOnly: true, splitArrow: true }],
   null,
   ['link', '링크', (s) => s.a],
   ['image', '이미지', () => false],
@@ -253,7 +257,8 @@ export class JmToolbarEditor {
       if (opts.segLast) btn.classList.add('jm-btn-seg-last');
       btn.dataset.cmd = cmd;
       if (opts.tip) btn.title = opts.tip;
-      if (opts.compact) btn.classList.add('jm-btn-compact');
+      if (opts.splitMain) btn.classList.add('jm-btn-split-main');
+      if (opts.splitArrow) btn.classList.add('jm-btn-split-arrow');
       if (opts.icon) {
         // 아이콘 (+ 텍스트). iconOnly 면 라벨은 툴팁으로만
         btn.classList.add('jm-btn-icon');
