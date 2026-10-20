@@ -4549,7 +4549,7 @@ const BUTTONS = [
   ['modePreview','미리보기',s=>mode==='preview',false,{icon:PREVIEW_ICON,group:'mode',segLast:true,row:'top'}],
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
   ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),selectDefault:['','기본']}],null,
-  ['h1','H1',s=>s.block==='h1'],['h2','H2',s=>s.block==='h2'],['h3','H3',s=>s.block==='h3'],['quote','인용',s=>s.block==='blockquote',false,{tip:'인용',icon:QUOTE_ICON,iconOnly:true}],null,
+  ['heading','제목',()=>false,false,{tip:'제목 단계',select:[['h1','제목 1'],['h2','제목 2'],['h3','제목 3']],selectDefault:['p','본문']}],['quote','인용',s=>s.block==='blockquote',false,{tip:'인용',icon:QUOTE_ICON,iconOnly:true}],null,
   ['alignMenu','가로 정렬',()=>false,false,{tip:'가로 정렬',icon:ALIGN_LEFT_ICON,iconOnly:true,dropdown:true}],['valignMenu','세로 정렬',()=>false,false,{tip:'세로 정렬 (표 셀)',icon:VALIGN_TOP_ICON,iconOnly:true,dropdown:true,tableEnabled:true}],null,
   ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true,splitMain:true}],['ulType','비순서 목록 유형',()=>false,false,{tip:'비순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true,splitMain:true}],['olType','순서 목록 유형',()=>false,false,{tip:'순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],null,
   ['link','링크',s=>s.a,false,{tip:'링크',icon:LINK_ICON,iconOnly:true}],['image','이미지',()=>false,false,{tip:'이미지',icon:IMAGE_ICON,iconOnly:true}],['youtube','유튜브',()=>false,false,{icon:YOUTUBE_ICON,iconOnly:true}],['table','표',s=>s.table,false,{tip:'표 삽입',icon:TABLE_ICON,iconOnly:true}],null,
@@ -4622,6 +4622,7 @@ fileInput.addEventListener('change',()=>{editor.insertImageFile(fileInput.files[
 function refresh(){if(mode!=='editor')return;const s=editor.getState();BUTTONS.forEach(d=>{if(!d)return;btns[d[0]].classList.toggle('is-active',!!d[2](s));if(d[3])btns[d[0]].hidden=!s.table;if(d[4]?.tableEnabled)btns[d[0]].disabled=!s.table;});
   const setIcon=(c,icon)=>{if(btns[c])btns[c].innerHTML=icon+CHEVRON_ICON;};
   setIcon('alignMenu',(ALIGN_ITEMS.find(([v])=>v===s.align)||ALIGN_ITEMS[0])[2]);setIcon('valignMenu',(VALIGN_ITEMS.find(([v])=>v===s.valign)||VALIGN_ITEMS[0])[2]);
+  if(btns.heading)btns.heading.value=['h1','h2','h3'].includes(s.block)?s.block:'p';
   if(btns.fontSize)btns.fontSize.value=FONT_SIZES.map(n=>n+'px').includes(s.fontSize)?s.fontSize:'';
   btns.color.style.setProperty('--jm-swatch',s.color||'transparent');btns.bgColor.style.setProperty('--jm-swatch',s.bg||'transparent');}
 

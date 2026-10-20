@@ -84,9 +84,8 @@ const BUTTONS = [
   ['bgColor', 'A', (s) => !!s.bg, false, { tip: '글자 배경색' }],
   ['fontSize', '크기', () => false, false, { tip: '글자 크기', select: FONT_SIZES.map((n) => [`${n}px`, `${n}px`]), selectDefault: ['', '기본'] }],
   null, // 구분선
-  ['h1', 'H1', (s) => s.block === 'h1'],
-  ['h2', 'H2', (s) => s.block === 'h2'],
-  ['h3', 'H3', (s) => s.block === 'h3'],
+  // 제목: 셀렉트 (본문 / 제목 1~3). 값 선택 시 exec('heading', 'p'|'h1'|'h2'|'h3')
+  ['heading', '제목', () => false, false, { tip: '제목 단계', select: [['h1', '제목 1'], ['h2', '제목 2'], ['h3', '제목 3']], selectDefault: ['p', '본문'] }],
   ['quote', '인용', (s) => s.block === 'blockquote', false, { tip: '인용', icon: QUOTE_ICON, iconOnly: true }],
   null,
   // 정렬: 드롭다운 두 개 (가로 / 세로). 버튼 아이콘은 현재 상태를 보여주고, 누르면 목록
@@ -275,7 +274,7 @@ export class JmToolbarEditor {
         if (opts.tip) sel.title = opts.tip;
         [opts.selectDefault, ...opts.select].filter(Boolean).forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); });
         sel.addEventListener('mousedown', () => this.editor.sel.save());
-        sel.addEventListener('change', () => { this.editor.exec(cmd, sel.value || null); });
+        sel.addEventListener('change', () => { this.editor.exec(cmd, sel.value || null); this.editor.focus?.(); });
         bar.appendChild(sel);
         this.buttons[cmd] = sel;
         return;
@@ -380,6 +379,7 @@ export class JmToolbarEditor {
     setIcon('alignMenu', (ALIGN_ITEMS.find(([v]) => v === state.align) || ALIGN_ITEMS[0])[2]);
     setIcon('valignMenu', (VALIGN_ITEMS.find(([v]) => v === state.valign) || VALIGN_ITEMS[0])[2]);
     // 현재 글자 크기 표시
+    if (this.buttons.heading) this.buttons.heading.value = ['h1', 'h2', 'h3'].includes(state.block) ? state.block : 'p';
     if (this.buttons.fontSize) this.buttons.fontSize.value = FONT_SIZES.map((n) => `${n}px`).includes(state.fontSize) ? state.fontSize : '';
     // 현재 색을 버튼 하단 띠로 표시
     this.buttons.color.style.setProperty('--jm-swatch', state.color || 'transparent');
