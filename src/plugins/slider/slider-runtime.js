@@ -4,7 +4,7 @@
  * - 화살표·인디케이터는 런타임이 붙이는 UI(.jm-slider-ui) 로, 저장 HTML 에는 포함되지 않는다.
  * - data-indicator: dots(점) | numbers(현재/전체) | bars(막대) | none
  * - data-indicator-pos: bottom-center(기본) | bottom-left | bottom-right
- * - 마우스를 올리면 자동 전환을 멈춘다.
+ * - 마우스를 올리면 자동 전환을 멈추고, 인디케이터 옆 ⏸/▶ 버튼으로 사용자가 직접 멈춤/재생할 수 있다.
  *
  * 뷰어 페이지:
  *   import { initSliders } from '/js/jm-editor/plugins/slider/slider-runtime.js';
@@ -20,7 +20,7 @@ const UI = 'jm-slider-ui';
 export function initSlider(block) {
   if (block._slider) { block._slider.refresh(); return block._slider; }
 
-  let index = 0, timer = null, paused = false;
+  let index = 0, timer = null, paused = false, stopped = false; // paused: 호버, stopped: 사용자가 멈춤
   const imgs = () => Array.from(block.querySelectorAll(':scope > img'));
 
   // UI: 화살표 + 점
@@ -30,6 +30,16 @@ export function initSlider(block) {
   next.type = 'button'; next.className = `${UI} jm-slider-arrow jm-slider-next`; next.setAttribute('aria-label', '다음'); next.innerHTML = '&#10095;';
   const dots = document.createElement('div');
   dots.className = `${UI} jm-slider-dots`;
+  const toggle = document.createElement('button');
+  toggle.type = 'button'; toggle.className = 'jm-slider-toggle'; toggle.setAttribute('aria-label', '자동 전환 멈춤/재생');
+  toggle.addEventListener('mousedown', (e) => e.stopPropagation());
+  toggle.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); stopped = !stopped; renderToggle(); start(); });
+  const renderToggle = () => {
+    const auto = interval() > 0 && imgs().length > 1;
+    toggle.hidden = !auto;
+    toggle.innerHTML = stopped ? '&#9654;' : '&#10074;&#10074;';
+    toggle.title = stopped ? '자동 전환 재생' : '자동 전환 멈춤';
+  };
   [prev, next, dots].forEach((el) => el.addEventListener('mousedown', (e) => e.stopPropagation()));
   prev.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); api.prev(); });
   next.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); api.next(); });
@@ -57,15 +67,18 @@ export function initSlider(block) {
         dots.appendChild(d);
       });
     }
+    dots.appendChild(toggle); // 인디케이터 옆에 멈춤/재생
+    renderToggle();
     const single = list.length < 2;
-    prev.hidden = single; next.hidden = single; dots.hidden = single || kind === 'none';
+    prev.hidden = single; next.hidden = single;
+    dots.hidden = single || (kind === 'none' && toggle.hidden);
   };
 
   const interval = () => Math.max(0, parseInt(block.dataset.interval, 10) || 0);
   const start = () => {
     stop();
     const ms = interval();
-    if (ms > 0 && imgs().length > 1) timer = setInterval(() => { if (!paused) api.next(); }, ms);
+    if (ms > 0 && imgs().length > 1 && !stopped) timer = setInterval(() => { if (!paused) api.next(); }, ms);
   };
   const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
   const onEnter = () => { paused = true; };
