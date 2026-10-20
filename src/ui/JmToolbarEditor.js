@@ -23,6 +23,9 @@ const ALIGN_LEFT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="n
 const ALIGN_CENTER_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M6 12h12M4 18h16"/></svg>';
 const ALIGN_RIGHT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M9 12h12M5 18h16"/></svg>';
 
+/** 인용 아이콘 */
+const QUOTE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M7.2 17.5c-1.9 0-3.2-1.5-3.2-3.6 0-3.6 2.4-6.6 5.8-7.9l.6 1.3c-2.2.9-3.6 2.5-3.9 4.4.3-.1.7-.2 1-.2 1.8 0 3 1.3 3 3s-1.4 3-3.3 3Zm9 0c-1.9 0-3.2-1.5-3.2-3.6 0-3.6 2.4-6.6 5.8-7.9l.6 1.3c-2.2.9-3.6 2.5-3.9 4.4.3-.1.7-.2 1-.2 1.8 0 3 1.3 3 3s-1.4 3-3.3 3Z"/></svg>';
+
 /** 실행 취소 / 다시 실행 아이콘 */
 const UNDO_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>';
 const REDO_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>';
@@ -80,7 +83,7 @@ const BUTTONS = [
   ['h1', 'H1', (s) => s.block === 'h1'],
   ['h2', 'H2', (s) => s.block === 'h2'],
   ['h3', 'H3', (s) => s.block === 'h3'],
-  ['quote', '❝', (s) => s.block === 'blockquote'],
+  ['quote', '인용', (s) => s.block === 'blockquote', false, { tip: '인용', icon: QUOTE_ICON, iconOnly: true }],
   null,
   ['alignLeft', '왼쪽 정렬', (s) => s.align === 'left', false, { tip: '왼쪽 정렬', icon: ALIGN_LEFT_ICON, iconOnly: true }],
   ['alignCenter', '가운데 정렬', (s) => s.align === 'center', false, { tip: '가운데 정렬', icon: ALIGN_CENTER_ICON, iconOnly: true }],
