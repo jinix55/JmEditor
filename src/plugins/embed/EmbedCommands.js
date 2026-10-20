@@ -3,8 +3,8 @@
  * - 저장 HTML: <div data-type="youtube" data-width="100|75|50" data-align="left|center|right">
  *               <iframe src="https://www.youtube-nocookie.com/embed/{id}" title="YouTube video" allow="…" allowfullscreen></iframe></div>
  *   16:9 영역은 CSS 로 잡는다. 뷰어는 CSS 만 있으면 된다.
- * - 에디터에서는 레이어(<div class="jm-embed-layer" contenteditable="false">) 로 감싸 핸들(드래그 이동)·헤더(폭/정렬/삭제)를 붙이고,
- *   iframe 위에 투명 커버를 덮어 클릭이 에디터로 오게 한다(재생은 미리보기에서).
+ * - 에디터에서는 레이어(<div class="jm-embed-layer" contenteditable="false">) 로 감싸 핸들(드래그 이동)·헤더(폭/정렬/삭제)를 붙인다.
+ *   편집 중에는 iframe 을 로드하지 않고 썸네일(i.ytimg.com) + 제목·채널(YouTube oEmbed) 을 보여준다. 재생은 미리보기/조회에서.
  */
 import { BlockDrag } from '../../core/BlockDrag.js';
 
@@ -99,10 +99,21 @@ export class EmbedCommands {
 
     header.append(handle, title, spacer, width, align, remove);
 
-    // iframe 위 투명 커버: 편집 중 클릭이 iframe 에 먹히지 않게
+    // 편집용 커버: 썸네일 + 제목. iframe 은 CSS 로 숨겨 편집 중엔 로드하지 않음
+    const id = EmbedCommands.idOf(block);
     const cover = document.createElement('div');
     cover.className = 'jm-embed-cover';
     cover.title = '재생은 미리보기에서';
+    if (id) cover.style.backgroundImage = `url(https://i.ytimg.com/vi/${id}/hqdefault.jpg)`;
+    cover.innerHTML = '<span class="jm-embed-play" aria-hidden="true"></span><div class="jm-embed-info"><div class="jm-embed-name">YouTube 동영상</div><div class="jm-embed-author"></div></div>';
+    if (id) {
+      EmbedCommands.fetchInfo(id).then((info) => {
+        if (!info) return;
+        cover.querySelector('.jm-embed-name').textContent = info.title;
+        cover.querySelector('.jm-embed-author').textContent = info.author;
+        title.textContent = `YouTube · ${info.title}`;
+      });
+    }
 
     layer.append(header, block);
     block.appendChild(cover);
@@ -129,6 +140,31 @@ export class EmbedCommands {
       layer.replaceWith(block);
     });
     return tpl.innerHTML;
+  }
+
+  /** 블록의 동영상 ID */
+  static idOf(block) {
+    const m = block.querySelector('iframe')?.getAttribute('src')?.match(/\/embed\/([A-Za-z0-9_-]{11})/);
+    return m ? m[1] : null;
+  }
+
+  /**
+   * YouTube oEmbed 로 제목·채널명 조회 (CORS 허용). 실패하면 null. 결과는 메모리 캐시
+   * @returns {Promise<{title: string, author: string}|null>}
+   */
+  static async fetchInfo(id) {
+    EmbedCommands._cache ||= new Map();
+    if (EmbedCommands._cache.has(id)) return EmbedCommands._cache.get(id);
+    const p = (async () => {
+      try {
+        const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);
+        if (!res.ok) return null;
+        const j = await res.json();
+        return { title: j.title || '', author: j.author_name || '' };
+      } catch { return null; }
+    })();
+    EmbedCommands._cache.set(id, p);
+    return p;
   }
 
   /** 블록 드래그 중인지 등 외부에서 판별할 때 */
