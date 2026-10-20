@@ -3,7 +3,7 @@
  * - div[data-type="slider"] 안의 img 들을 한 장씩 보여주며 data-interval(ms, 0 이면 수동) 간격으로 자동 전환한다.
  * - 화살표·인디케이터는 런타임이 붙이는 UI(.jm-slider-ui) 로, 저장 HTML 에는 포함되지 않는다.
  * - data-indicator: dots(점) | numbers(현재/전체) | bars(막대) | none
- * - data-indicator-pos: bottom-center(기본) | bottom-left | bottom-right | top-left | top-center | top-right | below(이미지 아래)
+ * - data-indicator-pos: bottom-center(기본) | bottom-left | bottom-right
  * - 마우스를 올리면 자동 전환을 멈춘다.
  *
  * 뷰어 페이지:

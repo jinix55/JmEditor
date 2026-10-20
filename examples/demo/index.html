@@ -101,14 +101,9 @@ div[data-type="slider"] > img.is-current, div[data-type="slider"]:not(:has(> img
 .jm-slider-bar { width: 28px; height: 4px; padding: 0; border: 0; border-radius: 2px; background: rgba(255,255,255,.5); cursor: pointer; }
 .jm-slider-bar.is-current { background: var(--panel); }
 .jm-slider-ind-numbers { justify-content: flex-end; right: 12px; left: auto; }
-.jm-slider-pos-bottom-left,.jm-slider-pos-top-left{justify-content:flex-start;padding-left:12px}
-.jm-slider-pos-bottom-right,.jm-slider-pos-top-right{justify-content:flex-end;padding-right:12px}
-.jm-slider-pos-top-left,.jm-slider-pos-top-center,.jm-slider-pos-top-right{bottom:auto;top:10px}
-div[data-type="slider"] p[data-role="title"]~.jm-slider-pos-top-left,div[data-type="slider"] p[data-role="title"]~.jm-slider-pos-top-center,div[data-type="slider"] p[data-role="title"]~.jm-slider-pos-top-right{top:calc(10px + 1.4em + 6px)}
-.jm-slider-pos-below{position:static;margin-top:8px}
-.jm-slider-pos-below .jm-slider-dot,.jm-slider-pos-below .jm-slider-bar{background:var(--line)}
-.jm-slider-pos-below .jm-slider-dot.is-current,.jm-slider-pos-below .jm-slider-bar.is-current{background:var(--accent)}
-.jm-slider-pos-below .jm-slider-num{background:var(--code);color:var(--fg)}
+.jm-slider-pos-bottom-left{justify-content:flex-start;padding-left:12px}
+.jm-slider-pos-bottom-right{justify-content:flex-end;padding-right:12px}
+
 .jm-slider-num { padding: 3px 10px; border-radius: 12px; background: rgba(0,0,0,.55); color: var(--panel); font-size: 12px; font-variant-numeric: tabular-nums; }
 .jm-slider-layer { margin: 0 0 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
 .jm-slider-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--accent-soft); border-radius: 6px 6px 0 0; }
@@ -402,7 +397,7 @@ class Sanitizer {
       const ind = node.getAttribute('data-indicator');
       b.setAttribute('data-indicator', ['dots', 'numbers', 'bars', 'none'].includes(ind) ? ind : 'dots');
       const pos = node.getAttribute('data-indicator-pos');
-      b.setAttribute('data-indicator-pos', ['bottom-center', 'bottom-left', 'bottom-right', 'top-left', 'top-center', 'top-right', 'below'].includes(pos) ? pos : 'bottom-center');
+      b.setAttribute('data-indicator-pos', ['bottom-center', 'bottom-left', 'bottom-right'].includes(pos) ? pos : 'bottom-center');
       const w = node.getAttribute('data-width');
       b.setAttribute('data-width', ['100', '75', '50'].includes(w) ? w : '100');
       const al = node.getAttribute('data-align');
@@ -2950,7 +2945,7 @@ class ButtonsCommands {
  * - div[data-type="slider"] 안의 img 들을 한 장씩 보여주며 data-interval(ms, 0 이면 수동) 간격으로 자동 전환한다.
  * - 화살표·인디케이터는 런타임이 붙이는 UI(.jm-slider-ui) 로, 저장 HTML 에는 포함되지 않는다.
  * - data-indicator: dots(점) | numbers(현재/전체) | bars(막대) | none
- * - data-indicator-pos: bottom-center(기본) | bottom-left | bottom-right | top-left | top-center | top-right | below(이미지 아래)
+ * - data-indicator-pos: bottom-center(기본) | bottom-left | bottom-right
  * - 마우스를 올리면 자동 전환을 멈춘다.
  *
  * 뷰어 페이지:
@@ -3149,7 +3144,7 @@ class SliderCommands {
     const interval = mkSelect('jm-slider-interval', [['0', '수동'], ['2000', '2초'], ['3000', '3초'], ['5000', '5초'], ['8000', '8초']], String(parseInt(block.dataset.interval, 10) || 0), (v) => { block.dataset.interval = v; block._slider?.refresh(); }, '자동 전환 간격');
     const ratio = mkSelect('jm-slider-ratio', [['16:9', '16:9'], ['4:3', '4:3'], ['1:1', '1:1'], ['21:9', '21:9']], block.dataset.ratio || '16:9', (v) => { block.dataset.ratio = v; }, '화면 비율');
     const indicator = mkSelect('jm-slider-indicator', [['dots', '점'], ['numbers', '숫자'], ['bars', '막대'], ['none', '표시 없음']], block.dataset.indicator || 'dots', (v) => { block.dataset.indicator = v; block._slider?.refresh(); }, '인디케이터');
-    const indPos = mkSelect('jm-slider-indpos', [['bottom-center', '아래 가운데'], ['bottom-left', '아래 왼쪽'], ['bottom-right', '아래 오른쪽'], ['top-left', '위 왼쪽'], ['top-center', '위 가운데'], ['top-right', '위 오른쪽'], ['below', '이미지 밖 아래']], block.dataset.indicatorPos || 'bottom-center', (v) => { block.dataset.indicatorPos = v; block._slider?.refresh(); }, '인디케이터 위치');
+    const indPos = mkSelect('jm-slider-indpos', [['bottom-left', '왼쪽'], ['bottom-center', '가운데'], ['bottom-right', '오른쪽']], block.dataset.indicatorPos || 'bottom-center', (v) => { block.dataset.indicatorPos = v; block._slider?.refresh(); }, '인디케이터 위치');
     const width = mkSelect('jm-slider-width', [['100', '폭 100%'], ['75', '폭 75%'], ['50', '폭 50%']], block.dataset.width || '100', (v) => { block.dataset.width = v; }, '본문에서 보이는 폭');
     const align = mkSelect('jm-slider-align', [['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']], block.dataset.align || 'center', (v) => { block.dataset.align = v; }, '정렬');
     const remove = mk('✕', () => this.#deleteBlock(block), 'jm-slider-remove', '슬라이드 삭제');
