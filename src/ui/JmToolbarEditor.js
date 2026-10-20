@@ -24,6 +24,9 @@ const OL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" str
 /** 글자 크기 선택지 (px) */
 const FONT_SIZES = [10, 11, 12, 13, 14, 15, 16, 18, 20, 24, 28, 32, 36, 48];
 
+/** 표 버튼 아이콘 (자체 제작 SVG) */
+const TABLE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg>';
+
 /** 스플릿 버튼 꺾쇠 아이콘 */
 const CHEVRON_ICON = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 
@@ -69,7 +72,7 @@ const BUTTONS = [
   ['link', '링크', (s) => s.a],
   ['image', '이미지', () => false],
   ['youtube', '유튜브', () => false, false, { icon: YOUTUBE_ICON, iconOnly: true }], // 아이콘만 표시 (라벨은 title)
-  ['table', '표', (s) => s.table], // 행·열 편집은 표 레이어 우클릭 메뉴에서
+  ['table', '표', (s) => s.table, false, { tip: '표 삽입', icon: TABLE_ICON, iconOnly: true }], // 행·열 편집은 표 레이어 우클릭 메뉴에서
   null,
   ['undo', '↶', () => false],
   ['redo', '↷', () => false],
