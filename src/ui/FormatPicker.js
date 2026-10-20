@@ -139,6 +139,12 @@ export const SAMPLE_FORMATS = [
     html: `<h3>확인 사항</h3><ul><li>☐ 항목 1</li><li>☐ 항목 2</li><li>☐ 항목 3</li></ul>`,
   },
   {
+    id: 'button-link',
+    name: '버튼 링크',
+    description: '버튼 모양 링크. 글자를 고치고 「링크」로 주소를 바꾸세요',
+    html: `<p><a href="https://example.com" data-role="button" data-style="primary">자세히 보기</a> <a href="https://example.com" data-role="button" data-style="outline">신청하기</a></p>`,
+  },
+  {
     id: 'image-gallery',
     name: '이미지 갤러리',
     description: '이미지만 넣는 블록. 드롭/추가 시 자동 균등 배치, 헤더에서 선택·전체 삭제',

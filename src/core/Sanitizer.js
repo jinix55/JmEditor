@@ -10,7 +10,7 @@ const ALLOWED = {
   h1: [], h2: [], h3: [],
   ul: [], ol: [], li: [],
   blockquote: [],
-  a: ['href', 'target', 'rel'],
+  a: ['href', 'target', 'rel', 'data-role', 'data-style'], // data-role=button → 버튼 모양 링크
   img: ['src', 'alt', 'width', 'height'],
   table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style'],
   tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
@@ -157,8 +157,12 @@ export class Sanitizer {
       });
       return frag;
     }
-    // 링크는 새창 + noopener 강제
-    if (tag === 'a') { el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer'); }
+    // 링크는 새창 + noopener 강제. 버튼 링크 속성은 허용 값만
+    if (tag === 'a') {
+      el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer');
+      if (el.getAttribute('data-role') !== 'button') { el.removeAttribute('data-role'); el.removeAttribute('data-style'); }
+      else if (!['primary', 'outline', 'gray'].includes(el.getAttribute('data-style'))) el.setAttribute('data-style', 'primary');
+    }
 
     Array.from(node.childNodes).forEach((c) => {
       const r = Sanitizer.#cleanNode(c);
