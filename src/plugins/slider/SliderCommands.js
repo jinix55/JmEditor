@@ -7,7 +7,7 @@
  *   썸네일 줄(클릭 선택, 드래그 순서 변경, 파일 드롭 추가)을 붙인다. 본 화면은 런타임으로 실제처럼 돌아간다.
  */
 import { BlockDrag } from '../../core/BlockDrag.js';
-import { initSlider, stripSliderUI } from './slider-runtime.js';
+import { initSlider, stripSliderUI, destroySliders } from './slider-runtime.js';
 import { stampSize } from '../gallery/gallery-layout.js';
 
 export const SLIDER_LAYER_CLASS = 'jm-slider-layer';
@@ -258,5 +258,8 @@ export class SliderCommands {
     return stripSliderUI(tpl.innerHTML);
   }
 
-  destroy() { this.fileInput.remove(); }
+  /** 에디터 안 슬라이드 런타임 모두 정리 (HTML 교체·실행 취소 전에 호출) */
+  stopAll() { destroySliders(this.root); }
+
+  destroy() { this.stopAll(); this.fileInput.remove(); }
 }

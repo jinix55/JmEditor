@@ -7,7 +7,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 ## 기능
 
 - 굵게 / 기울임 / 밑줄 / 취소선, 글자 크기(10~48px), 글자색 / 배경색 (견본 + HSV 팔레트 + HEX 입력 + 스포이드)
-- 제목(본문·제목 1~3 셀렉트), 인용, 가로 정렬(왼쪽/가운데/오른쪽)·세로 정렬(표 셀) 드롭다운, 순서 / 비순서 목록(● ○ ■, 1. 01. a. A. i. I. 가.), 링크, 버튼 그룹 블록(서식 — 이름·주소 입력으로 추가, 모양·크기, 그립 드래그로 순서, 정렬)
+- 제목(본문·제목 1~3 셀렉트), 인용, 가로 정렬(왼쪽/가운데/오른쪽)·세로 정렬(표 셀) 드롭다운, 순서 / 비순서 목록(● ○ ■, 1. 01. a. A. i. I. 가.), 링크, 버튼 그룹 블록(서식 — 이름·주소 입력으로 추가, 모양(채움·외곽선·연한색)·색(테마 7색 또는 직접 선택 — 고른 색 하나로 테두리·오버·연한 배경·글자색 자동)·크기·아이콘 16종(글자 앞/뒤), 그립 드래그로 순서, 정렬)
 - 이미지 삽입 (버튼, 드래그 앤 드롭, 붙여넣기)
 - 글 감싸기 — 본문 이미지를 클릭하면 도구 막대가 뜹니다. 왼쪽·오른쪽 감싸기(이미지 옆으로 글이 흐르고 아래로 이어짐), 폭 30·40·50·100% 또는 모서리 손잡이로 본문 폭 대비 % 조절, 교체·삭제, ⠿ 로 다른 문단 앞뒤로 이동. 휴대폰 폭(640px 이하)에서는 감싸기를 풀고 꽉 차게
 - 이미지 + 글 배치 블록(서식) — 이미지 | 글(2칸), 이미지 1장 + 글(4분할: 이미지 옆 작은 칸 + 반대쪽 줄 전체), 대각선 이미지 2장 + 글, 이미지 2장 나란히 + 각각 글. 헤더 아이콘으로 이미지 위치를 바꾸면 글은 같은 역할 칸으로 따라가고, 가운데 경계를 끌어 좌우 폭(20~80%) 조절. 이미지 칸은 클릭·파일 놓기로 넣고 교체·삭제. 휴대폰 폭에서는 세로로 쌓임
@@ -33,15 +33,15 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 | `dist/jm-viewer.min.js` | 조회 화면용 런타임 (갤러리 배치·슬라이드 전환). ESM 은 `jm-viewer.esm.js` |
 | `dist/jm-editor.config.js` | 설정 견본 (업로드 제한 등). 선택 사항 — 아래 [설정](#설정) 참고 |
 
-복사하지 않고 CDN(jsDelivr)으로 불러와도 됩니다. 주소의 `@v0.1.0` 은 릴리스 태그로, 내용이 고정됩니다.
+복사하지 않고 CDN(jsDelivr)으로 불러와도 됩니다. 주소의 `@v0.0.1` 은 릴리스 태그로, 내용이 고정됩니다.
 
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.1.0/dist/jm-editor.css">
-<script src="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.1.0/dist/jm-editor.min.js"></script>   <!-- 편집 화면 -->
-<script src="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.1.0/dist/jm-viewer.min.js"></script>   <!-- 조회 화면 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.1/dist/jm-editor.css">
+<script src="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.1/dist/jm-editor.min.js"></script>   <!-- 편집 화면 -->
+<script src="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.1/dist/jm-viewer.min.js"></script>   <!-- 조회 화면 -->
 ```
 
-ES Module 은 `…@v0.1.0/dist/jm-editor.esm.js` 를 import 합니다. 설정은 CDN 의 `jm-editor.config.js` 대신 페이지에서 `window.JmEditorConfig` 로 지정하세요([설정](#설정)).
+ES Module 은 `…@v0.0.1/dist/jm-editor.esm.js` 를 import 합니다. 설정은 CDN 의 `jm-editor.config.js` 대신 페이지에서 `window.JmEditorConfig` 로 지정하세요([설정](#설정)).
 
 ### 편집 화면
 
@@ -72,7 +72,7 @@ API 없이 폼으로만 보낼 거면 `api` 옵션을 빼고 submit 직전에 `e
 **1. 페이지 전체에 적용** — `window.JmEditorConfig` 를 에디터 생성 전에 지정합니다. 에디터 스크립트를 불러온 뒤여도 생성 전이면 됩니다.
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.1.0/dist/jm-editor.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.1/dist/jm-editor.min.js"></script>
 <script>
   window.JmEditorConfig = { gallery: { maxFileSizeMB: 20, maxImagesPerPost: 30 } };
   const editor = new JmEditor.JmToolbarEditor(el, { /* ... */ });
@@ -174,7 +174,7 @@ api: {
 
 ## 저장되는 HTML
 
-허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`, 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]` 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100)만 더 남습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 만 남고 값 형식도 검사합니다.
+허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`(모양 `data-style`, 테마 색 `data-color`, 직접 색 `style="--jm-btn: #rrggbb"`+`data-tone`, 아이콘 `data-icon`·`data-icon-pos` — 테마 실제 색은 `:root { --jm-btn-green: … }` 처럼 사이트에서 바꿀 수 있음), 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]` 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100)만 더 남습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 만 남고 값 형식도 검사합니다.
 
 표는 이렇게 저장됩니다. 열 너비는 `colgroup`, 행 높이는 `tr`, 병합은 `colspan` / `rowspan`, 테두리 숨김은 `data-border="0"` 입니다.
 

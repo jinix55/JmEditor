@@ -1,16 +1,20 @@
 /**
  * ButtonsCommands — 버튼 그룹 블록
  * - 저장 HTML: <div data-type="buttons" data-align="left|center|right">
- *               <a href="…" data-role="button" data-style="primary|outline|gray" data-size="sm|md|lg" target="_blank" rel="noopener noreferrer">텍스트</a> …</div>
- *   뷰어는 CSS 만 있으면 된다.
- * - 에디터에서는 레이어(jm-buttons-layer, contenteditable=false)로 감싸고 헤더에서 버튼 추가 / 주소 / 스타일 / 순서 / 삭제 / 정렬을 다룬다.
+ *               <a href="…" data-role="button" data-style="primary|outline|soft" data-color="green" data-size="sm|lg"
+ *                  data-icon="arrow" data-icon-pos="right" target="_blank" rel="noopener noreferrer">텍스트</a> …</div>
+ *   직접 고른 색은 style="--jm-btn: #rrggbb" (+ 밝은 색이면 data-tone="light"). 모양·색·아이콘 정의는 button-theme.js.
+ *   뷰어는 CSS 만 있으면 된다 (테두리·오버·연한 배경은 고른 색에서 CSS 가 계산).
+ * - 에디터에서는 레이어(jm-buttons-layer, contenteditable=false)로 감싸고 헤더에서 버튼 추가 / 정렬, 선택한 버튼의
+ *   주소 / 모양 / 색 / 크기 / 아이콘 / 삭제를 다룬다.
  *   각 버튼은 contenteditable 로 글자를 바로 고치고, 클릭하면 선택(헤더 조작 대상)된다.
  */
 import { BlockDrag } from '../../core/BlockDrag.js';
+import { Sanitizer } from '../../core/Sanitizer.js';
+import { BUTTON_SHAPES, BUTTON_COLORS, BUTTON_ICONS, normalizeHex, toneOf } from './button-theme.js';
 
 export const BUTTONS_LAYER_CLASS = 'jm-buttons-layer';
 const SELECTED = 'is-selected';
-const STYLES = [['primary', '채움'], ['outline', '외곽선'], ['gray', '회색']];
 const SIZES = [['sm', '작게'], ['md', '보통'], ['lg', '크게']];
 
 export class ButtonsCommands {
@@ -86,22 +90,61 @@ export class ButtonsCommands {
     url.placeholder = '선택한 버튼의 주소 (https://…)';
     url.title = '선택한 버튼의 링크 주소';
     url.addEventListener('mousedown', (e) => e.stopPropagation());
-    url.addEventListener('input', () => { const a = this.#selected(block); if (a) this.editor.constructor.setHref(a, url.value.trim() || '#'); });
+    // 허용되지 않는 주소(javascript: 등)는 저장하지 않고 # 로 두며 입력란을 빨갛게 표시
+    url.addEventListener('input', () => {
+      const a = this.#selected(block);
+      const href = Sanitizer.normalizeHref(url.value);
+      url.classList.toggle('is-invalid', !!url.value.trim() && !href);
+      if (a) this.editor.constructor.setHref(a, href || '#');
+    });
     url.addEventListener('change', () => this.editor.commit());
     url.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); url.blur(); } });
     block._urlInput = url;
-    const style = mkSelect('jm-buttons-style needs-sel', STYLES, (v) => this.setStyle(block, v));
+    const style = mkSelect('jm-buttons-style needs-sel', BUTTON_SHAPES, (v) => this.setStyle(block, v));
     style.title = '선택한 버튼의 모양';
+    // 색: 테마 색 견본 + 직접 선택 (고른 색 하나로 테두리·오버·연한 배경이 자동 계산됨)
+    const colors = document.createElement('span');
+    colors.className = 'jm-buttons-colors';
+    BUTTON_COLORS.forEach(([v, label, hex]) => {
+      const sw = mk('', () => this.setColor(block, v), 'jm-buttons-swatch needs-sel', label);
+      sw.dataset.color = v;
+      sw.style.setProperty('--sw', `var(--jm-btn-${v}, ${hex})`);
+      colors.appendChild(sw);
+    });
+    const custom = mk('직접…', (e) => this.#pickCustomColor(block, e.currentTarget), 'jm-buttons-swatch-custom needs-sel', '색 직접 고르기');
+    colors.appendChild(custom);
     const size = mkSelect('jm-buttons-size needs-sel', SIZES, (v) => this.setSize(block, v));
     size.title = '선택한 버튼의 크기';
+    const icon = mkSelect('jm-buttons-icon needs-sel', [['', '아이콘 없음'], ...BUTTON_ICONS], (v) => this.setIcon(block, v || null));
+    icon.title = '선택한 버튼의 아이콘';
+    const iconPos = mkSelect('jm-buttons-iconpos needs-sel', [['left', '글자 앞'], ['right', '글자 뒤']], (v) => this.setIconPos(block, v));
+    iconPos.title = '아이콘 위치';
     const del = mk('선택 삭제', () => this.deleteSelected(block), 'needs-sel');
     const align = mkSelect('jm-buttons-align', [['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']], (v) => { block.dataset.align = v; this.editor.commit(); });
     align.value = block.dataset.align || 'center';
     const remove = mk('✕', () => this.#deleteBlock(block), 'jm-buttons-remove', '블록 삭제');
+    // 둘째 줄: 선택한 버튼 설정
+    const br = document.createElement('span');
+    br.className = 'jm-buttons-break';
+    const selLabel = document.createElement('span');
+    selLabel.className = 'jm-buttons-sellabel';
+    selLabel.textContent = '선택한 버튼';
 
-    h.append(handle, title, spacer, add, url, style, size, del, align, remove);
+    h.append(handle, title, spacer, add, align, remove, br, selLabel, url, style, colors, size, icon, iconPos, del);
     block._header = h;
     return h;
+  }
+
+  /** 직접 색 고르기: 에디터의 색상 선택기(pickColor)가 있으면 그것을, 없으면 브라우저 기본 색 입력 */
+  #pickCustomColor(block, anchor) {
+    const apply = (c) => { const hex = normalizeHex(c); if (hex) this.setColor(block, hex); };
+    const r = anchor.getBoundingClientRect();
+    if (this.editor.options.pickColor) { this.editor.options.pickColor(r.left, r.bottom + 4, (c) => { if (c) apply(c); }); return; }
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.value = normalizeHex(this.#selected(block)?.style.getPropertyValue('--jm-btn')) || '#1d4ed8';
+    input.addEventListener('change', () => apply(input.value), { once: true });
+    input.click();
   }
 
   /** 「버튼 추가」 입력줄: 이름 + 주소 → 추가 */
@@ -222,10 +265,21 @@ export class ButtonsCommands {
   #refreshHeader(block) {
     const sel = this.#selected(block);
     block._header?.querySelectorAll('.needs-sel').forEach((el) => { el.disabled = !sel; });
-    const style = block._header?.querySelector('.jm-buttons-style');
-    if (style && sel) style.value = sel.dataset.style || 'primary';
-    const size = block._header?.querySelector('.jm-buttons-size');
+    const h = block._header;
+    const style = h?.querySelector('.jm-buttons-style');
+    if (style && sel) style.value = sel.dataset.style === 'gray' ? 'soft' : (sel.dataset.style || 'primary'); // 예전 회색은 연한색으로 표시
+    const size = h?.querySelector('.jm-buttons-size');
     if (size && sel) size.value = sel.dataset.size || 'md';
+    // 색: 직접 고른 색이면 「직접…」, 아니면 해당 테마 견본을 표시
+    const customHex = sel ? normalizeHex(sel.style.getPropertyValue('--jm-btn')) : null;
+    const color = sel ? (sel.dataset.style === 'gray' ? 'gray' : (sel.dataset.color || 'blue')) : null;
+    h?.querySelectorAll('.jm-buttons-swatch').forEach((sw) => sw.classList.toggle('is-on', !!sel && !customHex && sw.dataset.color === color));
+    const custom = h?.querySelector('.jm-buttons-swatch-custom');
+    if (custom) { custom.classList.toggle('is-on', !!customHex); custom.style.setProperty('--sw', customHex || ''); }
+    const icon = h?.querySelector('.jm-buttons-icon');
+    if (icon && sel) icon.value = sel.dataset.icon || '';
+    const iconPos = h?.querySelector('.jm-buttons-iconpos');
+    if (iconPos) { if (sel) iconPos.value = sel.dataset.iconPos === 'right' ? 'right' : 'left'; iconPos.disabled = !sel || !sel.dataset.icon; }
     if (block._urlInput) block._urlInput.value = sel ? this.editor.constructor.getHref(sel) : '';
   }
 
@@ -236,17 +290,69 @@ export class ButtonsCommands {
     a.textContent = text;
     a.setAttribute('data-role', 'button'); a.setAttribute('data-style', 'primary');
     a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer');
-    this.editor.constructor.setHref(a, href);
+    this.editor.constructor.setHref(a, Sanitizer.normalizeHref(href) || '#'); // 허용되지 않는 주소는 #
     block.appendChild(a);
     this.#bindButtons(block);
     this.#select(block, a);
     this.editor.commit();
   }
 
+  /**
+   * 모양 지정 (primary 채움 / outline 외곽선 / soft 연한색). 예전 회색 버튼은 회색 테마로 옮긴다
+   * @param {HTMLElement} block
+   * @param {string} style
+   */
   setStyle(block, style) {
     const a = this.#selected(block);
     if (!a) return;
+    if (a.dataset.style === 'gray' && !a.dataset.color && !a.style.getPropertyValue('--jm-btn')) a.dataset.color = 'gray';
     a.dataset.style = style;
+    this.#refreshHeader(block);
+    this.editor.commit();
+  }
+
+  /**
+   * 색 지정: 테마 이름(blue·green…) 또는 직접 고른 색(#rrggbb). 직접 색은 밝기에 따라 data-tone 을 함께 기록
+   * @param {HTMLElement} block
+   * @param {string} value
+   */
+  setColor(block, value) {
+    const a = this.#selected(block);
+    if (!a) return;
+    if (a.dataset.style === 'gray') a.dataset.style = 'soft';
+    const hex = value?.startsWith?.('#') ? normalizeHex(value) : null;
+    a.style.removeProperty('--jm-btn');
+    delete a.dataset.tone;
+    if (hex) {
+      delete a.dataset.color;
+      a.style.setProperty('--jm-btn', hex);
+      if (toneOf(hex) === 'light') a.dataset.tone = 'light';
+    } else if (value && value !== 'blue') a.dataset.color = value;
+    else delete a.dataset.color;
+    if (!a.getAttribute('style')?.trim()) a.removeAttribute('style');
+    this.#refreshHeader(block);
+    this.editor.commit();
+  }
+
+  /**
+   * 아이콘 지정 (null 이면 없앰)
+   * @param {HTMLElement} block
+   * @param {string|null} name
+   */
+  setIcon(block, name) {
+    const a = this.#selected(block);
+    if (!a) return;
+    if (name) a.dataset.icon = name;
+    else { delete a.dataset.icon; delete a.dataset.iconPos; }
+    this.#refreshHeader(block);
+    this.editor.commit();
+  }
+
+  /** 아이콘 위치: left(글자 앞, 기본) / right(글자 뒤) */
+  setIconPos(block, pos) {
+    const a = this.#selected(block);
+    if (!a || !a.dataset.icon) return;
+    if (pos === 'right') a.dataset.iconPos = 'right'; else delete a.dataset.iconPos;
     this.editor.commit();
   }
 

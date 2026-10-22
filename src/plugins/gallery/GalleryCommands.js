@@ -67,6 +67,7 @@ export class GalleryCommands {
   /** 루트 안의 갤러리 요소를 모두 레이어로 감싼다 (setHTML / commit 후) */
   wrapAll() {
     this.root.querySelectorAll('div[data-type="gallery"]').forEach((g) => {
+      if (!g.isConnected || !this.root.contains(g)) return; // 앞 블록 정리 중 제거된 경우
       if (g.parentNode?.classList?.contains(GALLERY_LAYER_CLASS)) { this.#layout(g); return; }
       this.#wrap(g);
     });

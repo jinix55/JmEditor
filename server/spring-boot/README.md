@@ -28,7 +28,10 @@
    | image/webp | .webp |
 
    파일명은 UUID, 경로는 `upload-dir/yyyy/MM/dd/` 입니다. Content-Type 은 클라이언트가 보내는 값이므로, 더 엄격하게 하려면 파일 앞부분(매직바이트) 검사를 추가하세요.
-4. **권한** — 샘플에는 인증·권한 처리가 없습니다. 등록·수정·업로드 API 는 각 서비스의 보안 설정 안에 두세요.
+4. **권한** — 샘플에는 인증·권한 처리가 없습니다. 등록·수정·업로드 API 는 각 서비스의 보안 설정 안에 두세요(작성자 검증, CSRF — 클라이언트는 `api.headers` 옵션으로 토큰 전달, 업로드 횟수 제한).
+6. **업로드 파일 응답 헤더** — 업로드 폴더를 정적 리소스로 서빙할 때 `X-Content-Type-Options: nosniff` 와 `Content-Security-Policy: …; sandbox` 를 붙입니다(`UploadConfig.UploadHeaderInterceptor`). 이미지로 위장한 파일을 브라우저가 HTML 등으로 추측해 실행하지 않게 하고, 문서로 열려도 스크립트가 돌지 않게 합니다. 가능하면 업로드 파일은 쿠키가 없는 별도 도메인에서 서빙하세요.
+7. **본문 크기 제한** — `EditorDto.MAX_CONTENT_LENGTH`(기본 200만 자)를 넘는 본문은 400 으로 거부합니다. base64 이미지를 본문에 넣어 업로드 크기 제한을 우회하거나 DB 를 부풀리는 것을 막습니다. 이미지 `data:` 주소는 이미지 형식(png·jpeg·gif·webp·svg)의 base64 만 남깁니다.
+8. **오류 응답** — 입력 오류는 안내 문구를, 파일 입출력 오류는 서버 경로 같은 내부 정보가 담길 수 있으므로 로그에만 남기고 일반 문구(500)를 내려줍니다.
 5. **갤러리 업로드 제한** — 에디터는 설정값(`window.JmEditorConfig` 또는 생성 옵션 `galleryLimits`)으로 업로드 전에 막지만 우회할 수 있으므로, 서버에서도 같은 값으로 검사합니다.
 
    | 항목 | 기본값 | 서버에서 검사하는 곳 |
@@ -86,7 +89,7 @@ psql -d <DB> -f sample-formats-postgresql.sql
 | h1, h2, h3, li, blockquote, ul, span | style |
 | ol | style, start |
 | br, strong, em, u, s, tbody, thead | — |
-| a | href, target, rel, data-role, data-style, data-size |
+| a | href, target, rel, data-role, data-style, data-size, data-color, data-tone, data-icon, data-icon-pos, style(버튼의 `--jm-btn: #hex` 만) — 버튼 속성은 `data-role="button"` 일 때만 남음 |
 | img | src, alt, width, height, data-float(left·right), style(`width: N%` 10~100 만 — 글 감싸기) |
 | table | style, data-border |
 | colgroup | — |
@@ -104,7 +107,7 @@ psql -d <DB> -f sample-formats-postgresql.sql
 | 대상 | 허용 |
 |---|---|
 | a[href] | http, https, mailto, 상대 경로(`/…`, `#…`) |
-| img[src] | http, https, data, 상대 경로 |
+| img[src] | http, https, 상대 경로, `data:image/(png·jpeg·gif·webp·svg+xml);base64,` |
 | iframe[src] | 유튜브 embed 주소만 (아래 참고) |
 
 `javascript:` 등 그 밖의 프로토콜은 속성째 제거합니다. 모든 링크에는 `target="_blank"`, `rel="noopener noreferrer"` 가 강제로 붙습니다.
@@ -129,19 +132,18 @@ psql -d <DB> -f sample-formats-postgresql.sql
 |---|---|---|
 | gallery | 제목 `p[data-role=title]`, `img` | data-layout justify/cover. 예전 저장분 호환용: data-cols 는 있을 때만 1~6 으로 맞춤(숫자가 아니면 제거), data-auto `1`, data-align center/right — 허용 값이 아니면 해당 속성 제거 |
 | slider | 제목 `p[data-role=title]`, `img` | data-interval 0~60000 (기본 3000), data-ratio 16:9/4:3/1:1/21:9, data-indicator dots/numbers/bars/none, data-indicator-pos bottom-center/bottom-left/bottom-right, data-width 100/75/50, data-align left/center/right (기본 center) |
-| buttons | `a` 만 (`data-role="button"` 강제) | data-align left/center/right (기본 center). 버튼 `data-style` primary/outline/gray (기본 primary), `data-size` sm/lg (그 밖이면 제거). 버튼이 없으면 블록 제거 |
+| buttons | `a` 만 (`data-role="button"` 강제) | data-align left/center/right (기본 center). 버튼 `data-style` primary/outline/soft/gray (기본 primary), `data-size` sm/lg, `data-color` green/red/orange/purple/gray/black (blue 는 기본값이라 제거), `data-icon` 16종(arrow·external·download·phone·mail·calendar·pin·search·play·check·info·heart·star·plus·chat·file), `data-icon-pos` right(아이콘이 있을 때만). 직접 색은 `style` 의 `--jm-btn: #rgb/#rrggbb` 만 남기고(테마 색보다 우선) 밝기로 `data-tone="light"` 를 다시 계산. 버튼이 없으면 블록 제거 |
 | youtube | `iframe` 하나 | data-width 100/75/50, data-align left/center/right (기본 center). 바로 아래 `iframe` 이 없으면 블록 제거 |
 | layout | `div[data-cell=image]`(img 1장만), `div[data-cell=text]`(문단·제목·목록·인용·인라인만 — 표·이미지·iframe·블록 제거) | data-preset side/one/diagonal/pair (기본 side), data-variant 는 preset 별 허용 값(기본 첫 배치), data-split 20~80 의 5 배수만. 칸은 variant 의 저장 순서대로 다시 세우고 모자라면 빈 칸을 채우며 넘치면 버림 |
 
 - 제목은 내용이 비어 있으면 제거하고, 블록 바로 아래의 텍스트 노드도 제거합니다.
 - 배치 블록의 preset·variant 별 칸 저장 순서(`LAYOUT_CELLS`)는 클라이언트 `src/plugins/layout/layout-presets.js` 와 같아야 합니다.
-- 유튜브 `iframe` 은 `https://www.youtube.com/embed/{11자 id}` 또는 `youtube-nocookie.com` 주소일 때만 남깁니다. 남길 때 속성을 모두 지우고 `src=https://www.youtube-nocookie.com/embed/{id}`, `title`, `allow`, `allowfullscreen` 을 새로 씁니다. 유튜브 블록 밖의 `iframe` 은 제거합니다.
+- 유튜브 `iframe` 은 `https://www.youtube.com/embed/{11자 id}` 또는 `youtube-nocookie.com` 주소일 때만 남깁니다. 남길 때 속성을 모두 지우고 `src=https://www.youtube-nocookie.com/embed/{id}`, `title`, `allow`, `allowfullscreen` 을 새로 씁니다. iframe 안의 내용은 비웁니다(남기면 저장할 때마다 escape 가 겹쳐 늘어남). 유튜브 블록 밖의 `iframe` 은 제거합니다.
 
 ### 클라이언트 Sanitizer 와 다른 점
 
 | 항목 | 클라이언트 (`core/Sanitizer.js`) | 서버 (`HtmlSanitizer`) |
 |---|---|---|
 | `ol[start]` | 1~4자리 숫자만 | 값 검사 없음 |
-| `img[src]` 의 data | `data:image/` 만 | `data:` 전체 |
-| `a[href]` 의 data | `data:image/` 허용 | 허용 안 함 |
+| `a[href]` | http(s)·mailto·tel·`#`·`/` 경로만 (`//…`, `/\…` 같은 외부 주소 우회 차단). 사용자가 입력한 링크는 도메인만 쓰면 `https://` 를 붙이고 `javascript:` 등은 거부 | http·https·mailto 와 상대 경로(`//…` 포함) |
 | 출력 형식 | 공백 없이 | 블록 사이에 줄바꿈·들여쓰기가 들어감 (`body().html()` pretty print) |

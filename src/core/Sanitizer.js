@@ -4,6 +4,7 @@
  * - XSS 1차 방어. 서버 저장 시에도 반드시 별도 sanitize(jsoup 등) 할 것.
  */
 import { normalizeLayout, normalizeSplit, cellsOf, isImageRole } from '../plugins/layout/layout-presets.js';
+import { SHAPE_VALUES, COLOR_VALUES, ICON_VALUES, normalizeHex, toneOf } from '../plugins/buttons/button-theme.js';
 
 /** 허용 태그와 각 태그에서 허용하는 속성 */
 const ALLOWED = {
@@ -11,7 +12,7 @@ const ALLOWED = {
   h1: ['style'], h2: ['style'], h3: ['style'],
   ul: ['style'], ol: ['style', 'start'], li: ['style'],
   blockquote: ['style'],
-  a: ['href', 'target', 'rel', 'data-role', 'data-style', 'data-size'], // data-role=button → 버튼 모양 링크
+  a: ['href', 'target', 'rel', 'data-role', 'data-style', 'data-size', 'data-color', 'data-tone', 'data-icon', 'data-icon-pos'], // data-role=button → 버튼 모양 링크 (값 검사는 #cleanButton)
   img: ['src', 'alt', 'width', 'height', 'data-float', 'style'], // 글 감싸기: 방향 + 폭(%) — 값 검사는 #cleanImage
   table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style'],
   tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
@@ -35,8 +36,10 @@ const ALLOWED_STYLE = {
 /** 태그 이름 치환 (레거시/외부 태그 → 표준 태그) */
 const TAG_ALIAS = { b: 'strong', i: 'em', strike: 's', div: 'p' };
 
-/** href/src 에 허용하는 프로토콜 */
-const SAFE_URL = /^(https?:|mailto:|\/|#|data:image\/)/i;
+/** src 에 허용하는 주소: http(s)·/ 경로·이미지 data:(base64). img 안의 svg 는 스크립트가 실행되지 않아 허용 (서버 HtmlSanitizer 와 같은 규칙) */
+const SAFE_URL = /^(https?:|\/|data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,)/i;
+/** href(링크)에 허용하는 주소: http(s)·mailto·tel·# 와 / 로 시작하는 내부 경로 (// 와 /\ 같은 외부 주소 우회는 제외) */
+const SAFE_HREF = /^(https?:\/\/|mailto:|tel:|#|\/(?![/\\]))/i;
 
 export class Sanitizer {
   /**
@@ -55,6 +58,29 @@ export class Sanitizer {
     const wrap = document.createElement('div');
     wrap.appendChild(frag);
     return wrap.innerHTML;
+  }
+
+  /**
+   * 링크 주소가 허용 형식인지 (javascript:·data: 등 차단, 제어 문자 포함 시 차단)
+   * @param {string} url
+   * @returns {boolean}
+   */
+  static isSafeHref(url) {
+    const v = String(url ?? '').trim();
+    return !!v && !/[\u0000-\u001f\u007f]/.test(v) && SAFE_HREF.test(v);
+  }
+
+  /**
+   * 사용자가 입력한 링크 주소 정리: 허용 형식이면 그대로, 「example.com/…」 처럼 도메인만 쓰면 https:// 를 붙이고,
+   * 그 밖(javascript: 등)은 null
+   * @param {string} url
+   * @returns {string|null}
+   */
+  static normalizeHref(url) {
+    const v = String(url ?? '').trim();
+    if (Sanitizer.isSafeHref(v)) return v;
+    if (/^[\w-]+(\.[\w-]+)+([/?#:].*)?$/.test(v) && !/[\u0000-\u001f\u007f\s]/.test(v)) return `https://${v}`;
+    return null;
   }
 
   /**
@@ -186,7 +212,8 @@ export class Sanitizer {
     ALLOWED[tag].forEach((attr) => {
       const v = node.getAttribute(attr);
       if (v == null) return;
-      if ((attr === 'href' || attr === 'src') && !SAFE_URL.test(v.trim())) return;
+      if (attr === 'href' && !Sanitizer.isSafeHref(v)) return;
+      if (attr === 'src' && !SAFE_URL.test(v.trim())) return;
       if (attr === 'start' && !/^\d{1,4}$/.test(v)) return;
       if (attr === 'style') {
         const clean = Sanitizer.cleanStyle(v);
@@ -207,11 +234,8 @@ export class Sanitizer {
     // 링크는 새창 + noopener 강제. 버튼 링크 속성은 허용 값만
     if (tag === 'a') {
       el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer');
-      if (el.getAttribute('data-role') !== 'button') { el.removeAttribute('data-role'); el.removeAttribute('data-style'); el.removeAttribute('data-size'); }
-      else {
-        if (!['primary', 'outline', 'gray'].includes(el.getAttribute('data-style'))) el.setAttribute('data-style', 'primary');
-        if (!['sm', 'lg'].includes(el.getAttribute('data-size'))) el.removeAttribute('data-size');
-      }
+      if (el.getAttribute('data-role') !== 'button') ['data-role', 'data-style', 'data-size', 'data-color', 'data-tone', 'data-icon', 'data-icon-pos'].forEach((x) => el.removeAttribute(x));
+      else Sanitizer.#cleanButton(el, node.getAttribute('style'));
     }
     if (tag === 'img') Sanitizer.#cleanImage(el);
 
@@ -220,6 +244,29 @@ export class Sanitizer {
       if (r) el.appendChild(r);
     });
     return el;
+  }
+
+  /**
+   * 버튼 링크 속성 정리: 모양·테마 색·아이콘은 허용 값만, 직접 색은 style 의 --jm-btn(#hex) 만 남기고
+   * data-tone 은 그 색의 밝기로 다시 계산 (서버 HtmlSanitizer 와 같은 규칙)
+   * @param {HTMLAnchorElement} el 새로 만든 a
+   * @param {string|null} rawStyle 원본 style 속성
+   */
+  static #cleanButton(el, rawStyle) {
+    if (!SHAPE_VALUES.includes(el.getAttribute('data-style'))) el.setAttribute('data-style', 'primary');
+    if (!['sm', 'lg'].includes(el.getAttribute('data-size'))) el.removeAttribute('data-size');
+    if (!COLOR_VALUES.includes(el.getAttribute('data-color')) || el.getAttribute('data-color') === 'blue') el.removeAttribute('data-color');
+    if (!ICON_VALUES.includes(el.getAttribute('data-icon'))) el.removeAttribute('data-icon');
+    if (!el.hasAttribute('data-icon') || el.getAttribute('data-icon-pos') !== 'right') el.removeAttribute('data-icon-pos');
+    el.removeAttribute('data-tone');
+    el.removeAttribute('style');
+    const m = (rawStyle || '').match(/(?:^|;)\s*--jm-btn\s*:\s*([^;]+)/i);
+    const hex = m && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(m[1].trim()) ? normalizeHex(m[1]) : null;
+    if (hex) {
+      el.removeAttribute('data-color'); // 직접 색이 테마 색보다 우선
+      el.setAttribute('style', `--jm-btn: ${hex}`);
+      if (toneOf(hex) === 'light') el.setAttribute('data-tone', 'light');
+    }
   }
 
   /** 글 감싸기 이미지: data-float 는 left/right, style 은 width 10~100% 만 */

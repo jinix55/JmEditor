@@ -167,6 +167,8 @@ export class TableCommands {
       table._resizeHit = !!h; // 선택 핸들러가 참고
       table.style.cursor = h ? (h.kind === 'col' ? 'col-resize' : 'row-resize') : '';
     });
+    // 경계에서 바로 표 밖으로 나가도 커서 스타일이 남지 않게 (저장 HTML 에 섞이지 않도록)
+    table.addEventListener('mouseleave', () => { if (!drag) { table.style.removeProperty('cursor'); table._resizeHit = false; } });
     table.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       const h = hit(e);
@@ -186,6 +188,9 @@ export class TableCommands {
       }
       table._resizing = true;
       layer.classList.add('is-resizing');
+      // 드래그 동안에만 document 에서 이동·놓기를 받는다 (표마다 상시 등록하면 실행 취소 때마다 쌓여 해제되지 않음)
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
     });
     const MIN = 30;
     const move = (e) => {
@@ -206,6 +211,8 @@ export class TableCommands {
       }
     };
     const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
       if (!drag) return;
       if (drag.kind === 'col') this.#writeColPercents(table, this.#colPercents(table)); // px → % 로 되돌려 저장
       drag = null;
@@ -213,8 +220,6 @@ export class TableCommands {
       layer.classList.remove('is-resizing');
       this.editor.commit();
     };
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mouseup', up);
   }
 
   /** colgroup 이 없으면 현재 렌더 폭으로 만든다 (열 너비 저장용) */
