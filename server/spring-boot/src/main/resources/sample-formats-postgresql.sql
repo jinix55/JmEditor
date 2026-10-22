@@ -16,8 +16,8 @@ FROM (VALUES
      '<div data-type="slider" data-interval="3000" data-ratio="16:9"></div>', 5),
     ('버튼', '블록', '버튼 묶음 블록. 추가·주소·모양·순서·정렬을 헤더에서 조정',
      '<div data-type="buttons" data-align="center"><a href="https://example.com" data-role="button" data-style="primary">자세히 보기</a><a href="https://example.com" data-role="button" data-style="outline">신청하기</a></div>', 6),
-    ('이미지 갤러리', '미디어', '이미지만 넣는 블록. 드롭/추가 시 자동 균등 배치, 헤더에서 선택·전체 삭제',
-     '<div data-type="gallery" data-cols="3" data-auto="1"></div>', 7),
+    ('이미지 갤러리', '미디어', '이미지만 넣는 블록. 비율을 유지하며 줄을 채워 자동 배치, 순서 변경·교체·삭제',
+     '<div data-type="gallery" data-layout="justify"></div>', 7),
     ('구분 메모', '텍스트', '배경색 띠 한 줄',
      '<p><span style="background-color: #fff9c4">　메모: 내용을 입력하세요　</span></p>', 8)
 ) AS v(name, category, description, html, sort_order)

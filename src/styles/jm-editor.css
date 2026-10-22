@@ -80,7 +80,7 @@
 .jm-content td, .jm-content th { border: 1px solid #d0d5dd; padding: 6px 8px; vertical-align: top; }
 .jm-content th { background: #f2f4f7; font-weight: 600; text-align: left; }
 .jm-content table[data-border="0"] td, .jm-content table[data-border="0"] th { border-color: transparent; }
-.jm-content div[data-type="gallery"] { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.jm-content div[data-type="gallery"] { display: flex; flex-wrap: wrap; gap: var(--jm-gallery-gap); margin: 0 0 8px; }
 
 .jm-editor {
   min-height: 240px;
@@ -195,21 +195,23 @@ ol[style*="hangul"] > li::before { content: counter(jm-hangul, hangul) ". "; pos
 .jm-formatpicker-preview p, .jm-formatpicker-preview ul, .jm-formatpicker-preview ol, .jm-formatpicker-preview table, .jm-formatpicker-preview blockquote { margin: 0 0 3px; }
 .jm-formatpicker-preview td, .jm-formatpicker-preview th { padding: 2px 4px; }
 
-/* 이미지 갤러리 (저장 HTML 에도 필요한 공통 스타일 — 뷰어 페이지에도 포함할 것) */
+/* 이미지 갤러리 (저장 HTML 에도 필요한 공통 스타일 — 뷰어 페이지에도 포함할 것)
+   디자인 변수: 목표 줄 높이·이미지 간격(px). :where 로 우선순위를 0 으로 두어 서비스 CSS 에서 바로 덮어쓸 수 있다.
+   예) .jm-content div[data-type="gallery"] { --jm-gallery-row-height: 240px; --jm-gallery-gap: 12px; } */
+:where(div[data-type="gallery"]) { --jm-gallery-row-height: 200px; --jm-gallery-gap: 8px; }
 .jm-editor div[data-type="gallery"], .jm-gallery {
-  display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px;
+  display: flex; flex-wrap: wrap; gap: var(--jm-gallery-gap); margin: 0 0 8px;
 }
-/* 한 줄에 --jm-cols 장, 마지막 줄은 남은 폭을 균등하게 채움 (flex-grow) */
+/* 예전에 저장된 cover(칸 고정) 갤러리 호환: 한 줄에 --jm-cols 장, 마지막 줄은 남은 폭을 균등하게 채움 (flex-grow) */
 div[data-type="gallery"] img { flex: 1 1 calc((100% - 8px * (var(--jm-cols, 3) - 1)) / var(--jm-cols, 3)); min-width: 0; }
 div[data-type="gallery"][data-cols="1"] { --jm-cols: 1; } div[data-type="gallery"][data-cols="2"] { --jm-cols: 2; }
 div[data-type="gallery"][data-cols="3"] { --jm-cols: 3; } div[data-type="gallery"][data-cols="4"] { --jm-cols: 4; }
 div[data-type="gallery"][data-cols="5"] { --jm-cols: 5; } div[data-type="gallery"][data-cols="6"] { --jm-cols: 6; }
-/* cover: 칸 고정, 잘라 채움 (CSS 만으로 동작) */
 div[data-type="gallery"]:not([data-layout="justify"]) img { height: 180px; object-fit: cover; }
 /* justify: 비율 유지, 줄 채움 — 폭·높이는 gallery-layout.js 가 인라인으로 지정 */
 div[data-type="gallery"][data-layout="justify"] img { flex: 0 0 auto; object-fit: cover; }
 div[data-type="gallery"] img { border-radius: 4px; margin: 0; }
-/* 정렬: flex-wrap 컨테이너라 줄 단위로 적용됨. 가로를 다 못 채운 줄에만 효과 */
+/* 예전에 저장된 정렬 값 호환 (새 갤러리는 정렬 선택 없이 마지막 줄 왼쪽 정렬) */
 div[data-type="gallery"][data-align="center"] { justify-content: center; }
 div[data-type="gallery"][data-align="right"] { justify-content: flex-end; }
 
@@ -228,7 +230,6 @@ div[data-type="gallery"] p[data-role="title"] { flex: 0 0 100%; margin: 0 0 2px;
 .jm-gallery-count { flex: 1; font-size: 11px; color: #667085; }
 .jm-gallery-btn { height: 26px; padding: 0 8px; font-size: 12px; }
 .jm-gallery-btn:disabled { opacity: .4; cursor: default; }
-.jm-gallery-cols, .jm-gallery-layout, .jm-gallery-align { height: 26px; font-size: 12px; border: 1px solid var(--jm-border); border-radius: 4px; background: #fff; }
 .jm-gallery-remove { color: #b42318; }
 .jm-gallery-layer .jm-gallery { padding: 8px; min-height: 60px; }
 .jm-gallery-layer .jm-gallery.is-empty { display: flex; align-items: center; justify-content: center; border: 2px dashed var(--jm-border); border-radius: 4px; margin: 8px; color: #98a2b3; font-size: 13px; }

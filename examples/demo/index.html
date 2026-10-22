@@ -44,7 +44,7 @@ header p{margin:0;color:var(--muted);font-size:.92rem}
 .jm-content blockquote{margin:8px 0;padding:6px 12px;border-left:3px solid var(--accent);color:var(--muted)}
 .jm-content ul,.jm-content ol{margin:0 0 8px;padding-left:24px}.jm-content img{max-width:100%;height:auto;display:block}.jm-content a{color:var(--accent);text-decoration:underline}
 .jm-content table{border-collapse:collapse;width:100%;margin:0 0 8px;table-layout:fixed}.jm-content td,.jm-content th{border:1px solid var(--line);padding:6px 8px;vertical-align:top}.jm-content th{background:var(--accent-soft);font-weight:600;text-align:left}
-.jm-content div[data-type="gallery"]{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
+.jm-content div[data-type="gallery"]{display:flex;flex-wrap:wrap;gap:var(--jm-gallery-gap);margin:0 0 8px}
 .jm-btn-icon{display:inline-flex;align-items:center;gap:6px}
 .jm-editor{min-height:260px;padding:14px 16px;outline:none;line-height:1.65;overflow-wrap:break-word;position:relative}
 .jm-editor[data-placeholder]:has(> p:only-child > br:only-child)::before{content:attr(data-placeholder);color:var(--muted);position:absolute;pointer-events:none}
@@ -207,7 +207,9 @@ div[data-type="buttons"][data-align="center"]{justify-content:center}div[data-ty
 .jm-formatpicker-preview h1,.jm-formatpicker-preview h2,.jm-formatpicker-preview h3{margin:0 0 3px;font-size:1.2em}
 .jm-formatpicker-preview p,.jm-formatpicker-preview ul,.jm-formatpicker-preview ol,.jm-formatpicker-preview table,.jm-formatpicker-preview blockquote{margin:0 0 3px}
 .jm-formatpicker-preview td,.jm-formatpicker-preview th{padding:2px 4px}
-.jm-editor div[data-type="gallery"],.jm-gallery{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px}
+/* 갤러리 디자인 변수: 목표 줄 높이·이미지 간격 */
+:where(div[data-type="gallery"]){--jm-gallery-row-height:200px;--jm-gallery-gap:8px}
+.jm-editor div[data-type="gallery"],.jm-gallery{display:flex;flex-wrap:wrap;gap:var(--jm-gallery-gap);margin:0 0 8px}
 div[data-type="gallery"]:not([data-layout="justify"]) img{flex:1 1 calc((100% - 8px*(var(--jm-cols,3) - 1))/var(--jm-cols,3));min-width:0;height:180px}
 div[data-type="gallery"][data-layout="justify"] img{flex:0 0 auto}
 div[data-type="gallery"] img{object-fit:cover;border-radius:4px;margin:0}
@@ -225,7 +227,6 @@ div[data-type="gallery"] p[data-role="title"]{flex:0 0 100%;margin:0 0 2px;font-
 .jm-gallery-count{flex:1;font-size:11px;color:var(--muted)}
 .jm-gallery-btn{height:26px;padding:0 8px;font-size:12px;background:var(--panel);border-color:var(--line)}
 .jm-gallery-btn:disabled{opacity:.4;cursor:default}
-.jm-gallery-cols,.jm-gallery-layout,.jm-gallery-align{height:26px;font-size:12px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
 .jm-gallery-remove{color:#d14343}
 .jm-gallery-layer .jm-gallery{padding:8px;min-height:60px}
 .jm-gallery-layer .jm-gallery.is-empty{display:flex;align-items:center;justify-content:center;border:2px dashed var(--line);border-radius:4px;margin:8px;color:var(--muted);font-size:13px}
@@ -373,8 +374,9 @@ class Sanitizer {
     if (tag === 'div' && node.getAttribute('data-type') === 'gallery') {
       const g = document.createElement('div');
       g.setAttribute('data-type', 'gallery');
+      // data-cols 는 예전 cover 갤러리 호환용 — 있을 때만 남긴다 (새 갤러리는 쓰지 않음)
       const cols = parseInt(node.getAttribute('data-cols'), 10);
-      g.setAttribute('data-cols', String(cols >= 1 && cols <= 6 ? cols : 3));
+      if (cols >= 1 && cols <= 6) g.setAttribute('data-cols', String(cols));
       if (node.getAttribute('data-auto') === '1') g.setAttribute('data-auto', '1');
       const layout = node.getAttribute('data-layout');
       if (layout === 'justify' || layout === 'cover') g.setAttribute('data-layout', layout);
@@ -2163,20 +2165,74 @@ class ContextMenu {
 }
 
 /**
+ * JmEditor 설정 — 기본값과 페이지 설정(window.JmEditorConfig) 병합
+ *
+ * 우선순위: 에디터 생성 옵션 > window.JmEditorConfig > 아래 기본값
+ * window.JmEditorConfig 는 에디터 생성 시점에 읽으므로, CDN 으로 번들을 불러온 뒤 페이지에서 지정해도 된다.
+ *   window.JmEditorConfig = { gallery: { maxFileSizeMB: 20 } };   // 바꿀 항목만
+ *   new JmToolbarEditor(el, { galleryLimits: { maxFilesPerAdd: 5 } }); // 에디터별 (우선)
+ * dist/jm-editor.config.js 는 전체 항목 견본 — 자기 서버에 복사해 고쳐 불러와도 된다.
+ * 크기 단위는 MB, 길이 단위는 px.
+ */
+
+/** 기본 설정 */
+const DEFAULT_CONFIG = Object.freeze({
+  gallery: Object.freeze({
+    types: Object.freeze(['image/jpeg', 'image/png', 'image/gif', 'image/webp']), // 올릴 수 있는 형식
+    maxFileSizeMB: 10,      // 파일당 (원본)
+    maxFilesPerAdd: 10,     // 한 번에 올리는 장수
+    maxImagesPerPost: 50,   // 글당 장수
+    maxTotalSizeMB: 100,    // 글당 용량 (축소 후)
+    maxDimension: 2000,     // 긴 변 상한(px), 넘으면 축소 (GIF 제외)
+  }),
+});
+
+/**
+ * 설정 파일(window.JmEditorConfig)의 한 영역을 읽는다
+ * @param {'gallery'} section
+ * @returns {object} 없으면 빈 객체
+ */
+function fileConfig(section) {
+  const cfg = typeof window !== 'undefined' ? window.JmEditorConfig : undefined;
+  return (cfg && typeof cfg[section] === 'object' && cfg[section]) || {};
+}
+
+/**
+ * 기본값 < 설정 파일 < 생성 옵션 순으로 합친 영역 설정
+ * @param {'gallery'} section
+ * @param {object} [override] 에디터 생성 옵션으로 넘긴 값
+ * @returns {object}
+ */
+function resolveConfig(section, override) {
+  return { ...DEFAULT_CONFIG[section], ...fileConfig(section), ...(override || {}) };
+}
+
+/**
  * gallery-layout — 이미지 갤러리 저스티파이드 배치 (에디터·뷰어 공용)
  *
  * - 각 줄의 높이를 같게 두고, 이미지 폭은 원본 비율대로 잡은 뒤 한 줄이 컨테이너 폭을 꽉 채우도록 스케일한다.
- *   세로 사진이 섞여도 줄이 가지런하고 가로가 남지 않는다.
+ *   세로 사진이 섞여도 줄이 가지런하고 가로가 남지 않는다. 마지막 줄은 늘리지 않고 목표 줄 높이로 왼쪽에 둔다.
+ * - 목표 줄 높이·이미지 간격은 디자인에서 정한다: CSS 변수 --jm-gallery-row-height / --jm-gallery-gap (px).
  * - 원본 비율은 img 의 width / height 속성에 저장한다 (저장 HTML 에 포함, 뷰어에서 이미지 로딩 전에도 계산 가능).
- * - data-layout="justify" 인 갤러리만 처리. "cover"(칸 고정·잘라 채움) 는 CSS 만으로 동작하므로 건드리지 않는다.
- * - data-cols 는 한 줄에 들어갈 대략적인 장 수로 쓰여 목표 줄 높이를 정한다.
+ * - data-layout="justify" 인 갤러리만 처리. 예전에 저장된 "cover"(칸 고정·잘라 채움) 는 CSS 만으로 보이므로 건드리지 않는다.
  *
  * 뷰어 페이지에서는 아래 한 줄이면 된다:
  *   import { observeGalleries } from '/js/jm-editor/plugins/gallery/gallery-layout.js';
  *   observeGalleries(document.querySelector('.jm-content'));
  */
-const GAP = 8;             // 이미지 사이 간격(px) — CSS gap 과 같아야 함
-const MAX_LAST_ROW_SCALE = 1.6; // 마지막 줄이 너무 커지지 않도록 확대 상한
+const DEFAULT_ROW_HEIGHT = 200; // CSS 변수가 없을 때 목표 줄 높이(px)
+const DEFAULT_GAP = 8;          // CSS 변수가 없을 때 이미지 간격(px)
+
+/**
+ * 갤러리에 적용된 CSS 변수(px)를 숫자로 읽는다
+ * @param {CSSStyleDeclaration} cs
+ * @param {string} name 변수 이름 (--jm-gallery-…)
+ * @param {number} fallback 없거나 숫자가 아닐 때 기본값
+ */
+function cssPx(cs, name, fallback) {
+  const v = parseFloat(cs.getPropertyValue(name));
+  return Number.isFinite(v) && v >= 0 ? v : fallback;
+}
 
 /** img 의 원본 비율 (w/h). width/height 속성 → naturalWidth/Height 순으로 읽고, 없으면 4:3 */
 function ratioOf(img) {
@@ -2185,9 +2241,13 @@ function ratioOf(img) {
   return w > 0 && h > 0 ? w / h : 4 / 3;
 }
 
-/** 로드된 이미지의 원본 크기를 width/height 속성에 기록 (저장 HTML 에 비율이 남도록) */
-function stampSize(img) {
-  if (img.naturalWidth && img.naturalHeight && !img.getAttribute('width')) {
+/**
+ * 로드된 이미지의 원본 크기를 width/height 속성에 기록 (저장 HTML 에 비율이 남도록)
+ * @param {HTMLImageElement} img
+ * @param {boolean} [force=false] 이미 기록돼 있어도 덮어씀 (이미지 교체 시)
+ */
+function stampSize(img, force = false) {
+  if (img.naturalWidth && img.naturalHeight && (force || !img.getAttribute('width'))) {
     img.setAttribute('width', img.naturalWidth);
     img.setAttribute('height', img.naturalHeight);
   }
@@ -2203,11 +2263,12 @@ function layoutGallery(gallery) {
     imgs.forEach((img) => { img.style.width = ''; img.style.height = ''; img.style.flex = ''; });
     return;
   }
-  const width = gallery.clientWidth - (parseFloat(getComputedStyle(gallery).paddingLeft) || 0) * 2;
+  const cs = getComputedStyle(gallery);
+  const width = gallery.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
   if (!imgs.length || width <= 0) return;
 
-  const cols = Math.max(1, parseInt(gallery.dataset.cols, 10) || 3);
-  const targetH = (width - GAP * (cols - 1)) / cols / (4 / 3); // 4:3 사진이 cols 장 들어가는 높이
+  const GAP = cssPx(cs, '--jm-gallery-gap', DEFAULT_GAP);
+  const targetH = cssPx(cs, '--jm-gallery-row-height', DEFAULT_ROW_HEIGHT) || DEFAULT_ROW_HEIGHT;
 
   // 줄 나누기: 목표 높이 기준 폭 합이 컨테이너를 넘을 때,
   // 이 이미지를 포함한 폭과 제외한 폭 중 컨테이너 폭에 더 가까운 쪽을 택한다 (한 줄이 과하게 확대/축소되는 것 방지)
@@ -2230,8 +2291,8 @@ function layoutGallery(gallery) {
     const sumRatio = items.reduce((a, it) => a + it.r, 0);
     const avail = width - GAP * (items.length - 1);
     let h = avail / sumRatio;
-    // 마지막 줄은 너무 커지지 않게 상한 적용 (그 이상이면 왼쪽 정렬로 남김)
-    if (idx === rows.length - 1 && h > targetH * MAX_LAST_ROW_SCALE) h = targetH * MAX_LAST_ROW_SCALE;
+    // 마지막 줄은 늘리지 않고 목표 높이로 왼쪽에 둔다 (폭을 넘칠 때만 줄여서 맞춤)
+    if (idx === rows.length - 1) h = Math.min(h, targetH);
     items.forEach(({ img, r }) => {
       img.style.flex = '0 0 auto';
       img.style.width = `${Math.floor(r * h)}px`;
@@ -2261,19 +2322,116 @@ function observeGalleries(root = document) {
 }
 
 /**
+ * gallery-upload — 이미지 갤러리 업로드 제한·리사이즈 (에디터 전용)
+ *
+ * - 제한값은 config.js 기본값(jpg·png·gif·webp, 파일당 10MB, 1회 10장, 글당 50장 또는 100MB, 긴 변 2000px)에
+ *   설정 파일(jm-editor.config.js) → 에디터 옵션 galleryLimits 순으로 덮어쓴다.
+ * - 파일당 크기는 원본 기준, 글당 용량은 축소 후 실제로 올라가는 크기 기준으로 센다.
+ * - GIF 는 브라우저에서 줄이면 애니메이션이 사라지므로 축소하지 않는다 (파일당 크기 제한만 적용).
+ * - 클라이언트 제한은 우회할 수 있으므로 서버에서도 같은 제한을 다시 검사해야 한다.
+ */
+
+const MB = 1024 * 1024;
+
+/**
+ * @typedef {object} GalleryLimits 내부 계산용 제한값 (크기는 바이트)
+ * @property {string[]} types
+ * @property {number} maxFileSize
+ * @property {number} maxFilesPerAdd
+ * @property {number} maxImagesPerPost
+ * @property {number} maxTotalSize
+ * @property {number} maxDimension
+ */
+
+/** 형식 안내 문구 (예: "jpg·png·gif·webp") */
+function typeLabel(types) {
+  return types.map((t) => t.replace('image/', '').replace('jpeg', 'jpg')).join('·');
+}
+
+/** 바이트를 MB 문구로 */
+function mbLabel(bytes) {
+  return `${Math.round((bytes / MB) * 10) / 10}MB`;
+}
+
+/**
+ * 기본값 < 설정 파일 < 에디터 옵션(galleryLimits) 을 합쳐 내부 제한값(바이트 단위)으로 바꾼다
+ * @param {object} [override] 에디터 옵션 galleryLimits (설정 파일과 같은 키, 크기는 MB)
+ * @returns {GalleryLimits}
+ */
+function resolveLimits(override) {
+  const c = resolveConfig('gallery', override);
+  return {
+    types: [...c.types],
+    maxFileSize: c.maxFileSizeMB * MB,
+    maxFilesPerAdd: c.maxFilesPerAdd,
+    maxImagesPerPost: c.maxImagesPerPost,
+    maxTotalSize: c.maxTotalSizeMB * MB,
+    maxDimension: c.maxDimension,
+  };
+}
+
+/**
+ * 형식·파일당 크기로 파일을 고른다 (장수·글당 제한은 호출하는 쪽에서 검사)
+ * @param {File[]} files
+ * @param {GalleryLimits} limits
+ * @returns {{ accepted: File[], messages: string[] }} 통과한 파일과 제외 사유 문구
+ */
+function filterFiles(files, limits) {
+  const badType = [], tooBig = [];
+  const accepted = files.filter((f) => {
+    if (!limits.types.includes(f.type)) { badType.push(f.name); return false; }
+    if (f.size > limits.maxFileSize) { tooBig.push(f.name); return false; }
+    return true;
+  });
+  const messages = [];
+  if (badType.length) messages.push(`${typeLabel(limits.types)} 파일만 올릴 수 있습니다. (제외: ${badType.join(', ')})`);
+  if (tooBig.length) messages.push(`파일당 ${mbLabel(limits.maxFileSize)}까지 올릴 수 있습니다. (제외: ${tooBig.join(', ')})`);
+  return { accepted, messages };
+}
+
+/**
+ * 긴 변이 maxDimension 을 넘으면 비율을 유지한 채 줄인다. GIF·작은 이미지는 원본 그대로 돌려준다.
+ * @param {File} file
+ * @param {number} maxDimension
+ * @returns {Promise<File>}
+ */
+async function resizeImage(file, maxDimension) {
+  if (file.type === 'image/gif' || !(maxDimension > 0)) return file;
+  const bitmap = await createImageBitmap(file); // EXIF 회전 반영
+  try {
+    const { width, height } = bitmap;
+    if (Math.max(width, height) <= maxDimension) return file;
+    const scale = maxDimension / Math.max(width, height);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, file.type, 0.9));
+    if (!blob) return file;
+    return new File([blob], file.name, { type: blob.type, lastModified: file.lastModified });
+  } finally {
+    bitmap.close();
+  }
+}
+
+/**
  * GalleryCommands
- * - 이미지 갤러리 블록: 저장 HTML 은 <div data-type="gallery" data-cols="N" data-auto="1"><p data-role="title">제목</p><img …>…</div>
- *   제목은 선택 사항. 비어 있으면 저장 시 제거되어 뷰어에는 제목 없이 이미지만 보인다.
+ * - 이미지 갤러리 블록: 저장 HTML 은 <div data-type="gallery" data-layout="justify"><p data-role="title">제목</p><img …>…</div>
+ *   제목은 선택 사항. 비어 있으면 저장 시 제거되어 뷰어에는 제목 없이 이미지만 보인다. 사진별 캡션은 두지 않는다.
+ * - 배치는 한 가지: 비율을 유지하며 줄 전체를 채우고 마지막 줄은 왼쪽 정렬 (gallery-layout.js).
+ *   줄 높이·간격은 CSS 변수(--jm-gallery-row-height / --jm-gallery-gap)로 디자인에서 정한다.
+ *   예전에 저장된 cover·열 수·정렬 값은 편집할 때 justify 로 바뀐다 (뷰어는 예전 값도 그대로 보여줌).
  * - 에디터 안에서는 레이어(<div class="jm-gallery-layer" contenteditable="false">) 로 감싸고
- *   헤더(이미지 추가 / 선택 삭제 / 전체 삭제 / 열 수)를 붙인다. 저장 시 레이어·헤더·선택 상태는 제거된다.
- * - 이미지는 CSS grid 로 data-cols 열에 균등 배치. data-auto="1" 이면 개수에 따라 열 수를 자동 계산한다.
+ *   헤더(이미지 추가 / 교체 / 선택 삭제 / 전체 삭제)를 붙인다. 저장 시 레이어·헤더·선택 상태는 제거된다.
  * - 갤러리 위에 이미지 파일을 드롭하거나 헤더 「이미지 추가」로 여러 장을 넣을 수 있다.
+ *   업로드 제한·긴 변 축소는 gallery-upload.js (에디터 옵션 galleryLimits 로 변경).
  */
 
 const GALLERY_LAYER_CLASS = 'jm-gallery-layer';
 const SELECTED_CLASS = 'is-selected';
-const DEFAULT_LAYOUT = 'justify'; // 'justify'(비율 유지, 줄 채움) | 'cover'(칸 고정, 잘라 채움)
-const MAX_AUTO_COLS = 4;
+const LAYOUT = 'justify';
+/** 예전 배치 옵션(열 수·배치 방식·정렬) 속성 — 편집 시 제거 */
+const LEGACY_ATTRS = ['data-cols', 'data-auto', 'data-align'];
 
 class GalleryCommands {
   /** @param {import('../../core/JmEditor.js').JmEditor} editor */
@@ -2281,27 +2439,42 @@ class GalleryCommands {
     this.editor = editor;
     this.sel = editor.sel;
     this.root = editor.root;
+    this.limits = resolveLimits(editor.options.galleryLimits);
+    /** 이번 편집에서 올린 이미지의 크기(바이트) — src 별. 글당 용량 계산용 (불러온 기존 이미지는 크기를 알 수 없어 0) */
+    this.bytesBySrc = new Map();
 
-    // 여러 장 선택용 숨김 input (레이어 공용)
-    this.fileInput = document.createElement('input');
-    this.fileInput.type = 'file';
-    this.fileInput.accept = 'image/*';
-    this.fileInput.multiple = true;
-    this.fileInput.hidden = true;
-    this.root.parentNode?.appendChild(this.fileInput) ?? document.body.appendChild(this.fileInput);
+    // 여러 장 추가용 / 1장 교체용 숨김 input (레이어 공용)
+    this.fileInput = this.#createFileInput(true);
+    this.replaceInput = this.#createFileInput(false);
     this.pendingGallery = null;
     this.fileInput.addEventListener('change', async () => {
       const files = Array.from(this.fileInput.files);
       this.fileInput.value = '';
       if (this.pendingGallery) await this.addFiles(this.pendingGallery, files);
     });
+    this.replaceInput.addEventListener('change', async () => {
+      const file = this.replaceInput.files[0];
+      this.replaceInput.value = '';
+      if (file && this.pendingGallery) await this.replaceSelected(this.pendingGallery, file);
+    });
+  }
+
+  /** 허용 형식만 고르는 숨김 file input */
+  #createFileInput(multiple) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = this.limits.types.join(',');
+    input.multiple = multiple;
+    input.hidden = true;
+    this.root.parentNode?.appendChild(input) ?? document.body.appendChild(input);
+    return input;
   }
 
   // ───────────── 생성 / 레이어 ─────────────
 
   /** 갤러리 블록 HTML (서식 삽입용) */
-  static template(cols = 3, auto = true, layout = DEFAULT_LAYOUT) {
-    return `<div data-type="gallery" data-cols="${cols}"${auto ? ' data-auto="1"' : ''} data-layout="${layout}"></div>`;
+  static template() {
+    return `<div data-type="gallery" data-layout="${LAYOUT}"></div>`;
   }
 
   /** 루트 안의 갤러리 요소를 모두 레이어로 감싼다 (setHTML / commit 후) */
@@ -2320,10 +2493,12 @@ class GalleryCommands {
     layer.append(this.#buildHeader(gallery), gallery);
     this.editor.blockDrag?.makeDraggable(gallery._handle, layer);
     gallery.classList.add('jm-gallery');
-    if (!gallery.dataset.layout) gallery.dataset.layout = DEFAULT_LAYOUT;
+    // 배치는 한 가지 — 예전 배치 옵션은 정리
+    gallery.dataset.layout = LAYOUT;
+    LEGACY_ATTRS.forEach((a) => gallery.removeAttribute(a));
     this.#ensureTitle(gallery);
     this.#bindGallery(gallery);
-    gallery.querySelectorAll('img').forEach(stampSize);
+    gallery.querySelectorAll('img').forEach((img) => stampSize(img));
     // 폭 변경·이미지 로드 시 재배치
     if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => layoutGallery(gallery)).observe(gallery);
     gallery.addEventListener('load', (e) => { if (e.target.tagName === 'IMG') { stampSize(e.target); layoutGallery(gallery); } }, true);
@@ -2347,7 +2522,7 @@ class GalleryCommands {
     t.addEventListener('blur', () => this.editor.commit());
   }
 
-  /** 헤더: 이미지 추가 / 선택 삭제 / 전체 삭제 / 열 수 */
+  /** 헤더: 이미지 추가 / 교체 / 선택 삭제 / 전체 삭제 / 갤러리 삭제 */
   #buildHeader(gallery) {
     const h = document.createElement('div');
     h.className = 'jm-gallery-header';
@@ -2374,49 +2549,10 @@ class GalleryCommands {
     };
 
     const add = mk('＋ 이미지 추가', () => { this.pendingGallery = gallery; this.fileInput.click(); });
+    const replace = mk('교체', () => { this.pendingGallery = gallery; this.replaceInput.click(); }, 'jm-gallery-replace');
+    replace.title = '선택한 사진 1장을 다른 파일로 바꿉니다';
     const delSel = mk('선택 삭제', () => this.deleteSelected(gallery), 'jm-gallery-delsel');
     const delAll = mk('전체 삭제', () => this.deleteAll(gallery));
-
-    // 열 수: 자동 / 1~6
-    const cols = document.createElement('select');
-    cols.className = 'jm-gallery-cols';
-    cols.title = '열 수';
-    [['auto', '자동'], ['1', '1열'], ['2', '2열'], ['3', '3열'], ['4', '4열'], ['5', '5열'], ['6', '6열']].forEach(([v, t]) => {
-      const o = document.createElement('option'); o.value = v; o.textContent = t; cols.appendChild(o);
-    });
-    cols.value = gallery.dataset.auto === '1' ? 'auto' : (gallery.dataset.cols || '3');
-    cols.addEventListener('mousedown', (e) => e.stopPropagation());
-    cols.addEventListener('change', () => {
-      if (cols.value === 'auto') gallery.dataset.auto = '1';
-      else { delete gallery.dataset.auto; gallery.dataset.cols = cols.value; }
-      this.#layout(gallery);
-      this.editor.commit();
-    });
-
-    // 배치 방식: 비율 유지(줄 채움) / 칸 고정(잘라 채움)
-    const layout = document.createElement('select');
-    layout.className = 'jm-gallery-layout';
-    layout.title = '배치 방식';
-    [['justify', '비율 유지'], ['cover', '잘라 채움']].forEach(([v, t]) => {
-      const o = document.createElement('option'); o.value = v; o.textContent = t; layout.appendChild(o);
-    });
-    layout.value = gallery.dataset.layout || DEFAULT_LAYOUT;
-    layout.addEventListener('mousedown', (e) => e.stopPropagation());
-    layout.addEventListener('change', () => { gallery.dataset.layout = layout.value; this.#layout(gallery); this.editor.commit(); });
-
-    // 정렬: 가로를 다 못 채운 줄(주로 마지막 줄)을 어디에 둘지
-    const align = document.createElement('select');
-    align.className = 'jm-gallery-align';
-    align.title = '정렬';
-    [['left', '왼쪽'], ['center', '중앙'], ['right', '오른쪽']].forEach(([v, t]) => {
-      const o = document.createElement('option'); o.value = v; o.textContent = t; align.appendChild(o);
-    });
-    align.value = gallery.dataset.align || 'left';
-    align.addEventListener('mousedown', (e) => e.stopPropagation());
-    align.addEventListener('change', () => {
-      if (align.value === 'left') delete gallery.dataset.align; else gallery.dataset.align = align.value;
-      this.editor.commit();
-    });
 
     const count = document.createElement('span');
     count.className = 'jm-gallery-count';
@@ -2425,7 +2561,7 @@ class GalleryCommands {
     const remove = mk('✕', () => this.deleteGallery(gallery), 'jm-gallery-remove');
     remove.title = '갤러리 삭제';
 
-    h.append(handle, title, count, add, delSel, delAll, cols, layout, align, remove);
+    h.append(handle, title, count, add, replace, delSel, delAll, remove);
     return h;
   }
 
@@ -2490,16 +2626,15 @@ class GalleryCommands {
         this.editor.commit();
         return;
       }
-      const files = Array.from(e.dataTransfer?.files || []).filter((f) => f.type.startsWith('image/'));
+      // 형식 검사는 addFiles 에서 (허용되지 않는 파일은 안내 후 제외)
+      const files = Array.from(e.dataTransfer?.files || []);
       if (files.length) await this.addFiles(gallery, files);
     });
   }
 
-  /** 열 수 계산·적용 + 빈 상태 표시 + 헤더 갱신 */
+  /** 빈 상태 표시 + 배치 + 헤더 갱신 */
   #layout(gallery) {
     const n = gallery.querySelectorAll('img').length;
-    if (gallery.dataset.auto === '1') gallery.dataset.cols = String(Math.max(1, Math.min(MAX_AUTO_COLS, n)));
-    gallery.style.setProperty('--jm-cols', gallery.dataset.cols || '3');
     gallery.classList.toggle('is-empty', n === 0);
     layoutGallery(gallery);
     this.#refreshHeader(gallery);
@@ -2509,23 +2644,117 @@ class GalleryCommands {
     const n = gallery.querySelectorAll('img').length;
     const s = gallery.querySelectorAll(`img.${SELECTED_CLASS}`).length;
     if (gallery._countEl) gallery._countEl.textContent = n ? `${n}장${s ? ` · ${s}장 선택` : ''}` : '이미지를 드롭하거나 추가하세요';
-    const btn = gallery.parentNode?.querySelector('.jm-gallery-delsel');
-    if (btn) btn.disabled = s === 0;
+    const layer = gallery.parentNode;
+    const delSel = layer?.querySelector('.jm-gallery-delsel');
+    if (delSel) delSel.disabled = s === 0;
+    const replace = layer?.querySelector('.jm-gallery-replace');
+    if (replace) replace.disabled = s !== 1;
   }
 
-  // ───────────── 이미지 추가 / 삭제 ─────────────
+  // ───────────── 제한 / 안내 ─────────────
 
-  /** 파일들을 업로드(또는 base64)하여 갤러리에 추가 */
+  /** 사용자 안내: options.notify 가 있으면 그쪽으로, 없으면 alert */
+  #notify(messages) {
+    const list = [].concat(messages).filter(Boolean);
+    if (!list.length) return;
+    const text = list.join('\n');
+    if (this.editor.options.notify) this.editor.options.notify(text);
+    else window.alert(text);
+  }
+
+  /** 이 글(에디터)의 모든 갤러리 이미지 */
+  #postImages() {
+    return Array.from(this.root.querySelectorAll('div[data-type="gallery"] > img'));
+  }
+
+  /** 이 글의 갤러리 이미지 용량 합계 (이번 편집에서 올린 것만 크기를 안다) */
+  #postBytes(except = null) {
+    return this.#postImages().reduce((sum, img) => (img === except ? sum : sum + (this.bytesBySrc.get(img.getAttribute('src')) || 0)), 0);
+  }
+
+  /**
+   * 축소 후 업로드(또는 base64)해서 img 요소를 만든다
+   * @param {File} file 형식·크기 검사를 통과한 파일
+   * @returns {Promise<{img: HTMLImageElement, bytes: number}>}
+   */
+  async #prepare(file) {
+    const resized = await resizeImage(file, this.limits.maxDimension);
+    const src = this.editor.options.uploadImage
+      ? await this.editor.options.uploadImage(resized)
+      : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(resized); });
+    const img = document.createElement('img');
+    img.alt = file.name;
+    // 원본 크기를 width/height 속성에 기록한 뒤 붙임 (저장 HTML 에 비율 포함)
+    await new Promise((resolve) => { img.onload = () => { stampSize(img, true); resolve(); }; img.onerror = resolve; img.src = src; });
+    this.bytesBySrc.set(src, resized.size);
+    return { img, bytes: resized.size };
+  }
+
+  // ───────────── 이미지 추가 / 교체 / 삭제 ─────────────
+
+  /**
+   * 파일들을 제한 검사 → 긴 변 축소 → 업로드(또는 base64) 후 갤러리에 추가
+   * - 1회 장수·글당 장수를 넘으면 이번 파일 전체를 넣지 않는다.
+   * - 형식·파일당 크기가 맞지 않는 파일만 빼고 나머지는 넣는다.
+   * - 글당 용량은 넣는 도중 넘으면 거기서 멈춘다.
+   */
   async addFiles(gallery, files) {
-    for (const file of files) {
-      const src = this.editor.options.uploadImage
-        ? await this.editor.options.uploadImage(file)
-        : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
-      const img = document.createElement('img');
-      img.alt = file.name;
-      // 원본 크기를 width/height 속성에 기록한 뒤 붙임 (저장 HTML 에 비율 포함)
-      await new Promise((resolve) => { img.onload = () => { stampSize(img); resolve(); }; img.onerror = resolve; img.src = src; });
-      gallery.appendChild(img);
+    const L = this.limits;
+    if (files.length > L.maxFilesPerAdd) {
+      this.#notify(`한 번에 ${L.maxFilesPerAdd}장까지 올릴 수 있습니다. (선택: ${files.length}장)`);
+      return;
+    }
+    const { accepted, messages } = filterFiles(files, L);
+    const current = this.#postImages().length;
+    if (accepted.length && current + accepted.length > L.maxImagesPerPost) {
+      this.#notify([...messages, `글 하나에 사진은 ${L.maxImagesPerPost}장까지 넣을 수 있습니다. (현재 ${current}장, 추가 ${accepted.length}장)`]);
+      return;
+    }
+    let total = this.#postBytes();
+    let added = 0;
+    try {
+      for (const file of accepted) {
+        const { img, bytes } = await this.#prepare(file);
+        if (total + bytes > L.maxTotalSize) {
+          this.bytesBySrc.delete(img.getAttribute('src'));
+          messages.push(`글 하나에 사진은 ${mbLabel(L.maxTotalSize)}까지 넣을 수 있습니다. (${file.name}부터 제외)`);
+          break;
+        }
+        total += bytes;
+        gallery.appendChild(img);
+        added++;
+      }
+    } catch (err) {
+      messages.push(`이미지를 올리지 못했습니다: ${err?.message || err}`);
+    }
+    this.#notify(messages);
+    if (!added) return;
+    this.#layout(gallery);
+    this.editor.commit();
+  }
+
+  /**
+   * 선택한 사진 1장을 새 파일로 교체 (같은 자리 유지)
+   * @param {HTMLElement} gallery
+   * @param {File} file
+   */
+  async replaceSelected(gallery, file) {
+    const target = gallery.querySelectorAll(`img.${SELECTED_CLASS}`);
+    if (target.length !== 1) { this.#notify('교체할 사진을 1장만 선택하세요.'); return; }
+    const old = target[0];
+    const { accepted, messages } = filterFiles([file], this.limits);
+    if (!accepted.length) { this.#notify(messages); return; }
+    try {
+      const { img, bytes } = await this.#prepare(file);
+      if (this.#postBytes(old) + bytes > this.limits.maxTotalSize) {
+        this.bytesBySrc.delete(img.getAttribute('src'));
+        this.#notify(`글 하나에 사진은 ${mbLabel(this.limits.maxTotalSize)}까지 넣을 수 있습니다.`);
+        return;
+      }
+      old.replaceWith(img);
+    } catch (err) {
+      this.#notify(`이미지를 올리지 못했습니다: ${err?.message || err}`);
+      return;
     }
     this.#layout(gallery);
     this.editor.commit();
@@ -2571,7 +2800,7 @@ class GalleryCommands {
       // 제목: 편집 속성 제거, 비어 있으면 통째로 제거
       const t = g.querySelector(':scope > p[data-role="title"]');
       if (t) {
-        if (!t.textContent.replace(/\u200B/g, '').trim()) t.remove();
+        if (!t.textContent.replace(/​/g, '').trim()) t.remove();
         else { t.removeAttribute('contenteditable'); t.removeAttribute('data-placeholder'); }
       }
       layer.replaceWith(g);
@@ -2579,7 +2808,7 @@ class GalleryCommands {
     return tpl.innerHTML;
   }
 
-  destroy() { this.fileInput.remove(); }
+  destroy() { this.fileInput.remove(); this.replaceInput.remove(); }
 }
 
 /**
@@ -3432,6 +3661,8 @@ class JmEditor {
    * @param {(html: string) => void} [options.onChange]  내용 변경 콜백
    * @param {() => void} [options.onSelectionChange] 커서 이동 콜백 (툴바 상태 갱신용)
    * @param {(file: File) => Promise<string>} [options.uploadImage] 이미지 파일 → URL 반환. 없으면 base64 로 삽입
+   * @param {object} [options.galleryLimits] 갤러리 업로드 제한 (설정 파일 jm-editor.config.js 의 gallery 와 같은 키, 이 값이 우선)
+   * @param {(message: string) => void} [options.notify] 업로드 제한 등 안내 문구 표시. 없으면 alert
    * @param {string} [options.placeholder]
    * @param {(x: number, y: number, cb: (color: string|null) => void) => void} [options.pickColor]
    *        색상 선택 UI 를 띄우는 콜백 (표 셀/행 배경색 메뉴에서 사용). 래퍼가 주입한다.
@@ -3472,7 +3703,7 @@ class JmEditor {
    *                      |alignLeft|alignCenter|alignRight (블록 가로 정렬)
    *                      |valignTop|valignMiddle|valignBottom (표 셀 세로 정렬)
    *                      |format (value: 삽입할 HTML — 서식/템플릿. 내부에서 sanitize 후 블록 단위 삽입)
-   *                      |gallery (value: {cols, auto} — 이미지 갤러리 블록 삽입)
+   *                      |gallery (이미지 갤러리 블록 삽입)
    *                      |youtube (value: 유튜브 주소 또는 동영상 ID)
    *                      |buttons (value: {align} — 버튼 그룹 블록 삽입)
    *                      |slider (value: {interval, ratio} — 이미지 슬라이드 블록 삽입)
@@ -3498,7 +3729,7 @@ class JmEditor {
       unlink: () => c.setLink(null),
       image: () => c.insertImage(value?.src, value?.alt),
       format: () => c.insertBlockHTML(Sanitizer.clean(value || '')),
-      gallery: () => c.insertBlockHTML(GalleryCommands.template(value?.cols, value?.auto ?? true)),
+      gallery: () => c.insertBlockHTML(GalleryCommands.template()),
       youtube: () => this.embed.insertYouTube(value),
       buttons: () => c.insertBlockHTML(ButtonsCommands.template(value?.align)),
       slider: () => c.insertBlockHTML(SliderCommands.template(value?.interval, value?.ratio)),
@@ -4508,8 +4739,8 @@ const SAMPLE_FORMATS = [
     id: 'image-gallery',
     category: '미디어',
     name: '이미지 갤러리',
-    description: '이미지만 넣는 블록. 드롭/추가 시 자동 균등 배치, 헤더에서 선택·전체 삭제',
-    html: `<div data-type="gallery" data-cols="3" data-auto="1"></div>`,
+    description: '이미지만 넣는 블록. 비율을 유지하며 줄을 채워 자동 배치, 순서 변경·교체·삭제',
+    html: `<div data-type="gallery" data-layout="justify"></div>`,
   },
   {
     id: 'divider-note',
@@ -4656,7 +4887,7 @@ editor.setHTML(`<h2>공지사항 작성 샘플</h2>
 </tbody></table>
 <div data-type="slider" data-interval="3000" data-ratio="16:9" data-indicator="dots" data-indicator-pos="bottom-center" data-width="75" data-align="center"><p data-role="title">행사 사진 — 3초마다 자동 전환</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjMmY2ZjRlIi8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMTwvdGV4dD48L3N2Zz4=" alt="슬라이드 1" width="1280" height="720"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjM2I2ZWE1Ii8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMjwvdGV4dD48L3N2Zz4=" alt="슬라이드 2" width="1280" height="720"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMzwvdGV4dD48L3N2Zz4=" alt="슬라이드 3" width="1280" height="720"></div>
 <div data-type="youtube" data-width="75" data-align="center"><iframe src="https://www.youtube-nocookie.com/embed/M2lu8RiZhW0" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
-<div data-type="gallery" data-cols="3" data-layout="justify"><p data-role="title">현장 사진 — 사진은 드래그로 순서 변경, 헤더의 ⠿ 로 블록 이동</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJmNmY0ZSIvPjx0ZXh0IHg9IjQwMCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDQ6MzwvdGV4dD48L3N2Zz4=" alt="가로 4:3" width="800" height="600"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzNiNmVhNSIvPjx0ZXh0IHg9IjMwMCIgeT0iNDEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDM6NDwvdGV4dD48L3N2Zz4=" alt="세로 3:4" width="600" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjUwMCI+PHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNTAwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjAwIiB5PSIyNjIiIGZvbnQtc2l6ZT0iNjIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7tjIzrhbjrnbzrp4g8L3RleHQ+PC9zdmc+" alt="파노라마" width="1200" height="500"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NTAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNDUwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzZiNGZhMCIvPjx0ZXh0IHg9IjIyNSIgeT0iNDEyIiBmb250LXNpemU9IjU2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDk6MTY8L3RleHQ+PC9zdmc+" alt="세로 9:16" width="450" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MDAiIGhlaWdodD0iNzAwIj48cmVjdCB3aWR0aD0iNzAwIiBoZWlnaHQ9IjcwMCIgZmlsbD0iIzhhNmQzYiIvPjx0ZXh0IHg9IjM1MCIgeT0iMzYyIiBmb250LXNpemU9Ijg3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7KCV7IKs6rCBPC90ZXh0Pjwvc3ZnPg==" alt="정사각" width="700" height="700"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iOTAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJhN2Y4ZiIvPjx0ZXh0IHg9IjQ1MCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDM6MjwvdGV4dD48L3N2Zz4=" alt="가로 3:2" width="900" height="600"></div>
+<div data-type="gallery" data-layout="justify"><p data-role="title">현장 사진 — 사진은 드래그로 순서 변경·선택 후 교체, 헤더의 ⠿ 로 블록 이동</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJmNmY0ZSIvPjx0ZXh0IHg9IjQwMCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDQ6MzwvdGV4dD48L3N2Zz4=" alt="가로 4:3" width="800" height="600"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzNiNmVhNSIvPjx0ZXh0IHg9IjMwMCIgeT0iNDEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDM6NDwvdGV4dD48L3N2Zz4=" alt="세로 3:4" width="600" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjUwMCI+PHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNTAwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjAwIiB5PSIyNjIiIGZvbnQtc2l6ZT0iNjIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7tjIzrhbjrnbzrp4g8L3RleHQ+PC9zdmc+" alt="파노라마" width="1200" height="500"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NTAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNDUwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzZiNGZhMCIvPjx0ZXh0IHg9IjIyNSIgeT0iNDEyIiBmb250LXNpemU9IjU2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDk6MTY8L3RleHQ+PC9zdmc+" alt="세로 9:16" width="450" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MDAiIGhlaWdodD0iNzAwIj48cmVjdCB3aWR0aD0iNzAwIiBoZWlnaHQ9IjcwMCIgZmlsbD0iIzhhNmQzYiIvPjx0ZXh0IHg9IjM1MCIgeT0iMzYyIiBmb250LXNpemU9Ijg3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7KCV7IKs6rCBPC90ZXh0Pjwvc3ZnPg==" alt="정사각" width="700" height="700"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iOTAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJhN2Y4ZiIvPjx0ZXh0IHg9IjQ1MCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDM6MjwvdGV4dD48L3N2Zz4=" alt="가로 3:2" width="900" height="600"></div>
 <div data-type="buttons" data-align="center"><a href="https://github.com/jinix55/JmEditor" data-role="button" data-style="primary">GitHub 저장소</a><a href="https://jinix55.github.io/JmEditor/" data-role="button" data-style="outline">데모 페이지</a></div>
 <p>참고 링크: <a href="https://developer.mozilla.org/ko/docs/Web/API/Range">MDN Range API</a></p>`);
 </script>

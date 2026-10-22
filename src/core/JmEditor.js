@@ -35,6 +35,8 @@ export class JmEditor {
    * @param {(html: string) => void} [options.onChange]  내용 변경 콜백
    * @param {() => void} [options.onSelectionChange] 커서 이동 콜백 (툴바 상태 갱신용)
    * @param {(file: File) => Promise<string>} [options.uploadImage] 이미지 파일 → URL 반환. 없으면 base64 로 삽입
+   * @param {object} [options.galleryLimits] 갤러리 업로드 제한 (설정 파일 jm-editor.config.js 의 gallery 와 같은 키, 이 값이 우선)
+   * @param {(message: string) => void} [options.notify] 업로드 제한 등 안내 문구 표시. 없으면 alert
    * @param {string} [options.placeholder]
    * @param {(x: number, y: number, cb: (color: string|null) => void) => void} [options.pickColor]
    *        색상 선택 UI 를 띄우는 콜백 (표 셀/행 배경색 메뉴에서 사용). 래퍼가 주입한다.
@@ -75,7 +77,7 @@ export class JmEditor {
    *                      |alignLeft|alignCenter|alignRight (블록 가로 정렬)
    *                      |valignTop|valignMiddle|valignBottom (표 셀 세로 정렬)
    *                      |format (value: 삽입할 HTML — 서식/템플릿. 내부에서 sanitize 후 블록 단위 삽입)
-   *                      |gallery (value: {cols, auto} — 이미지 갤러리 블록 삽입)
+   *                      |gallery (이미지 갤러리 블록 삽입)
    *                      |youtube (value: 유튜브 주소 또는 동영상 ID)
    *                      |buttons (value: {align} — 버튼 그룹 블록 삽입)
    *                      |slider (value: {interval, ratio} — 이미지 슬라이드 블록 삽입)
@@ -103,7 +105,7 @@ export class JmEditor {
       unlink: () => c.setLink(null),
       image: () => c.insertImage(value?.src, value?.alt),
       format: () => c.insertBlockHTML(Sanitizer.clean(value || '')),
-      gallery: () => c.insertBlockHTML(GalleryCommands.template(value?.cols, value?.auto ?? true)),
+      gallery: () => c.insertBlockHTML(GalleryCommands.template()),
       youtube: () => this.embed.insertYouTube(value),
       buttons: () => c.insertBlockHTML(ButtonsCommands.template(value?.align)),
       slider: () => c.insertBlockHTML(SliderCommands.template(value?.interval, value?.ratio)),

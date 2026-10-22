@@ -12,7 +12,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 - 이미지 슬라이드 — 이미지가 자동으로 넘어가는 블록(서식). 간격(수동/2~8초)·비율·인디케이터(점/숫자/막대/없음, 하단 좌/중/우)·폭·정렬, 썸네일로 선택·순서 변경. 뷰어에는 `slider-runtime.js` 필요
 - 유튜브 — 주소를 넣으면 16:9 영상 블록이 들어갑니다. 폭(100 / 75 / 50%)과 정렬 선택, ⠿ 핸들로 이동
 - 표 — 툴바에서 N×M 격자로 크기를 골라 삽입. 셀을 드래그(또는 Shift+클릭)하면 범위 선택. 우클릭 메뉴에서 행 / 열 추가·삭제·이동, 머리글 행·열 전환, 셀 병합·분할, 가로·세로 정렬, 셀·행 배경색, 표 폭·테두리. 셀 경계를 끌면 열 너비·행 높이 조절. 왼쪽 위 ⠿ 핸들을 끌어 위치 이동
-- 이미지 갤러리 블록 — 이미지만 넣는 블록. 드롭하면 원본 비율을 유지한 채 줄마다 가로를 꽉 채우도록 배치되고(세로 사진이 섞여도 줄 높이가 같습니다), 헤더에서 선택 삭제 / 전체 삭제 / 열 수 / 배치 방식(비율 유지·잘라 채움) / 정렬(왼쪽·중앙·오른쪽)을 바꿉니다. 사진은 드래그해서 순서를 바꾸고, 헤더의 ⠿ 핸들을 끌면 블록 자체가 다른 위치로 이동합니다. 제목은 선택 사항
+- 이미지 갤러리 블록 — 사진을 여러 장 올리면 원본 비율을 유지한 채 줄 전체를 채우도록 자동 배치합니다(세로 사진이 섞여도 줄 높이가 같고, 마지막 줄은 늘리지 않고 왼쪽 정렬). 사진은 드래그로 순서 변경, 선택 후 교체·삭제. 줄 높이·간격은 CSS 변수로 디자인에서 정합니다. 업로드 제한(jpg·png·gif·webp, 파일당 10MB, 1회 10장, 글당 50장 또는 100MB)과 긴 변 2000px 초과 시 축소(GIF 제외)는 설정 파일로 바꿉니다. 헤더의 ⠿ 핸들로 블록 이동, 제목은 선택 사항, 사진별 캡션은 없음
 - 서식(템플릿) 삽입 — 서버에서 받아온 HTML 조각을 골라 본문에 넣습니다. 서식 관리는 별도 화면에서
 - Editor / HTML / 미리보기 모드 전환
 - undo / redo, 한글 IME 조합 처리, 외부 글 붙여넣기 시 허용 태그만 남김
@@ -22,13 +22,14 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 
 ## 사용법
 
-필요한 건 `dist/` 의 파일 세 개입니다. 빌드할 필요 없이 그대로 복사해서 씁니다.
+필요한 건 `dist/` 의 파일들입니다. 빌드할 필요 없이 그대로 복사해서 씁니다.
 
 | 파일 | 용도 |
 |---|---|
 | `dist/jm-editor.css` | 편집 화면·조회 화면 공통 스타일 |
 | `dist/jm-editor.min.js` | 에디터 전체 (전역 `JmEditor.*`). ES Module 이 필요하면 `jm-editor.esm.js` |
 | `dist/jm-viewer.min.js` | 조회 화면용 런타임 (갤러리 배치·슬라이드 전환). ESM 은 `jm-viewer.esm.js` |
+| `dist/jm-editor.config.js` | 설정 견본 (업로드 제한 등). 선택 사항 — 아래 [설정](#설정) 참고 |
 
 ### 편집 화면
 
@@ -51,6 +52,52 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 Thymeleaf, JSP 모두 이 형태 그대로입니다. 전체 예시는 [examples/thymeleaf/notice-form.html](examples/thymeleaf/notice-form.html).
 
 API 없이 폼으로만 보낼 거면 `api` 옵션을 빼고 submit 직전에 `editor.getHTML()` 을 hidden input 에 넣으면 됩니다.
+
+### 설정
+
+업로드 제한 같은 값은 빌드 없이 페이지에서 바꿉니다. 에디터는 생성(`new JmToolbarEditor(...)`)할 때 설정을 읽으므로 CDN 으로 불러와도 그대로 적용됩니다. 바꿀 항목만 적으면 되고, 빠진 항목은 기본값을 씁니다. 크기 단위는 MB, 길이 단위는 px 입니다.
+
+**1. 페이지 전체에 적용** — `window.JmEditorConfig` 를 에디터 생성 전에 지정합니다. 에디터 스크립트를 불러온 뒤여도 생성 전이면 됩니다.
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@버전/dist/jm-editor.min.js"></script>
+<script>
+  window.JmEditorConfig = { gallery: { maxFileSizeMB: 20, maxImagesPerPost: 30 } };
+  const editor = new JmEditor.JmToolbarEditor(el, { /* ... */ });
+</script>
+```
+
+**2. 에디터마다 적용** — 생성 옵션 `galleryLimits` 로 넘깁니다(키는 같음). 1번보다 우선합니다.
+
+```js
+new JmEditor.JmToolbarEditor(el, { galleryLimits: { maxFilesPerAdd: 5 } });
+```
+
+여러 화면에서 같은 값을 쓰려면 `dist/jm-editor.config.js` 견본을 자기 서버에 복사해 값을 고치고 에디터 생성 전에 불러와도 됩니다. CDN 의 견본을 그대로 불러오면 기본값과 같아서 의미가 없습니다. 전체 항목과 기본값:
+
+```js
+window.JmEditorConfig = {
+  gallery: {
+    types: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], // 올릴 수 있는 형식
+    maxFileSizeMB: 10,      // 파일당 (원본)
+    maxFilesPerAdd: 10,     // 한 번에 올리는 장수
+    maxImagesPerPost: 50,   // 글당 장수
+    maxTotalSizeMB: 100,    // 글당 용량 (축소 후)
+    maxDimension: 2000,     // 긴 변 상한, 넘으면 축소 (GIF 제외)
+  },
+};
+```
+
+우선순위는 생성 옵션 `galleryLimits` > `window.JmEditorConfig` > 기본값입니다. 제한에 걸리면 `notify` 옵션으로 넘긴 함수에 안내 문구를 주고, 없으면 `alert` 로 띄웁니다. 글당 용량은 이번 편집에서 올린 사진만 셉니다(불러온 기존 사진은 크기를 알 수 없음). 클라이언트 제한은 우회할 수 있으므로 서버에서도 같은 값으로 검사하세요 ([서버 연동 가이드](server/spring-boot/README.md)).
+
+갤러리 줄 높이·간격은 CSS 변수로 정합니다.
+
+```css
+.jm-content div[data-type="gallery"], .jm-editor div[data-type="gallery"] {
+  --jm-gallery-row-height: 240px;  /* 목표 줄 높이 (기본 200px) */
+  --jm-gallery-gap: 12px;          /* 이미지 간격 (기본 8px) */
+}
+```
 
 ES Module 로 쓰려면:
 
@@ -131,20 +178,20 @@ api: {
 갤러리 블록은 이렇게 저장됩니다.
 
 ```html
-<div data-type="gallery" data-cols="3" data-auto="1" data-layout="justify">
+<div data-type="gallery" data-layout="justify">
   <p data-role="title">현장 사진</p>
   <img src="..." width="1600" height="1200"><img src="..." width="900" height="1600">
 </div>
 ```
 
-`width` / `height` 는 원본 크기이고 비율 계산에 씁니다. `data-layout="justify"` 갤러리는 조회 페이지에서도 배치 스크립트가 필요합니다.
+`width` / `height` 는 원본 크기(축소했다면 축소 후 크기)이고 비율 계산에 씁니다. 갤러리 배치는 조회 페이지에서도 배치 스크립트가 필요합니다 (`JmViewer.initViewer` 에 포함).
 
 ```js
 import { observeGalleries } from '/js/jm-editor/plugins/gallery/gallery-layout.js';
 observeGalleries(document.querySelector('.jm-content'));
 ```
 
-`data-layout="cover"` 는 CSS 만으로 동작합니다.
+예전 버전에서 저장된 `data-layout="cover"`·`data-cols`·`data-align` 갤러리도 조회 화면에서는 그대로 보이고, 에디터에서 열어 저장하면 위 형식으로 바뀝니다.
 
 슬라이드 블록도 조회 페이지에서 런타임을 한 번 초기화해야 돌아갑니다.
 

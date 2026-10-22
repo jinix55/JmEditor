@@ -29,6 +29,18 @@
 
    파일명은 UUID, 경로는 `upload-dir/yyyy/MM/dd/` 입니다. Content-Type 은 클라이언트가 보내는 값이므로, 더 엄격하게 하려면 파일 앞부분(매직바이트) 검사를 추가하세요.
 4. **권한** — 샘플에는 인증·권한 처리가 없습니다. 등록·수정·업로드 API 는 각 서비스의 보안 설정 안에 두세요.
+5. **갤러리 업로드 제한** — 에디터는 설정값(`window.JmEditorConfig` 또는 생성 옵션 `galleryLimits`)으로 업로드 전에 막지만 우회할 수 있으므로, 서버에서도 같은 값으로 검사합니다.
+
+   | 항목 | 기본값 | 서버에서 검사하는 곳 |
+   |---|---|---|
+   | 형식 | jpg·png·gif·webp | 업로드 API — 샘플 `ImageUploadService` 의 MIME 표 |
+   | 파일당 크기 | 10MB | 업로드 API — `spring.servlet.multipart.max-file-size` |
+   | 1회 장수 | 10장 | 에디터는 한 장씩 업로드하므로 서버 검사 불필요 |
+   | 글당 장수 | 50장 | 등록·수정 API — 저장할 본문의 `div[data-type=gallery] > img` 개수 (샘플에는 없음) |
+   | 글당 용량 | 100MB | 등록·수정 API — 본문 이미지들의 저장 파일 크기 합 (샘플에는 없음) |
+   | 긴 변 축소 | 2000px (GIF 제외) | 에디터가 업로드 전에 줄임. 서버에서 강제하려면 업로드 시 크기 확인 후 축소·거부 |
+
+   제한 값을 바꾸면 설정 파일과 서버 설정을 함께 바꿔야 합니다.
 
 ## 의존성 (build.gradle)
 ```groovy
@@ -115,7 +127,7 @@ psql -d <DB> -f sample-formats-postgresql.sql
 
 | 블록 | 자식 | 속성 (허용 값 밖이면 기본값) |
 |---|---|---|
-| gallery | 제목 `p[data-role=title]`, `img` | data-cols 1~6 (범위 밖은 1·6 으로 맞춤, 숫자가 아니면 3), data-auto `1`, data-layout justify/cover, data-align center/right — 허용 값이 아니면 해당 속성 제거 |
+| gallery | 제목 `p[data-role=title]`, `img` | data-layout justify/cover. 예전 저장분 호환용: data-cols 는 있을 때만 1~6 으로 맞춤(숫자가 아니면 제거), data-auto `1`, data-align center/right — 허용 값이 아니면 해당 속성 제거 |
 | slider | 제목 `p[data-role=title]`, `img` | data-interval 0~60000 (기본 3000), data-ratio 16:9/4:3/1:1/21:9, data-indicator dots/numbers/bars/none, data-indicator-pos bottom-center/bottom-left/bottom-right, data-width 100/75/50, data-align left/center/right (기본 center) |
 | buttons | `a` 만 (`data-role="button"` 강제) | data-align left/center/right (기본 center). 버튼 `data-style` primary/outline/gray (기본 primary), `data-size` sm/lg (그 밖이면 제거). 버튼이 없으면 블록 제거 |
 | youtube | `iframe` 하나 | data-width 100/75/50, data-align left/center/right (기본 center). 바로 아래 `iframe` 이 없으면 블록 제거 |
