@@ -48,8 +48,8 @@ public class HtmlSanitizer {
             .addAttributes("span", "style")
             .addAttributes("div", "data-type", "data-cols", "data-auto", "data-layout", "data-align", "data-width", "data-interval", "data-ratio", "data-indicator", "data-indicator-pos")
             .addAttributes("iframe", "src", "title", "allow", "allowfullscreen")
-            .addProtocols("iframe", "src", "https")   // 이미지 갤러리 블록
-            .addAttributes("p", "data-role")                                 // 갤러리 제목
+            .addProtocols("iframe", "src", "https")   // 유튜브 블록
+            .addAttributes("p", "data-role")                                 // 갤러리·슬라이드 제목
             .addProtocols("a", "href", "http", "https", "mailto")
             .addProtocols("img", "src", "http", "https", "data")
             .addEnforcedAttribute("a", "rel", "noopener noreferrer")
@@ -57,12 +57,22 @@ public class HtmlSanitizer {
             .preserveRelativeLinks(true);
 
     /**
+     * 프로토콜 검사용 가상 기준 주소.
+     * jsoup 은 baseUri 로 절대 주소를 만든 뒤 프로토콜을 검사하므로, 빈 값이면 /uploads/... 같은 상대 경로가 전부 제거된다.
+     * preserveRelativeLinks(true) 라 저장되는 값은 원래의 상대 경로 그대로다.
+     */
+    private static final String PROTOCOL_CHECK_BASE_URI = "http://jm-editor.local/";
+
+    /** 제목 p[data-role=title] 을 가질 수 있는 블록 */
+    private static final java.util.Set<String> TITLED_BLOCKS = java.util.Set.of("gallery", "slider");
+
+    /**
      * @param html 클라이언트에서 받은 HTML
      * @return 허용 태그/속성만 남긴 HTML
      */
     public String clean(String html) {
         if (html == null || html.isBlank()) return "";
-        String cleaned = Jsoup.clean(html, "", safelist, new Document.OutputSettings().prettyPrint(false));
+        String cleaned = Jsoup.clean(html, PROTOCOL_CHECK_BASE_URI, safelist, new Document.OutputSettings().prettyPrint(false));
         Document doc = Jsoup.parseBodyFragment(cleaned);
 
         // style 은 color / background-color 만 남김
@@ -151,9 +161,9 @@ public class HtmlSanitizer {
             }
             div.textNodes().forEach(org.jsoup.nodes.Node::remove);
         }
-        // 갤러리 밖의 data-role 은 제거
+        // 갤러리·슬라이드 제목 밖의 data-role 은 제거
         for (Element p : doc.select("p[data-role]")) {
-            if (p.parent() == null || !"gallery".equals(p.parent().attr("data-type"))) p.removeAttr("data-role");
+            if (p.parent() == null || !TITLED_BLOCKS.contains(p.parent().attr("data-type"))) p.removeAttr("data-role");
         }
         return doc.body().html();
     }
