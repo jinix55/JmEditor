@@ -143,7 +143,7 @@ ES Module 로 쓰려면:
 
 ### 서버
 
-[server/spring-boot](server/spring-boot) 의 Spring Boot 구현(조회·등록·수정·이미지 업로드·서식 목록)을 패키지에 맞춰 넣고, `schema-postgresql.sql` 로 테이블을 만듭니다. 저장 전 `HtmlSanitizer` 를 반드시 거칩니다.
+[server/spring-boot](server/spring-boot) 의 Spring Boot 구현(조회·등록·수정·이미지 업로드·서식 목록)을 패키지에 맞춰 넣고, `schema-postgresql.sql`(MariaDB 는 `schema-mariadb.sql`)로 테이블을 만듭니다. 저장 전 `HtmlSanitizer` 를 반드시 거칩니다.
 
 ### 소스로 쓰기 / 직접 빌드
 
@@ -173,7 +173,7 @@ api: {
 
 ## 서버
 
-[server/spring-boot](server/spring-boot) 에 Spring Boot(JPA + jsoup) 구현을 넣어 뒀습니다. 위 다섯 개 엔드포인트, 이미지 업로드 저장, `editor_content` / `editor_format` 스키마(PostgreSQL)가 들어 있습니다.
+[server/spring-boot](server/spring-boot) 에 Spring Boot(JPA + jsoup) 구현을 넣어 뒀습니다. 위 다섯 개 엔드포인트, 이미지 업로드 저장, `editor_content` / `editor_format` 스키마·서식 샘플(PostgreSQL, MariaDB)이 들어 있습니다.
 
 클라이언트 Sanitizer 는 편의용입니다. 저장 전에 서버에서 한 번 더 걸러야 하고, `HtmlSanitizer.java` 가 클라이언트와 같은 규칙으로 처리합니다.
 
