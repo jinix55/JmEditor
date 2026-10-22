@@ -130,7 +130,12 @@ export class ButtonsCommands {
     selLabel.className = 'jm-buttons-sellabel';
     selLabel.textContent = '선택한 버튼';
 
-    h.append(handle, title, spacer, add, align, remove, br, selLabel, url, style, colors, size, icon, iconPos, del);
+    // 둘째 줄 오른쪽 묶음: 색부터 삭제까지 (줄바꿈돼도 함께 오른쪽 정렬)
+    const right = document.createElement('span');
+    right.className = 'jm-buttons-right';
+    right.append(colors, size, icon, iconPos, del);
+
+    h.append(handle, title, spacer, add, align, remove, br, selLabel, url, style, right);
     block._header = h;
     return h;
   }
