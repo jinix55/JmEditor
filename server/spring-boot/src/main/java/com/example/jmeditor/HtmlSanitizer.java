@@ -38,7 +38,7 @@ public class HtmlSanitizer {
             .addAttributes("img", "src", "alt", "width", "height", "data-float", "style")   // 글 감싸기: 방향 + 폭(%)
             .addAttributes("p", "style")
             .addAttributes("h1", "style").addAttributes("h2", "style").addAttributes("h3", "style")
-            .addAttributes("li", "style").addAttributes("blockquote", "style")
+            .addAttributes("li", "style").addAttributes("blockquote", "style", "data-style")   // 인용 스타일: box·quote (세로선은 기본값)
             .addAttributes("ul", "style")
             .addAttributes("ol", "style", "start")
             .addAttributes("table", "style", "data-border")
@@ -138,6 +138,11 @@ public class HtmlSanitizer {
 
         // 이미지+글 배치 블록: 속성·칸 정리 (아래 div 일괄 처리보다 먼저)
         for (Element box : doc.select("div[data-type=layout]")) cleanLayout(box);
+
+        // 인용 스타일: box(박스)·quote(따옴표)만, 세로선(line)은 기본값이라 속성 없음
+        for (Element q : doc.select("blockquote[data-style]")) {
+            if (!java.util.Set.of("box", "quote").contains(q.attr("data-style"))) q.removeAttr("data-style");
+        }
 
         // 버튼 링크: data-role=button 일 때만 data-style 허용
         for (Element a : doc.select("a")) {

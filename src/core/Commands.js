@@ -295,6 +295,39 @@ export class Commands {
     this.editor.commit();
   }
 
+  /** 인용 스타일: line(세로선, 기본 — 속성 없음) | box(박스) | quote(따옴표) */
+  static QUOTE_STYLES = ['line', 'box', 'quote'];
+
+  /**
+   * 인용 적용·스타일 변경·해제
+   * - 인용이 아닌 블록이면 그 스타일의 인용으로 바꾼다
+   * - 이미 인용이면 스타일만 바꾼다. style 이 null 이면 인용을 풀어 단락으로
+   * @param {'line'|'box'|'quote'|null} style
+   */
+  setQuote(style) {
+    const block = this.sel.getBlock();
+    if (!block || /^(LI|TD|TH)$/.test(block.tagName)) return; // 목록 항목·표 셀은 대상 아님
+    let el = block;
+    if (block.tagName !== 'BLOCKQUOTE') {
+      if (!style) return;
+      el = document.createElement('blockquote');
+      while (block.firstChild) el.appendChild(block.firstChild);
+      if (block.style.textAlign) el.style.textAlign = block.style.textAlign; // 정렬은 유지
+      block.replaceWith(el);
+    } else if (!style) {
+      el = document.createElement('p');
+      while (block.firstChild) el.appendChild(block.firstChild);
+      if (block.style.textAlign) el.style.textAlign = block.style.textAlign;
+      block.replaceWith(el);
+    }
+    if (el.tagName === 'BLOCKQUOTE') {
+      if (style && style !== 'line' && Commands.QUOTE_STYLES.includes(style)) el.dataset.style = style;
+      else delete el.dataset.style;
+    }
+    this.sel.placeCursor(el, true);
+    this.editor.commit();
+  }
+
   // ───────────── 목록 (ul / ol) ─────────────
 
   /**
@@ -534,6 +567,7 @@ export class Commands {
       a: this.sel.isInside('a'),
       ...this.getStyleState(),
       block: block ? block.tagName.toLowerCase() : null,
+      quote: block?.tagName === 'BLOCKQUOTE' ? (block.dataset.style || 'line') : null, // 인용 스타일
       align: block ? (block.style.textAlign || 'left') : 'left',
       list: block && block.tagName === 'LI' ? block.parentNode.tagName.toLowerCase() : null,
       listType: block && block.tagName === 'LI' ? (block.parentNode.style.listStyleType || null) : null,

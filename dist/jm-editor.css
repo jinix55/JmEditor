@@ -72,7 +72,7 @@
 /* .jm-content: 저장된 HTML 을 보여주는 뷰어 공통 스타일 — 실제 조회 페이지에도 같은 클래스로 적용 */
 .jm-content p { margin: 0 0 8px; }
 .jm-content h1 { font-size: 1.8em; margin: 12px 0 8px; } .jm-content h2 { font-size: 1.5em; margin: 12px 0 8px; } .jm-content h3 { font-size: 1.2em; margin: 10px 0 6px; }
-.jm-content blockquote { margin: 8px 0; padding: 6px 12px; border-left: 3px solid var(--jm-border, #d0d5dd); color: #475467; }
+.jm-content blockquote { margin: 8px 0; padding: 6px 12px; border-left: 4px solid #475467; color: #475467; }
 .jm-content ul, .jm-content ol { margin: 0 0 8px; padding-left: 24px; }
 .jm-content img { max-width: 100%; height: auto; display: block; }
 .jm-content a { color: #1d4ed8; text-decoration: underline; }
@@ -105,9 +105,33 @@
 .jm-editor blockquote {
   margin: 8px 0;
   padding: 6px 12px;
-  border-left: 3px solid var(--jm-border);
+  border-left: 4px solid #475467;
   color: #475467;
 }
+/* 인용 스타일 (저장 HTML 에도 필요 — 뷰어 공통): 기본 세로선 / data-style="box" 박스 / data-style="quote" 따옴표 */
+.jm-editor blockquote[data-style="box"], .jm-content blockquote[data-style="box"] { border-left: 0; padding: 12px 16px; border-radius: 8px; background: #eef0f4; color: #1d2939; }
+/* 따옴표: 글 처음에 여는 따옴표, 마지막 글자 뒤에 닫는 따옴표 (글 흐름 안에 들어가 여러 줄이어도 처음·끝에 붙음) */
+.jm-editor blockquote[data-style="quote"], .jm-content blockquote[data-style="quote"] { border-left: 0; padding: 6px 12px; color: #1d2939; }
+.jm-editor blockquote[data-style="quote"]::before, .jm-content blockquote[data-style="quote"]::before,
+.jm-editor blockquote[data-style="quote"]::after, .jm-content blockquote[data-style="quote"]::after {
+  font: 700 1.9em/0 Georgia, "Times New Roman", serif; color: #98a2b3; vertical-align: -0.35em;
+}
+.jm-editor blockquote[data-style="quote"]::before, .jm-content blockquote[data-style="quote"]::before { content: "\201C"; margin-right: 6px; }
+.jm-editor blockquote[data-style="quote"]::after, .jm-content blockquote[data-style="quote"]::after { content: "\201D"; margin-left: 6px; }
+/* 인용 스타일 선택 팝업 (에디터 전용) */
+.jm-quotepicker { position: absolute; z-index: 1000; padding: 12px; background: #fff; border: 1px solid var(--jm-border, #d0d5dd); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+.jm-quotepicker[hidden] { display: none; }
+.jm-quotepicker-title { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: #101828; }
+.jm-quotepicker-list { display: flex; gap: 8px; }
+.jm-quotepicker-card { display: flex; flex-direction: column; width: 136px; padding: 10px 10px 8px; border: 1px solid #e4e7ec; border-radius: 10px; background: #fff; cursor: pointer; text-align: left; font: inherit; }
+.jm-quotepicker-card:hover { border-color: #a9c4ff; }
+.jm-quotepicker-card.is-on { border: 2px solid #1d4ed8; padding: 9px 9px 7px; }
+.jm-quotepicker-preview { flex: 1; min-height: 64px; display: flex; align-items: center; font-size: 13px; }
+.jm-quotepicker-preview blockquote { box-sizing: border-box; width: 100%; margin: 0; }
+.jm-quotepicker-name { margin-top: 8px; font-size: 12px; text-align: center; color: #344054; }
+.jm-quotepicker-card.is-on .jm-quotepicker-name { color: #1d4ed8; font-weight: 600; }
+.jm-quotepicker-remove { margin-top: 8px; width: 100%; height: 28px; border: 1px solid #e4e7ec; border-radius: 6px; background: #fff; color: #b42318; font-size: 12px; cursor: pointer; }
+.jm-quotepicker-remove[hidden] { display: none; }
 .jm-editor ul, .jm-editor ol { margin: 0 0 8px; padding-left: 24px; }
 /* 한글 목록 번호: list-style-type: hangul 은 비표준이라 counter 로 표시 (뷰어 .jm-content 도 동일) */
 ol[style*="hangul"] { list-style: none; counter-reset: jm-hangul; }

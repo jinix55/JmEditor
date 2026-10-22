@@ -86,7 +86,8 @@ psql -d <DB> -f sample-formats-postgresql.sql
 | 태그 | 허용 속성 |
 |---|---|
 | p | style, data-role (갤러리·슬라이드 제목에서만 유지) |
-| h1, h2, h3, li, blockquote, ul, span | style |
+| h1, h2, h3, li, ul, span | style |
+| blockquote | style, data-style(box·quote 만 — 세로선은 기본값이라 속성 없음) |
 | ol | style, start |
 | br, strong, em, u, s, tbody, thead | — |
 | a | href, target, rel, data-role, data-style, data-size, data-color, data-tone, data-icon, data-icon-pos, style(버튼의 `--jm-btn: #hex` 만) — 버튼 속성은 `data-role="button"` 일 때만 남음 |

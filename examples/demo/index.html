@@ -410,6 +410,25 @@ div[data-type="layout"] [data-cell="text"] > :last-child { margin-bottom: 0; }
 .jm-btn.jm-buttons-swatch-custom { min-width: 0; height: 22px; padding: 0 7px 0 22px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel); font-size: 11px; cursor: pointer; position: relative; }
 .jm-buttons-swatch-custom::before { content: ""; position: absolute; left: 4px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--sw, conic-gradient(#dc2626, #ea580c, #ca8a04, #15803d, #1d4ed8, #7c3aed, #dc2626)); }
 .jm-buttons-swatch-custom.is-on { box-shadow: 0 0 0 2px #1d4ed8; border-color: transparent; }
+/* 인용 스타일: 기본 세로선 / 박스 / 따옴표 */
+.jm-editor blockquote[data-style="box"],.jm-content blockquote[data-style="box"]{border-left:0;padding:12px 16px;border-radius:8px;background:var(--code);color:var(--fg)}
+.jm-editor blockquote[data-style="quote"],.jm-content blockquote[data-style="quote"]{border-left:0;padding:6px 12px;color:var(--fg)}
+.jm-editor blockquote[data-style="quote"]::before,.jm-content blockquote[data-style="quote"]::before,.jm-editor blockquote[data-style="quote"]::after,.jm-content blockquote[data-style="quote"]::after{font:700 1.9em/0 Georgia,"Times New Roman",serif;color:var(--muted);vertical-align:-.35em}
+.jm-editor blockquote[data-style="quote"]::before,.jm-content blockquote[data-style="quote"]::before{content:"\201C";margin-right:6px}
+.jm-editor blockquote[data-style="quote"]::after,.jm-content blockquote[data-style="quote"]::after{content:"\201D";margin-left:6px}
+.jm-quotepicker{position:absolute;z-index:1000;padding:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.jm-quotepicker[hidden]{display:none}
+.jm-quotepicker-title{margin:0 0 8px;font-size:13px;font-weight:700;color:var(--fg)}
+.jm-quotepicker-list{display:flex;gap:8px}
+.jm-quotepicker-card{display:flex;flex-direction:column;width:136px;padding:10px 10px 8px;border:1px solid var(--line);border-radius:10px;background:var(--panel);cursor:pointer;text-align:left;font:inherit;color:var(--fg)}
+.jm-quotepicker-card:hover{border-color:var(--accent)}
+.jm-quotepicker-card.is-on{border:2px solid var(--accent);padding:9px 9px 7px}
+.jm-quotepicker-preview{flex:1;min-height:64px;display:flex;align-items:center;font-size:13px}
+.jm-quotepicker-preview blockquote{box-sizing:border-box;width:100%;margin:0}
+.jm-quotepicker-name{margin-top:8px;font-size:12px;text-align:center;color:var(--muted)}
+.jm-quotepicker-card.is-on .jm-quotepicker-name{color:var(--accent);font-weight:600}
+.jm-quotepicker-remove{margin-top:8px;width:100%;height:28px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:#d14343;font-size:12px;cursor:pointer}
+.jm-quotepicker-remove[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -587,7 +606,7 @@ const ALLOWED = {
   p: ['style'], br: [], strong: [], em: [], u: [], s: [],
   h1: ['style'], h2: ['style'], h3: ['style'],
   ul: ['style'], ol: ['style', 'start'], li: ['style'],
-  blockquote: ['style'],
+  blockquote: ['style', 'data-style'], // 인용 스타일: box·quote (세로선은 기본값이라 속성 없음)
   a: ['href', 'target', 'rel', 'data-role', 'data-style', 'data-size', 'data-color', 'data-tone', 'data-icon', 'data-icon-pos'], // data-role=button → 버튼 모양 링크 (값 검사는 #cleanButton)
   img: ['src', 'alt', 'width', 'height', 'data-float', 'style'], // 글 감싸기: 방향 + 폭(%) — 값 검사는 #cleanImage
   table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style'],
@@ -814,6 +833,7 @@ class Sanitizer {
       else Sanitizer.#cleanButton(el, node.getAttribute('style'));
     }
     if (tag === 'img') Sanitizer.#cleanImage(el);
+    if (tag === 'blockquote' && !['box', 'quote'].includes(el.getAttribute('data-style'))) el.removeAttribute('data-style');
 
     Array.from(node.childNodes).forEach((c) => {
       const r = Sanitizer.#cleanNode(c);
@@ -1446,6 +1466,39 @@ class Commands {
     this.editor.commit();
   }
 
+  /** 인용 스타일: line(세로선, 기본 — 속성 없음) | box(박스) | quote(따옴표) */
+  static QUOTE_STYLES = ['line', 'box', 'quote'];
+
+  /**
+   * 인용 적용·스타일 변경·해제
+   * - 인용이 아닌 블록이면 그 스타일의 인용으로 바꾼다
+   * - 이미 인용이면 스타일만 바꾼다. style 이 null 이면 인용을 풀어 단락으로
+   * @param {'line'|'box'|'quote'|null} style
+   */
+  setQuote(style) {
+    const block = this.sel.getBlock();
+    if (!block || /^(LI|TD|TH)$/.test(block.tagName)) return; // 목록 항목·표 셀은 대상 아님
+    let el = block;
+    if (block.tagName !== 'BLOCKQUOTE') {
+      if (!style) return;
+      el = document.createElement('blockquote');
+      while (block.firstChild) el.appendChild(block.firstChild);
+      if (block.style.textAlign) el.style.textAlign = block.style.textAlign; // 정렬은 유지
+      block.replaceWith(el);
+    } else if (!style) {
+      el = document.createElement('p');
+      while (block.firstChild) el.appendChild(block.firstChild);
+      if (block.style.textAlign) el.style.textAlign = block.style.textAlign;
+      block.replaceWith(el);
+    }
+    if (el.tagName === 'BLOCKQUOTE') {
+      if (style && style !== 'line' && Commands.QUOTE_STYLES.includes(style)) el.dataset.style = style;
+      else delete el.dataset.style;
+    }
+    this.sel.placeCursor(el, true);
+    this.editor.commit();
+  }
+
   // ───────────── 목록 (ul / ol) ─────────────
 
   /**
@@ -1685,6 +1738,7 @@ class Commands {
       a: this.sel.isInside('a'),
       ...this.getStyleState(),
       block: block ? block.tagName.toLowerCase() : null,
+      quote: block?.tagName === 'BLOCKQUOTE' ? (block.dataset.style || 'line') : null, // 인용 스타일
       align: block ? (block.style.textAlign || 'left') : 'left',
       list: block && block.tagName === 'LI' ? block.parentNode.tagName.toLowerCase() : null,
       listType: block && block.tagName === 'LI' ? (block.parentNode.style.listStyleType || null) : null,
@@ -2824,16 +2878,18 @@ function computeJustifiedLayout(ratios, W, gap, T) {
     const isEnd = r2.next >= n;
     const a1 = 1 / sumR(r1.idx), a2 = 1 / sumR(r2.idx);
     const c1 = gap * (r1.idx.length - 1), c2 = gap * (r2.idx.length - 1);
+    // 두 줄 모두 남은 폭을 꽉 채우는 높이 (연립식)
     let H = ((W - gap - c1) * a1 + (W - gap - c2) * a2 + gap) / (1 + rt * (a1 + a2));
-    let h1, h2;
-    if (isEnd && H > H0) {
-      // 마지막 블록은 늘리지 않음: 목표 높이로 두되, 옆 폭(S0)을 넘는 줄은 그 폭에 맞게 줄인다
-      h1 = Math.min(T, (S0 - c1) * a1);
-      h2 = Math.min(T, (S0 - c2) * a2);
-      H = h1 + h2 + gap;
-    } else {
-      const S = W - rt * H - gap;
-      h1 = (S - c1) * a1; h2 = (S - c2) * a2;
+    let S = W - rt * H - gap;
+    let h1 = (S - c1) * a1, h2 = (S - c2) * a2;
+    // 마지막 블록의 아래 줄은 갤러리의 마지막 줄 — 목표 높이보다 커지면 목표 높이로 왼쪽 정렬하고,
+    // 긴 사진과 위 줄은 그대로 폭을 꽉 채운다 (마지막 줄만 덜 찰 수 있음)
+    // 아래 줄을 줄이면 H 가 줄어 긴 사진이 좁아지고 S 는 넓어지므로, 목표 높이의 아래 줄은 항상 S 안에 들어간다
+    if (isEnd && h2 > T) {
+      h2 = T;
+      H = ((W - gap - c1) * a1 + gap + h2) / (1 + rt * a1);
+      S = W - rt * H - gap;
+      h1 = (S - c1) * a1;
     }
     if (h1 < T * 0.5 || h2 < T * 0.5 || H > 4 * T) {  // 한쪽 줄이 지나치게 납작·길어지면 블록 대신 일반 배치
       noBlock.add(t);
@@ -2842,9 +2898,7 @@ function computeJustifiedLayout(ratios, W, gap, T) {
     }
     const tallW = rt * H;
     const xSub = side === 'left' ? tallW + gap : 0;
-    // 오른쪽 배치: 옆 줄이 폭을 채우면 오른쪽 끝, 늘리지 않은 마지막 블록이면 옆 줄 바로 뒤 (가운데가 비지 않게)
-    const subW = Math.max(sumR(r1.idx) * h1 + c1, sumR(r2.idx) * h2 + c2);
-    boxes[t] = { x: side === 'left' ? 0 : Math.min(W - tallW, subW + gap), y, w: tallW, h: H };
+    boxes[t] = { x: side === 'left' ? 0 : W - tallW, y, w: tallW, h: H };
     place(r1.idx, xSub, y, h1);
     place(r2.idx, xSub, y + h1 + gap, h2);
     y += H + gap;
@@ -2891,14 +2945,17 @@ function layoutGallery(gallery) {
   if (title && title.offsetParent === gallery) {
     top = title.offsetTop + title.offsetHeight + (parseFloat(getComputedStyle(title).marginBottom) || 0) + GAP;
   }
+  // 좌·우(위·아래) 끝을 각각 반올림해 크기를 정한다 — 줄 끝이 반올림 오차 없이 정확히 폭에 닿고 간격도 고르게
   imgs.forEach((img, k) => {
     const b = boxes[k];
+    const left = Math.round(padL + b.x), right = Math.round(padL + b.x + b.w);
+    const y0 = Math.round(top + b.y), y1 = Math.round(top + b.y + b.h);
     img.style.position = 'absolute';
     img.style.flex = 'none';
-    img.style.left = `${Math.round(padL + b.x)}px`;
-    img.style.top = `${Math.round(top + b.y)}px`;
-    img.style.width = `${Math.max(1, Math.floor(b.w))}px`;
-    img.style.height = `${Math.max(1, Math.floor(b.h))}px`;
+    img.style.left = `${left}px`;
+    img.style.top = `${y0}px`;
+    img.style.width = `${Math.max(1, right - left)}px`;
+    img.style.height = `${Math.max(1, y1 - y0)}px`;
   });
   const contentH = top - padT + height;
   gallery.style.height = `${Math.ceil(cs.boxSizing === 'border-box' ? contentH + padT + padB : contentH)}px`;
@@ -5137,7 +5194,8 @@ class JmEditor {
       h2: () => c.setBlock('h2'),
       h3: () => c.setBlock('h3'),
       paragraph: () => c.setBlock('p'),
-      quote: () => c.setBlock('blockquote'),
+      // 값 없이 부르면 인용 토글, 'line'·'box'·'quote' 면 그 스타일로, null 이면 인용 해제
+      quote: () => (value === undefined ? c.setBlock('blockquote') : c.setQuote(value)),
       ul: () => c.toggleList('ul', value),
       ol: () => c.toggleList('ol', value),
       link: () => c.setLink(value),
@@ -5541,6 +5599,107 @@ class JmEditor {
 }
 
 
+
+/**
+ * QuoteStylePicker
+ * - 툴바 「인용」 버튼 아래에 인용 스타일 카드(세로선·박스·따옴표)를 미리보기로 보여 주고, 고르면 onPick(style) 호출.
+ * - 현재 커서가 인용 안이면 그 스타일을 강조하고 「인용 해제」를 함께 보여 준다 (onPick(null)).
+ * - 미리보기는 실제 저장 스타일(.jm-content blockquote[data-style]) 그대로 그린다.
+ */
+const QUOTE_STYLE_ITEMS = Object.freeze([['line', '세로선'], ['box', '박스'], ['quote', '따옴표']]);
+
+class QuoteStylePicker {
+  /**
+   * @param {object} options
+   * @param {(style: 'line'|'box'|'quote'|null) => void} options.onPick
+   */
+  constructor({ onPick }) {
+    this.onPick = onPick;
+    this.el = document.createElement('div');
+    this.el.className = 'jm-quotepicker';
+    this.el.hidden = true;
+    this.el.setAttribute('role', 'dialog');
+    this.el.setAttribute('aria-label', '인용 스타일');
+
+    const title = document.createElement('div');
+    title.className = 'jm-quotepicker-title';
+    title.textContent = '인용 스타일';
+    const list = document.createElement('div');
+    list.className = 'jm-quotepicker-list';
+    this.cards = QUOTE_STYLE_ITEMS.map(([style, label]) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'jm-quotepicker-card';
+      card.dataset.style = style;
+      const preview = document.createElement('div');
+      preview.className = 'jm-quotepicker-preview jm-content';
+      const bq = document.createElement('blockquote');
+      if (style !== 'line') bq.dataset.style = style;
+      bq.textContent = '인용 예시';
+      preview.appendChild(bq);
+      const name = document.createElement('span');
+      name.className = 'jm-quotepicker-name';
+      name.textContent = label;
+      card.append(preview, name);
+      card.addEventListener('mousedown', (e) => e.preventDefault()); // 에디터 선택 유지
+      card.addEventListener('click', () => this.#pick(style));
+      list.appendChild(card);
+      return card;
+    });
+    this.removeBtn = document.createElement('button');
+    this.removeBtn.type = 'button';
+    this.removeBtn.className = 'jm-quotepicker-remove';
+    this.removeBtn.textContent = '인용 해제';
+    this.removeBtn.addEventListener('mousedown', (e) => e.preventDefault());
+    this.removeBtn.addEventListener('click', () => this.#pick(null));
+
+    this.el.append(title, list, this.removeBtn);
+    document.body.appendChild(this.el);
+
+    this.anchor = null;
+    this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.anchor?.contains(e.target)) this.close(); };
+    this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
+  }
+
+  /**
+   * 버튼 아래에 열기
+   * @param {HTMLElement} anchorEl
+   * @param {'line'|'box'|'quote'|null} current 커서가 있는 인용의 스타일 (인용이 아니면 null)
+   */
+  open(anchorEl, current) {
+    this.anchor = anchorEl;
+    this.cards.forEach((c) => c.classList.toggle('is-on', c.dataset.style === current));
+    this.removeBtn.hidden = !current;
+    this.el.hidden = false;
+    const r = anchorEl.getBoundingClientRect();
+    this.el.style.left = `${Math.max(8, Math.min(r.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - this.el.offsetWidth - 8))}px`;
+    this.el.style.top = `${r.bottom + window.scrollY + 4}px`;
+    document.addEventListener('mousedown', this.onDocDown, true);
+    document.addEventListener('keydown', this.onKey, true);
+  }
+
+  close() {
+    if (this.el.hidden) return;
+    this.el.hidden = true;
+    document.removeEventListener('mousedown', this.onDocDown, true);
+    document.removeEventListener('keydown', this.onKey, true);
+  }
+
+  /** 열려 있으면 닫고, 닫혀 있으면 연다 */
+  toggle(anchorEl, current) {
+    if (this.el.hidden) this.open(anchorEl, current); else this.close();
+  }
+
+  destroy() {
+    this.close();
+    this.el.remove();
+  }
+
+  #pick(style) {
+    this.close();
+    this.onPick?.(style);
+  }
+}
 
 /**
  * TableGridPicker
@@ -6259,7 +6418,7 @@ const BUTTONS = [
   ['modePreview','미리보기',s=>mode==='preview',false,{icon:PREVIEW_ICON,group:'mode',segLast:true,row:'top'}],
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
   ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),selectDefault:['','기본']}],null,
-  ['heading','제목',()=>false,false,{tip:'제목 단계',select:[['h1','제목 1'],['h2','제목 2'],['h3','제목 3']],selectDefault:['p','본문']}],['quote','인용',s=>s.block==='blockquote',false,{tip:'인용',icon:QUOTE_ICON,iconOnly:true}],null,
+  ['heading','제목',()=>false,false,{tip:'제목 단계',select:[['h1','제목 1'],['h2','제목 2'],['h3','제목 3']],selectDefault:['p','본문']}],['quote','인용',s=>s.block==='blockquote',false,{tip:'인용 (스타일 선택)',icon:QUOTE_ICON,iconOnly:true,dropdown:true}],null,
   ['alignMenu','가로 정렬',()=>false,false,{tip:'가로 정렬',icon:ALIGN_LEFT_ICON,iconOnly:true,dropdown:true}],['valignMenu','세로 정렬',()=>false,false,{tip:'세로 정렬 (표 셀)',icon:VALIGN_TOP_ICON,iconOnly:true,dropdown:true,tableEnabled:true}],null,
   ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true,splitMain:true}],['ulType','비순서 목록 유형',()=>false,false,{tip:'비순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true,splitMain:true}],['olType','순서 목록 유형',()=>false,false,{tip:'순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],null,
   ['link','링크',s=>s.a,false,{tip:'링크',icon:LINK_ICON,iconOnly:true}],['image','이미지',()=>false,false,{tip:'이미지',icon:IMAGE_ICON,iconOnly:true}],['youtube','유튜브',()=>false,false,{icon:YOUTUBE_ICON,iconOnly:true}],['table','표',s=>s.table,false,{tip:'표 삽입',icon:TABLE_ICON,iconOnly:true}],null,
@@ -6270,6 +6429,7 @@ const linkbar=document.getElementById('linkbar'), linkUrl=document.getElementByI
 const fileInput=document.getElementById('file');
 const colorPicker=new ColorPicker();
 const listMenu=new ContextMenu();
+const quotePicker=new QuoteStylePicker({onPick:s=>editor.exec('quote',s)}); // 인용 스타일 카드
 const ALIGN_ITEMS=[['left','왼쪽',ALIGN_LEFT_ICON],['center','가운데',ALIGN_CENTER_ICON],['right','오른쪽',ALIGN_RIGHT_ICON]];
 const VALIGN_ITEMS=[['top','위',VALIGN_TOP_ICON],['middle','중간',VALIGN_MIDDLE_ICON],['bottom','아래',VALIGN_BOTTOM_ICON]];
 const UL_TYPES=[['disc','● 기본'],['circle','○ 원'],['square','■ 사각']];
@@ -6313,6 +6473,7 @@ function run(cmd){
   if(cmd==='color'||cmd==='bgColor'){const s=editor.getState();editor.sel.save();colorPicker.toggleAt(btns[cmd],c=>editor.exec(cmd,c),{current:cmd==='color'?s.color:s.bg,sampleMode:cmd==='color'?'color':'background'});return;}
   if(cmd==='alignMenu'||cmd==='valignMenu'){const r=btns[cmd].getBoundingClientRect();editor.sel.save();const items=cmd==='alignMenu'?ALIGN_ITEMS:VALIGN_ITEMS;const prefix=cmd==='alignMenu'?'align':'valign';listMenu.open(r.left,r.bottom+4,items.map(([v,label])=>({label,action:()=>editor.exec(prefix+v.charAt(0).toUpperCase()+v.slice(1))})));return;}
   if(cmd==='ulType'||cmd==='olType'){const tag=cmd==='ulType'?'ul':'ol';const r=btns[cmd].getBoundingClientRect();editor.sel.save();listMenu.open(r.left,r.bottom+4,(tag==='ul'?UL_TYPES:OL_TYPES).map(([v,label])=>({label,action:()=>editor.exec(tag,v)})));return;}
+  if(cmd==='quote'){editor.sel.save();quotePicker.toggle(btns.quote,editor.getState().quote);return;}
   if(cmd==='table'){editor.sel.save();gridPicker.toggle(btns.table);return;}
   if(cmd==='format'){editor.sel.save();formatPicker.toggle(btns.format);return;}
   if(cmd==='modeEditor'){setMode('editor');return;}

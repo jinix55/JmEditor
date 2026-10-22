@@ -12,6 +12,7 @@ import { JmEditorApi } from '../api/JmEditorApi.js';
 import { observeGalleries } from '../plugins/gallery/gallery-layout.js';
 import { initSliders } from '../plugins/slider/slider-runtime.js';
 import { ContextMenu } from './ContextMenu.js';
+import { QuoteStylePicker } from './QuoteStylePicker.js';
 
 /** 서식 버튼 아이콘 (자체 제작 SVG) */
 const FORMAT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>';
@@ -87,7 +88,7 @@ const BUTTONS = [
   null, // 구분선
   // 제목: 셀렉트 (본문 / 제목 1~3). 값 선택 시 exec('heading', 'p'|'h1'|'h2'|'h3')
   ['heading', '제목', () => false, false, { tip: '제목 단계', select: [['h1', '제목 1'], ['h2', '제목 2'], ['h3', '제목 3']], selectDefault: ['p', '본문'] }],
-  ['quote', '인용', (s) => s.block === 'blockquote', false, { tip: '인용', icon: QUOTE_ICON, iconOnly: true }],
+  ['quote', '인용', (s) => s.block === 'blockquote', false, { tip: '인용 (스타일 선택)', icon: QUOTE_ICON, iconOnly: true, dropdown: true }],
   null,
   // 정렬: 드롭다운 두 개 (가로 / 세로). 버튼 아이콘은 현재 상태를 보여주고, 누르면 목록
   ['alignMenu', '가로 정렬', () => false, false, { tip: '가로 정렬', icon: ALIGN_LEFT_ICON, iconOnly: true, dropdown: true }],
@@ -192,6 +193,9 @@ export class JmToolbarEditor {
       loadFormats: options.loadFormats || (async () => SAMPLE_FORMATS),
       onPick: (f) => this.editor.exec('format', f.html),
     });
+
+    // 인용 스타일 선택 (세로선·박스·따옴표 미리보기 카드)
+    this.quotePicker = new QuoteStylePicker({ onPick: (style) => this.editor.exec('quote', style) });
 
     // 목록 유형 메뉴
     this.listMenu = new ContextMenu();
@@ -360,6 +364,7 @@ export class JmToolbarEditor {
       })));
       return;
     }
+    if (cmd === 'quote') { this.editor.sel.save(); this.quotePicker.toggle(this.buttons.quote, this.editor.getState().quote); return; }
     if (cmd === 'table') { this.editor.sel.save(); this.gridPicker.toggle(this.buttons.table); return; }
     if (cmd === 'format') { this.editor.sel.save(); this.formatPicker.toggle(this.buttons.format); return; }
     if (cmd === 'modeEditor') { this.setMode('editor'); return; }
@@ -484,6 +489,6 @@ export class JmToolbarEditor {
   destroy() {
     this.#stopPreviewLayout?.(); // 미리보기 런타임(갤러리 감시·슬라이드 타이머) 정리
     this.#stopPreviewLayout = null;
-    this.gridPicker.destroy(); this.colorPicker.destroy(); this.formatPicker.destroy(); this.listMenu.destroy(); this.editor.destroy();
+    this.gridPicker.destroy(); this.quotePicker.destroy(); this.colorPicker.destroy(); this.formatPicker.destroy(); this.listMenu.destroy(); this.editor.destroy();
   }
 }
