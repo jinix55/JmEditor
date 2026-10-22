@@ -197,8 +197,9 @@ ol[style*="hangul"] > li::before { content: counter(jm-hangul, hangul) ". "; pos
 
 /* 이미지 갤러리 (저장 HTML 에도 필요한 공통 스타일 — 뷰어 페이지에도 포함할 것)
    디자인 변수: 목표 줄 높이·이미지 간격(px). :where 로 우선순위를 0 으로 두어 서비스 CSS 에서 바로 덮어쓸 수 있다.
-   예) .jm-content div[data-type="gallery"] { --jm-gallery-row-height: 240px; --jm-gallery-gap: 12px; } */
-:where(div[data-type="gallery"]) { --jm-gallery-row-height: 200px; --jm-gallery-gap: 8px; }
+   --jm-gallery-max-per-row: 한 줄 최대 장수(대략) — 넓은 화면에서는 이 장수에 맞춰 줄 높이가 커진다
+   예) .jm-content div[data-type="gallery"] { --jm-gallery-row-height: 240px; --jm-gallery-gap: 12px; --jm-gallery-max-per-row: 5; } */
+:where(div[data-type="gallery"]) { --jm-gallery-row-height: 200px; --jm-gallery-gap: 8px; --jm-gallery-max-per-row: 4; }
 .jm-editor div[data-type="gallery"], .jm-gallery {
   display: flex; flex-wrap: wrap; gap: var(--jm-gallery-gap); margin: 0 0 8px;
 }
@@ -210,6 +211,8 @@ div[data-type="gallery"][data-cols="5"] { --jm-cols: 5; } div[data-type="gallery
 div[data-type="gallery"]:not([data-layout="justify"]) img { height: 180px; object-fit: cover; }
 /* justify: 비율 유지, 줄 채움 — 폭·높이는 gallery-layout.js 가 인라인으로 지정 */
 div[data-type="gallery"][data-layout="justify"] img { flex: 0 0 auto; object-fit: cover; }
+/* 배치 스크립트가 사진을 좌표(절대 위치)로 놓으므로 갤러리가 기준이 된다. 스크립트가 없으면 위 flex 줄 배치로 보임 */
+div[data-type="gallery"][data-layout="justify"] { position: relative; align-content: flex-start; align-items: flex-start; } /* 높이를 정해도 제목이 늘어나지 않게 */
 div[data-type="gallery"] img { border-radius: 4px; margin: 0; }
 /* 예전에 저장된 정렬 값 호환 (새 갤러리는 정렬 선택 없이 마지막 줄 왼쪽 정렬) */
 div[data-type="gallery"][data-align="center"] { justify-content: center; }
