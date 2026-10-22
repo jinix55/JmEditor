@@ -126,6 +126,9 @@ export class FormatPicker {
   }
 }
 
+/** 「이미지 + 글 (감싸기)」 서식의 이미지 자리 표시 (800×600 SVG). 이미지를 클릭해 「교체」로 바꾼다 */
+export const IMAGE_PLACEHOLDER = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIiB2aWV3Qm94PSIwIDAgODAwIDYwMCI+PHJlY3Qgd2lkdGg9IjgwMCIgaGVpZ2h0PSI2MDAiIGZpbGw9IiNlZWYyZjciLz48cmVjdCB4PSIxMiIgeT0iMTIiIHdpZHRoPSI3NzYiIGhlaWdodD0iNTc2IiBmaWxsPSJub25lIiBzdHJva2U9IiNiNGMwZDAiIHN0cm9rZS13aWR0aD0iNiIgc3Ryb2tlLWRhc2hhcnJheT0iMTggMTIiIHJ4PSIxMiIvPjx0ZXh0IHg9IjQwMCIgeT0iMjkwIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSI0NCIgZmlsbD0iIzY2NzA4NSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+7J2066+47KeA66W8IOuEo+ycvOyEuOyalDwvdGV4dD48dGV4dCB4PSI0MDAiIHk9IjM1MCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiM5OGEyYjMiIHRleHQtYW5jaG9yPSJtaWRkbGUiPuydtOuvuOyngCDtgbTrpq0g4oaSIOq1kOyytDwvdGV4dD48L3N2Zz4=';
+
 /**
  * 테스트용 샘플 서식 — 실제 운영에서는 서식 관리 API 로 대체
  * (허용 태그: p, h1~h3, strong/em/u/s, span[style color|background-color], ul/ol, blockquote, table, a, img)
@@ -189,5 +192,40 @@ export const SAMPLE_FORMATS = [
     name: '구분 메모',
     description: '배경색 띠 한 줄',
     html: `<p><span style="background-color: #fff9c4">　메모: 내용을 입력하세요　</span></p>`,
+  },
+  {
+    id: 'image-wrap',
+    category: '이미지 + 글',
+    name: '이미지 + 글 (감싸기)',
+    description: '이미지 옆으로 글이 흐르고 아래로 이어짐. 이미지를 클릭해 교체·방향·크기 조절',
+    html: `<p><img src="${IMAGE_PLACEHOLDER}" width="800" height="600" data-float="left" style="width: 40%"></p><p>이미지 오른쪽부터 글이 채워지고, 이미지 높이를 넘으면 아래 전체 폭으로 이어집니다.</p><p>이미지를 클릭하면 위에 도구 막대가 나옵니다. 「교체」로 실제 이미지를 넣고, 왼쪽·오른쪽 감싸기와 폭을 고르거나 모서리 손잡이를 끌어 크기를 바꿀 수 있습니다.</p>`,
+  },
+  {
+    id: 'layout-side',
+    category: '이미지 + 글',
+    name: '이미지 | 글',
+    description: '2칸. 헤더에서 이미지 왼쪽/오른쪽, 가운데 경계를 끌어 폭 조절',
+    html: `<div data-type="layout" data-preset="side" data-variant="left"><div data-cell="image"></div><div data-cell="text"><p>이미지 옆에 들어갈 글을 입력하세요.</p></div></div>`,
+  },
+  {
+    id: 'layout-one',
+    category: '이미지 + 글',
+    name: '이미지 1장 + 글',
+    description: '4분할. 이미지 옆 작은 글 칸 + 반대쪽 줄 전체 글 칸. 헤더에서 이미지 위치 4곳',
+    html: `<div data-type="layout" data-preset="one" data-variant="tl"><div data-cell="image"></div><div data-cell="text"><p>이미지 옆 글</p></div><div data-cell="text"><p>아래 전체 폭 글</p></div></div>`,
+  },
+  {
+    id: 'layout-diagonal',
+    category: '이미지 + 글',
+    name: '대각선 이미지 2장 + 글',
+    description: '4분할. 이미지가 대각선, 나머지 두 칸은 글. 헤더에서 방향 선택',
+    html: `<div data-type="layout" data-preset="diagonal" data-variant="tl-br"><div data-cell="image"></div><div data-cell="text"><p>위쪽 글</p></div><div data-cell="text"><p>아래쪽 글</p></div><div data-cell="image"></div></div>`,
+  },
+  {
+    id: 'layout-pair',
+    category: '이미지 + 글',
+    name: '이미지 2장 나란히 + 글',
+    description: '이미지 2장과 각각의 글. 헤더에서 이미지 위/아래',
+    html: `<div data-type="layout" data-preset="pair" data-variant="top"><div data-cell="image"></div><div data-cell="text"><p>왼쪽 이미지 설명</p></div><div data-cell="image"></div><div data-cell="text"><p>오른쪽 이미지 설명</p></div></div>`,
   },
 ];

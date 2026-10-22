@@ -26,6 +26,19 @@ export function typeLabel(types) {
   return types.map((t) => t.replace('image/', '').replace('jpeg', 'jpg')).join('·');
 }
 
+/**
+ * 사용자 안내: 에디터 옵션 notify 가 있으면 그쪽으로, 없으면 alert (갤러리·배치 블록 공용)
+ * @param {{ notify?: (message: string) => void }} options 에디터 옵션
+ * @param {string|string[]} messages
+ */
+export function notify(options, messages) {
+  const list = [].concat(messages).filter(Boolean);
+  if (!list.length) return;
+  const text = list.join('\n');
+  if (options?.notify) options.notify(text);
+  else window.alert(text);
+}
+
 /** 바이트를 MB 문구로 */
 export function mbLabel(bytes) {
   return `${Math.round((bytes / MB) * 10) / 10}MB`;

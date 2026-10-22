@@ -378,3 +378,95 @@ div[data-type="slider"] > img.is-current, div[data-type="slider"]:not(:has(> img
 .jm-gap { position: absolute; z-index: 5; height: 0; display: flex; justify-content: center; align-items: center; pointer-events: none; }
 .jm-gap::before { content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 2px; background: #a9c4ff; }
 .jm-gap-insert { position: relative; pointer-events: auto; padding: 2px 10px; border: 1px solid #a9c4ff; border-radius: 10px; background: #fff; color: #1d4ed8; font-size: 11px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+
+/* ───────── 글 감싸기 이미지 (저장 HTML 에도 필요 — 뷰어 공통) ─────────
+   <img data-float="left|right" style="width: N%"> : 이미지가 그쪽에 붙고 뒤따르는 글이 둘러 흐름.
+   휴대폰 폭(640px 이하)에서는 감싸기를 풀고 폭 100% */
+.jm-editor, .jm-content { display: flow-root; } /* 감싸기 이미지가 본문 밖으로 넘치지 않게 */
+.jm-editor img[data-float="left"], .jm-content img[data-float="left"] { float: left; margin: 4px 16px 8px 0; }
+.jm-editor img[data-float="right"], .jm-content img[data-float="right"] { float: right; margin: 4px 0 8px 16px; }
+/* 감싸기 이미지 옆으로 블록(표·갤러리·유튜브·버튼·슬라이드·배치)이 끼지 않게 아래로 */
+.jm-content table, .jm-content div[data-type],
+.jm-table-layer, .jm-gallery-layer, .jm-embed-layer, .jm-buttons-layer, .jm-slider-layer, .jm-layout-layer { clear: both; }
+@media (max-width: 640px) {
+  .jm-editor img[data-float], .jm-content img[data-float] { float: none; width: 100% !important; margin: 0 0 8px; }
+}
+/* 이미지 선택·도구 막대·크기 손잡이 (에디터 전용) */
+.jm-editor img { cursor: pointer; }
+.jm-editor img.jm-img-selected { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+.jm-imgbar { position: absolute; z-index: 1000; display: flex; align-items: center; gap: 2px; padding: 3px; background: #fff; border: 1px solid var(--jm-border, #d0d5dd); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.12); font-size: 12px; }
+.jm-imgbar[hidden], .jm-img-resize[hidden] { display: none; }
+.jm-imgbar-btn { height: 24px; padding: 0 7px; border: 0; border-radius: 4px; background: transparent; color: #344054; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.jm-imgbar-btn:hover { background: #f2f4f7; }
+.jm-imgbar-btn.is-on { background: #e0eaff; color: #1d4ed8; font-weight: 600; }
+.jm-imgbar-del { color: #b42318; }
+.jm-imgbar-sep { width: 1px; height: 16px; margin: 0 3px; background: var(--jm-border, #d0d5dd); }
+.jm-imgbar-size { min-width: 34px; padding: 0 4px; color: #667085; font-size: 11px; text-align: center; }
+.jm-imgbar-move { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 24px; color: #98a2b3; font-size: 15px; cursor: grab; user-select: none; }
+.jm-imgbar-move[hidden] { display: none; }
+.jm-img-resize { position: absolute; z-index: 1000; width: 12px; height: 12px; background: #1d4ed8; border: 2px solid #fff; border-radius: 3px; box-shadow: 0 0 0 1px #1d4ed8; cursor: ew-resize; touch-action: none; }
+
+/* ───────── 이미지+글 배치 블록 (저장 HTML 에도 필요 — 뷰어 공통, CSS 만으로 배치) ─────────
+   칸(data-cell)은 저장 순서대로 a·b·c·d 영역에 놓이고, preset·variant 가 영역 모양을 정한다.
+   디자인 변수: --jm-layout-gap (칸 간격). 휴대폰 폭(640px 이하)에서는 저장 순서대로 세로로 쌓임 */
+:where(div[data-type="layout"]) { --jm-layout-gap: 16px; }
+div[data-type="layout"] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--jm-layout-gap); align-items: start; margin: 0 0 12px; }
+div[data-type="layout"] > :nth-child(1) { grid-area: a; }
+div[data-type="layout"] > :nth-child(2) { grid-area: b; }
+div[data-type="layout"] > :nth-child(3) { grid-area: c; }
+div[data-type="layout"] > :nth-child(4) { grid-area: d; }
+div[data-type="layout"][data-preset="side"] { grid-template-areas: "a b"; }
+div[data-type="layout"][data-preset="one"][data-variant="tl"], div[data-type="layout"][data-preset="one"][data-variant="tr"] { grid-template-areas: "a b" "c c"; }
+div[data-type="layout"][data-preset="one"][data-variant="bl"], div[data-type="layout"][data-preset="one"][data-variant="br"] { grid-template-areas: "a a" "b c"; }
+div[data-type="layout"][data-preset="diagonal"] { grid-template-areas: "a b" "c d"; }
+div[data-type="layout"][data-preset="pair"] { grid-template-areas: "a c" "b d"; }
+/* 좌우 칸 폭 (왼쪽 열 %, 5 단위) */
+div[data-type="layout"][data-split="20"] { grid-template-columns: minmax(0, 20fr) minmax(0, 80fr); }
+div[data-type="layout"][data-split="25"] { grid-template-columns: minmax(0, 25fr) minmax(0, 75fr); }
+div[data-type="layout"][data-split="30"] { grid-template-columns: minmax(0, 30fr) minmax(0, 70fr); }
+div[data-type="layout"][data-split="35"] { grid-template-columns: minmax(0, 35fr) minmax(0, 65fr); }
+div[data-type="layout"][data-split="40"] { grid-template-columns: minmax(0, 40fr) minmax(0, 60fr); }
+div[data-type="layout"][data-split="45"] { grid-template-columns: minmax(0, 45fr) minmax(0, 55fr); }
+div[data-type="layout"][data-split="55"] { grid-template-columns: minmax(0, 55fr) minmax(0, 45fr); }
+div[data-type="layout"][data-split="60"] { grid-template-columns: minmax(0, 60fr) minmax(0, 40fr); }
+div[data-type="layout"][data-split="65"] { grid-template-columns: minmax(0, 65fr) minmax(0, 35fr); }
+div[data-type="layout"][data-split="70"] { grid-template-columns: minmax(0, 70fr) minmax(0, 30fr); }
+div[data-type="layout"][data-split="75"] { grid-template-columns: minmax(0, 75fr) minmax(0, 25fr); }
+div[data-type="layout"][data-split="80"] { grid-template-columns: minmax(0, 80fr) minmax(0, 20fr); }
+div[data-type="layout"] [data-cell="image"] img { width: 100%; height: auto; display: block; border-radius: 4px; }
+div[data-type="layout"] [data-cell="text"] > :first-child { margin-top: 0; }
+div[data-type="layout"] [data-cell="text"] > :last-child { margin-bottom: 0; }
+@media (max-width: 640px) {
+  div[data-type="layout"] { grid-template-columns: minmax(0, 1fr) !important; grid-template-areas: none !important; }
+  div[data-type="layout"] > * { grid-area: auto !important; }
+}
+/* 배치 블록 레이어 (에디터 전용) */
+.jm-layout-layer { margin: 0 0 8px; border: 1px solid var(--jm-border); border-radius: 6px; background: #fff; }
+.jm-layout-header { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--jm-border); background: #f8fafc; border-radius: 6px 6px 0 0; }
+.jm-layout-title { font-size: 12px; font-weight: 600; color: #344054; }
+.jm-layout-spacer { flex: 1; }
+.jm-layout-variants { display: flex; gap: 4px; }
+.jm-layout-variant { display: inline-flex; padding: 3px; border: 1px solid var(--jm-border); border-radius: 4px; background: #fff; cursor: pointer; }
+.jm-layout-variant.is-on { border-color: #1d4ed8; box-shadow: 0 0 0 1px #1d4ed8; }
+.jm-layout-icon { display: inline-grid; gap: 1px; }
+.jm-layout-icon-2 { grid-template-columns: 9px 9px; grid-template-rows: 14px; }
+.jm-layout-icon-4 { grid-template-columns: 9px 9px; grid-template-rows: 7px 7px; }
+.jm-layout-icon i { display: block; background: #e4e7ec; border-radius: 1px; }
+.jm-layout-icon i.is-img { background: #1d4ed8; }
+.jm-layout-btn { height: 26px; padding: 0 8px; font-size: 12px; }
+.jm-layout-remove { color: #b42318; }
+.jm-layout { position: relative; padding: 8px; margin: 0 !important; }
+.jm-layout [data-cell="text"] { min-height: 60px; padding: 6px 8px; border: 1px dashed #e4e7ec; border-radius: 4px; outline: none; }
+.jm-layout [data-cell="text"]:focus { border-color: #a9c4ff; }
+.jm-layout [data-cell="image"] { position: relative; min-height: 120px; }
+.jm-layout [data-cell="image"].is-dragover { outline: 2px dashed #1d4ed8; outline-offset: -2px; }
+.jm-layout-ph { width: 100%; min-height: 120px; border: 2px dashed var(--jm-border); border-radius: 4px; background: #f8fafc; color: #667085; font-size: 13px; cursor: pointer; }
+.jm-layout-ph:hover { border-color: #a9c4ff; color: #1d4ed8; }
+.jm-layout-imgtools { position: absolute; top: 6px; right: 6px; display: none; gap: 4px; }
+.jm-layout [data-cell="image"]:hover .jm-layout-imgtools { display: flex; }
+.jm-layout-imgtools button { height: 24px; padding: 0 8px; border: 1px solid var(--jm-border); border-radius: 4px; background: rgba(255,255,255,.95); font-size: 12px; cursor: pointer; }
+.jm-layout-imgtools button[data-act="clear"] { color: #b42318; }
+.jm-layout-split { position: absolute; top: 8px; bottom: 8px; width: 12px; margin-left: -6px; cursor: col-resize; touch-action: none; z-index: 2; }
+.jm-layout-split::after { content: ""; position: absolute; left: 5px; top: 0; bottom: 0; width: 2px; border-radius: 1px; background: transparent; }
+.jm-layout:hover .jm-layout-split::after, .jm-layout.is-resizing .jm-layout-split::after { background: #a9c4ff; }
+@media (max-width: 640px) { .jm-layout-split { display: none; } }

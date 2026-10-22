@@ -87,7 +87,7 @@ psql -d <DB> -f sample-formats-postgresql.sql
 | ol | style, start |
 | br, strong, em, u, s, tbody, thead | — |
 | a | href, target, rel, data-role, data-style, data-size |
-| img | src, alt, width, height |
+| img | src, alt, width, height, data-float(left·right), style(`width: N%` 10~100 만 — 글 감싸기) |
 | table | style, data-border |
 | colgroup | — |
 | col, tr | style |
@@ -131,8 +131,10 @@ psql -d <DB> -f sample-formats-postgresql.sql
 | slider | 제목 `p[data-role=title]`, `img` | data-interval 0~60000 (기본 3000), data-ratio 16:9/4:3/1:1/21:9, data-indicator dots/numbers/bars/none, data-indicator-pos bottom-center/bottom-left/bottom-right, data-width 100/75/50, data-align left/center/right (기본 center) |
 | buttons | `a` 만 (`data-role="button"` 강제) | data-align left/center/right (기본 center). 버튼 `data-style` primary/outline/gray (기본 primary), `data-size` sm/lg (그 밖이면 제거). 버튼이 없으면 블록 제거 |
 | youtube | `iframe` 하나 | data-width 100/75/50, data-align left/center/right (기본 center). 바로 아래 `iframe` 이 없으면 블록 제거 |
+| layout | `div[data-cell=image]`(img 1장만), `div[data-cell=text]`(문단·제목·목록·인용·인라인만 — 표·이미지·iframe·블록 제거) | data-preset side/one/diagonal/pair (기본 side), data-variant 는 preset 별 허용 값(기본 첫 배치), data-split 20~80 의 5 배수만. 칸은 variant 의 저장 순서대로 다시 세우고 모자라면 빈 칸을 채우며 넘치면 버림 |
 
 - 제목은 내용이 비어 있으면 제거하고, 블록 바로 아래의 텍스트 노드도 제거합니다.
+- 배치 블록의 preset·variant 별 칸 저장 순서(`LAYOUT_CELLS`)는 클라이언트 `src/plugins/layout/layout-presets.js` 와 같아야 합니다.
 - 유튜브 `iframe` 은 `https://www.youtube.com/embed/{11자 id}` 또는 `youtube-nocookie.com` 주소일 때만 남깁니다. 남길 때 속성을 모두 지우고 `src=https://www.youtube-nocookie.com/embed/{id}`, `title`, `allow`, `allowfullscreen` 을 새로 씁니다. 유튜브 블록 밖의 `iframe` 은 제거합니다.
 
 ### 클라이언트 Sanitizer 와 다른 점

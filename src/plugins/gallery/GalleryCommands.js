@@ -11,7 +11,7 @@
  *   업로드 제한·긴 변 축소는 gallery-upload.js (에디터 옵션 galleryLimits 로 변경).
  */
 import { layoutGallery, stampSize } from './gallery-layout.js';
-import { resolveLimits, filterFiles, resizeImage, mbLabel } from './gallery-upload.js';
+import { resolveLimits, filterFiles, resizeImage, mbLabel, notify } from './gallery-upload.js';
 import { BlockDrag } from '../../core/BlockDrag.js';
 
 export const GALLERY_LAYER_CLASS = 'jm-gallery-layer';
@@ -240,13 +240,9 @@ export class GalleryCommands {
 
   // ───────────── 제한 / 안내 ─────────────
 
-  /** 사용자 안내: options.notify 가 있으면 그쪽으로, 없으면 alert */
+  /** 사용자 안내 (options.notify 또는 alert) */
   #notify(messages) {
-    const list = [].concat(messages).filter(Boolean);
-    if (!list.length) return;
-    const text = list.join('\n');
-    if (this.editor.options.notify) this.editor.options.notify(text);
-    else window.alert(text);
+    notify(this.editor.options, messages);
   }
 
   /** 이 글(에디터)의 모든 갤러리 이미지 */

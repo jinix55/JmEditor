@@ -34,7 +34,7 @@ public class HtmlSanitizer {
             .addTags("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
                      "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe")
             .addAttributes("a", "href", "target", "rel", "data-role", "data-style", "data-size")
-            .addAttributes("img", "src", "alt", "width", "height")
+            .addAttributes("img", "src", "alt", "width", "height", "data-float", "style")   // 글 감싸기: 방향 + 폭(%)
             .addAttributes("p", "style")
             .addAttributes("h1", "style").addAttributes("h2", "style").addAttributes("h3", "style")
             .addAttributes("li", "style").addAttributes("blockquote", "style")
@@ -46,7 +46,8 @@ public class HtmlSanitizer {
             .addAttributes("td", "style", "colspan", "rowspan")
             .addAttributes("th", "style", "colspan", "rowspan")
             .addAttributes("span", "style")
-            .addAttributes("div", "data-type", "data-cols", "data-auto", "data-layout", "data-align", "data-width", "data-interval", "data-ratio", "data-indicator", "data-indicator-pos")
+            .addAttributes("div", "data-type", "data-cols", "data-auto", "data-layout", "data-align", "data-width", "data-interval", "data-ratio", "data-indicator", "data-indicator-pos",
+                           "data-preset", "data-variant", "data-split", "data-cell")   // 이미지+글 배치 블록
             .addAttributes("iframe", "src", "title", "allow", "allowfullscreen")
             .addProtocols("iframe", "src", "https")   // 유튜브 블록
             .addAttributes("p", "data-role")                                 // 갤러리·슬라이드 제목
@@ -65,6 +66,24 @@ public class HtmlSanitizer {
 
     /** 제목 p[data-role=title] 을 가질 수 있는 블록 */
     private static final java.util.Set<String> TITLED_BLOCKS = java.util.Set.of("gallery", "slider");
+
+    /** 글 감싸기 이미지 폭: 10~100 % 정수 */
+    private static final Pattern IMG_WIDTH = Pattern.compile("^width:\\s*(\\d{1,3})%$");
+
+    /**
+     * 이미지+글 배치 블록: preset → variant → 칸 저장 순서 (i = 이미지 칸, t = 글 칸).
+     * 클라이언트 src/plugins/layout/layout-presets.js 와 같아야 한다.
+     */
+    private static final java.util.Map<String, java.util.Map<String, String>> LAYOUT_CELLS = java.util.Map.of(
+            "side", java.util.Map.of("left", "it", "right", "ti"),
+            "one", java.util.Map.of("tl", "itt", "tr", "tit", "bl", "tit", "br", "tti"),
+            "diagonal", java.util.Map.of("tl-br", "itti", "tr-bl", "tiit"),
+            "pair", java.util.Map.of("top", "itit", "bottom", "titi"));
+    /** preset 별 기본 variant */
+    private static final java.util.Map<String, String> LAYOUT_DEFAULT_VARIANT = java.util.Map.of(
+            "side", "left", "one", "tl", "diagonal", "tl-br", "pair", "top");
+    /** 배치 블록에 남기는 속성 */
+    private static final java.util.Set<String> LAYOUT_ATTRS = java.util.Set.of("data-type", "data-preset", "data-variant", "data-split");
 
     /**
      * @param html 클라이언트에서 받은 HTML
@@ -89,6 +108,19 @@ public class HtmlSanitizer {
         // 스타일이 없는 span 은 의미 없으므로 언래핑
         for (Element span : doc.select("span:not([style])")) span.unwrap();
 
+        // 글 감싸기 이미지: data-float 는 left/right, style 은 width 10~100% 만
+        for (Element img : doc.select("img")) {
+            String f = img.attr("data-float");
+            if (!f.equals("left") && !f.equals("right")) img.removeAttr("data-float");
+            var m = IMG_WIDTH.matcher(Arrays.stream(img.attr("style").split(";")).map(String::trim)
+                    .filter(d -> d.startsWith("width")).findFirst().orElse(""));
+            int w = m.matches() ? Integer.parseInt(m.group(1)) : 0;
+            if (w >= 10 && w <= 100) img.attr("style", "width: " + w + "%"); else img.removeAttr("style");
+        }
+
+        // 이미지+글 배치 블록: 속성·칸 정리 (아래 div 일괄 처리보다 먼저)
+        for (Element box : doc.select("div[data-type=layout]")) cleanLayout(box);
+
         // 버튼 링크: data-role=button 일 때만 data-style 허용
         for (Element a : doc.select("a")) {
             if (!"button".equals(a.attr("data-role"))) { a.removeAttr("data-role"); a.removeAttr("data-style"); a.removeAttr("data-size"); }
@@ -111,6 +143,9 @@ public class HtmlSanitizer {
         }
         // div 는 갤러리/유튜브/버튼 블록만 허용, 그 외는 p 로 치환
         for (Element div : doc.select("div")) {
+            // 배치 블록과 그 칸은 cleanLayout 에서 처리
+            if ("layout".equals(div.attr("data-type"))) continue;
+            if (div.hasAttr("data-cell") && div.parent() != null && "layout".equals(div.parent().attr("data-type"))) continue;
             if ("slider".equals(div.attr("data-type"))) {
                 for (Element child : div.children()) {
                     boolean isTitle = child.tagName().equals("p") && "title".equals(child.attr("data-role")) && !child.text().isBlank();
@@ -168,6 +203,40 @@ public class HtmlSanitizer {
             if (p.parent() == null || !TITLED_BLOCKS.contains(p.parent().attr("data-type"))) p.removeAttr("data-role");
         }
         return doc.body().html();
+    }
+
+    /**
+     * 배치 블록 정리: preset·variant 는 허용 값(아니면 기본값), split 은 20~80 의 5 배수만.
+     * 칸은 variant 의 저장 순서대로 다시 세우고, 모자라면 빈 칸을 채우고 넘치면 버린다.
+     * 이미지 칸은 img 1장만, 글 칸에는 표·이미지·iframe·블록(data-type div)을 넣지 않는다.
+     */
+    private void cleanLayout(Element box) {
+        new java.util.ArrayList<>(box.attributes().asList()).forEach(a -> { if (!LAYOUT_ATTRS.contains(a.getKey())) box.removeAttr(a.getKey()); });
+        String preset = LAYOUT_CELLS.containsKey(box.attr("data-preset")) ? box.attr("data-preset") : "side";
+        box.attr("data-preset", preset);
+        var variants = LAYOUT_CELLS.get(preset);
+        String variant = variants.containsKey(box.attr("data-variant")) ? box.attr("data-variant") : LAYOUT_DEFAULT_VARIANT.get(preset);
+        box.attr("data-variant", variant);
+        int split = parseIntOr(box.attr("data-split"), 0);
+        if (split >= 20 && split <= 80 && split % 5 == 0) box.attr("data-split", String.valueOf(split)); else box.removeAttr("data-split");
+
+        java.util.Deque<Element> images = new java.util.ArrayDeque<>(), texts = new java.util.ArrayDeque<>();
+        for (Element c : box.children()) {
+            if (!c.tagName().equals("div")) continue;
+            if ("image".equals(c.attr("data-cell"))) images.add(c);
+            else if ("text".equals(c.attr("data-cell"))) texts.add(c);
+        }
+        box.empty();
+        for (char k : variants.get(variant).toCharArray()) {
+            Element cell = k == 'i' ? images.poll() : texts.poll();
+            if (cell == null) cell = new Element("div");
+            Element img = k == 'i' ? cell.selectFirst("img") : null;
+            if (k == 'i') cell.empty(); else cell.select("table, img, iframe, div[data-type]").remove();
+            cell.clearAttributes();
+            cell.attr("data-cell", k == 'i' ? "image" : "text");
+            if (img != null) cell.appendChild(img);
+            box.appendChild(cell);
+        }
     }
 
     private static int parseIntOr(String s, int def) {

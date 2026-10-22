@@ -3,6 +3,8 @@
  * - 서식 명령 모음. execCommand 를 쓰지 않고 Range/DOM 조작으로 구현.
  * - 모든 명령은 에디터 루트 안에서만 동작하며, 실행 후 editor.commit() 으로 히스토리 기록·변경 알림을 한다.
  */
+import { SelectionUtil } from './SelectionUtil.js';
+
 const ZWSP = '​'; // 빈 인라인 태그에 커서를 두기 위한 zero-width space
 
 export class Commands {
@@ -372,7 +374,7 @@ export class Commands {
     const p = document.createElement('p');
     p.appendChild(img);
 
-    const block = this.sel.getBlock();
+    const block = SelectionUtil.blockAnchor(this.sel.getBlock());
     if (block && /^(TD|TH)$/.test(block.tagName)) block.appendChild(p); // 셀 안이면 셀 내부에
     else if (block) block.parentNode.insertBefore(p, block.nextSibling);
     else this.root.appendChild(p);
@@ -413,8 +415,8 @@ export class Commands {
     tpl.innerHTML = html;
     if (!tpl.content.childNodes.length) return;
 
-    // 표 셀 안이면 셀 밖(표 레이어 뒤)에 삽입
-    let block = this.sel.getBlock();
+    // 표 셀 안이면 셀 밖(표 레이어 뒤)에 삽입. 배치 블록 글 칸 안이면 배치 블록 뒤에
+    let block = SelectionUtil.blockAnchor(this.sel.getBlock());
     if (block && /^(TD|TH)$/.test(block.tagName)) {
       block = block.closest('table');
       if (block.parentNode?.classList?.contains('jm-table-layer')) block = block.parentNode;

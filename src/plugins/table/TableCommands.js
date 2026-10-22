@@ -11,6 +11,7 @@
  *     <tr style="height:40px"?><td colspan rowspan style="text-align;vertical-align;background-color">…
  */
 import { TableGrid } from './TableGrid.js';
+import { SelectionUtil } from '../../core/SelectionUtil.js';
 
 export const TABLE_LAYER_CLASS = 'jm-table-layer';
 const SEL_CLASS = 'is-cell-selected';
@@ -247,7 +248,7 @@ export class TableCommands {
       tbody.appendChild(tr);
     }
     table.appendChild(tbody);
-    const block = this.sel.getBlock();
+    const block = SelectionUtil.blockAnchor(this.sel.getBlock());
     if (block && !this.getTable()) block.parentNode.insertBefore(table, block.nextSibling);
     else this.root.appendChild(table);
     const layer = this.#wrap(table);

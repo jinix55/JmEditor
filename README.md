@@ -9,6 +9,8 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 - 굵게 / 기울임 / 밑줄 / 취소선, 글자 크기(10~48px), 글자색 / 배경색 (견본 + HSV 팔레트 + HEX 입력 + 스포이드)
 - 제목(본문·제목 1~3 셀렉트), 인용, 가로 정렬(왼쪽/가운데/오른쪽)·세로 정렬(표 셀) 드롭다운, 순서 / 비순서 목록(● ○ ■, 1. 01. a. A. i. I. 가.), 링크, 버튼 그룹 블록(서식 — 이름·주소 입력으로 추가, 모양·크기, 그립 드래그로 순서, 정렬)
 - 이미지 삽입 (버튼, 드래그 앤 드롭, 붙여넣기)
+- 글 감싸기 — 본문 이미지를 클릭하면 도구 막대가 뜹니다. 왼쪽·오른쪽 감싸기(이미지 옆으로 글이 흐르고 아래로 이어짐), 폭 30·40·50·100% 또는 모서리 손잡이로 본문 폭 대비 % 조절, 교체·삭제, ⠿ 로 다른 문단 앞뒤로 이동. 휴대폰 폭(640px 이하)에서는 감싸기를 풀고 꽉 차게
+- 이미지 + 글 배치 블록(서식) — 이미지 | 글(2칸), 이미지 1장 + 글(4분할: 이미지 옆 작은 칸 + 반대쪽 줄 전체), 대각선 이미지 2장 + 글, 이미지 2장 나란히 + 각각 글. 헤더 아이콘으로 이미지 위치를 바꾸면 글은 같은 역할 칸으로 따라가고, 가운데 경계를 끌어 좌우 폭(20~80%) 조절. 이미지 칸은 클릭·파일 놓기로 넣고 교체·삭제. 휴대폰 폭에서는 세로로 쌓임
 - 이미지 슬라이드 — 이미지가 자동으로 넘어가는 블록(서식). 간격(수동/2~8초)·비율·인디케이터(점/숫자/막대/없음, 하단 좌/중/우)·폭·정렬, 썸네일로 선택·순서 변경. 뷰어에는 `slider-runtime.js` 필요
 - 유튜브 — 주소를 넣으면 16:9 영상 블록이 들어갑니다. 폭(100 / 75 / 50%)과 정렬 선택, ⠿ 핸들로 이동
 - 표 — 툴바에서 N×M 격자로 크기를 골라 삽입. 셀을 드래그(또는 Shift+클릭)하면 범위 선택. 우클릭 메뉴에서 행 / 열 추가·삭제·이동, 머리글 행·열 전환, 셀 병합·분할, 가로·세로 정렬, 셀·행 배경색, 표 폭·테두리. 셀 경계를 끌면 열 너비·행 높이 조절. 왼쪽 위 ⠿ 핸들을 끌어 위치 이동
@@ -118,7 +120,7 @@ ES Module 로 쓰려면:
 <script>JmViewer.initViewer(document.querySelector('.jm-content'));</script>
 ```
 
-표·버튼·유튜브는 CSS 만으로 보이고, 갤러리 비율 배치와 슬라이드 전환이 런타임을 씁니다.
+표·버튼·유튜브·글 감싸기·이미지 + 글 배치는 CSS 만으로 보이고, 갤러리 비율 배치와 슬라이드 전환이 런타임을 씁니다.
 
 ### React / Next.js
 
@@ -162,7 +164,7 @@ api: {
 
 ## 저장되는 HTML
 
-허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]` 입니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 만 남고 값 형식도 검사합니다.
+허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`, 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]` 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100)만 더 남습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 만 남고 값 형식도 검사합니다.
 
 표는 이렇게 저장됩니다. 열 너비는 `colgroup`, 행 높이는 `tr`, 병합은 `colspan` / `rowspan`, 테두리 숨김은 `data-border="0"` 입니다.
 
@@ -200,12 +202,39 @@ import { initSliders } from '/js/jm-editor/plugins/slider/slider-runtime.js';
 initSliders(document.querySelector('.jm-content'));
 ```
 
+글 감싸기 이미지는 이렇게 저장됩니다. 이미지 문단 뒤에 오는 문단들이 이미지를 둘러 흐릅니다.
+
+```html
+<p><img src="..." width="1600" height="1200" data-float="left" style="width: 40%"></p>
+<p>이미지 오른쪽부터 흐르는 글…</p>
+```
+
+이미지 + 글 배치 블록은 이렇게 저장됩니다.
+
+```html
+<div data-type="layout" data-preset="one" data-variant="tl" data-split="40">
+  <div data-cell="image"><img src="..." width="1600" height="1200"></div>
+  <div data-cell="text"><p>이미지 옆 글</p></div>
+  <div data-cell="text"><p>아래 전체 폭 글</p></div>
+</div>
+```
+
+| data-preset | data-variant (칸 저장 순서) |
+|---|---|
+| `side` 이미지 \| 글 | `left`(이미지, 글) · `right`(글, 이미지) |
+| `one` 이미지 1장 + 글 | `tl`(이미지, 옆 글, 아래 전체 글) · `tr`(옆 글, 이미지, 아래 전체 글) · `bl`(위 전체 글, 이미지, 옆 글) · `br`(위 전체 글, 옆 글, 이미지) |
+| `diagonal` 대각선 2장 | `tl-br`(이미지, 위 글, 아래 글, 이미지) · `tr-bl`(위 글, 이미지, 이미지, 아래 글) |
+| `pair` 이미지 2장 나란히 | `top`(이미지, 글, 이미지, 글 — 같은 열끼리) · `bottom`(글, 이미지, 글, 이미지) |
+
+칸 저장 순서가 곧 휴대폰에서 세로로 쌓이는 순서입니다. `data-split` 은 왼쪽 열 폭(%)으로 20~80 의 5 단위, 없으면 50 입니다. 칸 간격은 CSS 변수 `--jm-layout-gap`(기본 16px)으로 바꿉니다.
+
 ## 구조
 
 ```
 src/
   core/      JmEditor.js(진입점), Commands.js, SelectionUtil.js, History.js, Sanitizer.js
-  plugins/   table/, gallery/, embed/(유튜브), buttons/, slider/(SliderCommands, slider-runtime) — 블록형 기능. 편집 중에만 쓰는 레이어를 씌우고 저장 시 벗김
+  plugins/   table/, gallery/, embed/(유튜브), buttons/, slider/(SliderCommands, slider-runtime), layout/(이미지 + 글 배치) — 블록형 기능. 편집 중에만 쓰는 레이어를 씌우고 저장 시 벗김
+             image/(본문 이미지 글 감싸기·크기 조절 도구)
   ui/        JmToolbarEditor.js(툴바), ColorPicker, TableGridPicker, FormatPicker, ContextMenu
   api/       JmEditorApi.js
   styles/    jm-editor.css
