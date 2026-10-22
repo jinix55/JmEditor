@@ -261,4 +261,18 @@ server/      spring-boot
 
 ## 라이선스
 
-MIT
+[MIT License](LICENSE) © 2026 jinix55
+
+- **할 수 있는 것**: 개인·회사·상용 서비스에 무료로 쓰고, 고치고, 다시 배포하거나 판매하는 제품에 넣을 수 있습니다. 소스 공개 의무는 없습니다.
+- **지켜야 할 것**: 코드를 복사하거나 다시 배포할 때 저작권 표시와 라이선스 문구([LICENSE](LICENSE))를 함께 남겨 주세요. 빌드 파일(`dist/*.js`) 맨 앞의 주석 `/* JmEditor | MIT License | (c) 2026 jinix55 … */` 을 지우지 않으면 됩니다.
+- **보증 없음**: 있는 그대로 제공되며, 사용으로 생긴 문제에 대해 작성자는 책임지지 않습니다. 운영에 쓸 때는 서버 측 sanitize([server/spring-boot](server/spring-boot))를 꼭 함께 적용하세요.
+
+### 사용한 외부 요소
+
+| 항목 | 쓰는 곳 | 라이선스 |
+|---|---|---|
+| 에디터·뷰어 코드, 툴바·버튼 아이콘(SVG) | `src/`, `dist/` | 직접 작성 — MIT (위와 같음) |
+| [esbuild](https://github.com/evanw/esbuild) | 빌드 도구 (배포 파일에 포함되지 않음) | MIT |
+| [jsoup](https://jsoup.org/) | 서버 연동 샘플의 HTML sanitize (직접 추가하는 의존성) | MIT |
+
+에디터 자체는 실행 시 외부 라이브러리에 의존하지 않습니다. 유튜브 삽입은 `youtube-nocookie.com` 의 iframe 을 그대로 쓰므로, 영상 재생에는 YouTube 이용약관이 적용됩니다.
