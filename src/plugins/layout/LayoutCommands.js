@@ -62,6 +62,8 @@ export class LayoutCommands {
   /** 루트 안의 배치 블록을 모두 레이어로 감싼다 (setHTML / commit 후) */
   wrapAll() {
     this.root.querySelectorAll('div[data-type="layout"]').forEach((b) => {
+      // 앞 블록을 정리하다 제거된 블록(글 칸에 붙여넣은 중첩 블록 등)은 건너뜀
+      if (!b.isConnected || !this.root.contains(b)) return;
       if (b.parentNode?.classList?.contains(LAYOUT_LAYER_CLASS)) { this.#render(b); return; }
       this.#wrap(b);
     });

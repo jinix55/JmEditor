@@ -12,7 +12,7 @@ export { observeGalleries, initSliders };
  * @returns {() => void} 해제 함수
  */
 export function initViewer(root = document) {
-  const stop = observeGalleries(root);
-  initSliders(root);
-  return stop;
+  const stopGalleries = observeGalleries(root);
+  const stopSliders = initSliders(root);
+  return () => { stopGalleries(); stopSliders(); };
 }

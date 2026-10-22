@@ -4,6 +4,7 @@
  * - 모든 명령은 에디터 루트 안에서만 동작하며, 실행 후 editor.commit() 으로 히스토리 기록·변경 알림을 한다.
  */
 import { SelectionUtil } from './SelectionUtil.js';
+import { Sanitizer } from './Sanitizer.js';
 
 const ZWSP = '​'; // 빈 인라인 태그에 커서를 두기 위한 zero-width space
 
@@ -58,64 +59,127 @@ export class Commands {
     }
   }
 
-  /** 선택 영역이 있을 때의 인라인 토글 */
+  /**
+   * 선택 영역이 있을 때의 인라인 토글
+   * - 선택 범위를 텍스트 조각으로 나눠(문단 여러 개에 걸쳐도 문단마다 따로) 조각별로 감싸거나 푼다
+   * - 조각이 모두 해당 태그 안이면 해제(감싼 태그를 조각 앞뒤로 나눠 조각만 꺼냄), 아니면 적용
+   */
   #toggleInlineRange(tag, range) {
     const upper = tag.toUpperCase();
-    const allFormatted = this.#isRangeFullyInside(range, upper);
+    const pieces = this.#textPieces(range);
+    if (!pieces.length) return;
+    const allFormatted = pieces.every((t) => this.#findAncestor(t, upper));
 
     if (allFormatted) {
-      // 해제: 선택 영역을 잘라낸 뒤(경계의 태그는 자동 분할됨) 그 안의 해당 태그를 언래핑
-      const frag = range.extractContents();
-      this.#unwrapTag(frag, upper);
-      const first = frag.firstChild;
-      const last = frag.lastChild;
-
-      // 잘라낸 뒤 커서가 여전히 wrapper 안이면, wrapper 를 커서 지점에서 앞/뒤로 분할하고 그 사이에 삽입
-      const wrapper = this.#findAncestor(range.startContainer, upper);
-      if (wrapper) {
-        const tailRange = document.createRange();
-        tailRange.setStart(range.startContainer, range.startOffset);
-        tailRange.setEnd(wrapper, wrapper.childNodes.length);
-        const tailEl = wrapper.cloneNode(false);
-        tailEl.appendChild(tailRange.extractContents());
-
-        wrapper.parentNode.insertBefore(frag, wrapper.nextSibling);
-        if (last) wrapper.parentNode.insertBefore(tailEl, last.nextSibling);
-        this.#cleanEmpty(wrapper);
-        this.#cleanEmpty(tailEl);
-      } else {
-        range.insertNode(frag);
-      }
-      if (first && last) {
-        const r = document.createRange();
-        r.setStartBefore(first);
-        r.setEndAfter(last);
-        this.sel.setRange(r);
-      }
+      pieces.forEach((t) => {
+        const anc = this.#findAncestor(t, upper);
+        if (anc) this.#unwrapEl(this.#isolate(t, anc));
+      });
     } else {
-      // 적용: 잘라낸 내용에서 중첩된 동일 태그 제거 후 감싸기
-      const frag = range.extractContents();
-      this.#unwrapTag(frag, upper);
-      const el = document.createElement(tag);
-      el.appendChild(frag);
-      range.insertNode(el);
-      const r = document.createRange();
-      r.selectNodeContents(el);
-      this.sel.setRange(r);
+      pieces.forEach((t) => {
+        if (this.#findAncestor(t, upper)) return;
+        const el = document.createElement(tag);
+        t.parentNode.insertBefore(el, t);
+        el.appendChild(t);
+        this.#mergeSiblings(el);
+      });
     }
+    this.#selectPieces(pieces);
   }
 
-  /** range 안의 모든 텍스트가 특정 태그 안에 있는지 검사 */
-  #isRangeFullyInside(range, upper) {
-    const walker = document.createTreeWalker(range.commonAncestorContainer, NodeFilter.SHOW_TEXT);
-    let node;
-    let found = false;
-    while ((node = walker.nextNode())) {
-      if (!range.intersectsNode(node) || node.textContent === ZWSP) continue;
-      found = true;
-      if (!this.#findAncestor(node, upper)) return false;
+  /**
+   * 선택 범위 안의 텍스트 조각 목록. 경계에 걸친 텍스트 노드는 잘라서 범위 안 부분만 남긴다.
+   * 편집할 수 없는 영역(블록 헤더 등)·블록 사이 공백·ZWSP 는 제외
+   * @param {Range} range
+   * @param {boolean} [withImages=false] 범위 안의 본문 이미지도 포함 (링크 적용용)
+   * @returns {Array<Text|HTMLImageElement>} 문서 순서
+   */
+  #textPieces(range, withImages = false) {
+    // 경계 텍스트를 자른다. Range 는 살아 있는(live) 객체라 splitText 후 경계가 브라우저에 의해 자동 보정된다
+    // → 자른 뒤 경계를 다시 읽는다 (요소 경계에서 끝나는 선택도 어긋나지 않게)
+    const { endContainer: ec0, endOffset: eo0 } = range;
+    if (ec0.nodeType === Node.TEXT_NODE && eo0 > 0 && eo0 < ec0.length) ec0.splitText(eo0);
+    const { startContainer: sc0, startOffset: so0 } = range;
+    if (sc0.nodeType === Node.TEXT_NODE && so0 > 0 && so0 < sc0.length) sc0.splitText(so0);
+    const { startContainer: sc, startOffset: so, endContainer: ec, endOffset: eo } = range;
+
+    // 텍스트 노드 경계를 노드 앞/뒤 경계로 바꾼 범위 (조각이 통째로 들어가거나 빠지게)
+    const r = document.createRange();
+    if (sc.nodeType === Node.TEXT_NODE) { if (so >= sc.length) r.setStartAfter(sc); else r.setStartBefore(sc); } else r.setStart(sc, so);
+    if (ec.nodeType === Node.TEXT_NODE) { if (eo === 0) r.setEndBefore(ec); else r.setEndAfter(ec); } else r.setEnd(ec, eo);
+    if (r.collapsed) return [];
+
+    const root = r.commonAncestorContainer;
+    const all = [];
+    if (root.nodeType === Node.TEXT_NODE) all.push(root);
+    else {
+      const show = NodeFilter.SHOW_TEXT | (withImages ? NodeFilter.SHOW_ELEMENT : 0);
+      const walker = document.createTreeWalker(root, show);
+      let n;
+      while ((n = walker.nextNode())) {
+        if (n.nodeType === Node.ELEMENT_NODE && n.tagName !== 'IMG') continue;
+        if (r.intersectsNode(n)) all.push(n);
+      }
     }
-    return found;
+    return all.filter((t) => {
+      const parent = t.parentElement;
+      if (!parent || !parent.isContentEditable || !this.root.contains(t)) return false;
+      if (t.nodeType === Node.ELEMENT_NODE) return true; // 이미지 (편집 가능한 본문 안)
+      if (!t.textContent.replace(new RegExp(ZWSP, 'g'), '')) return false;
+      // 블록 사이 줄바꿈 공백(표 tbody 안 등)은 제외 — 글이 들어갈 수 있는 블록 안의 텍스트만
+      return !!parent.closest('p, h1, h2, h3, li, blockquote, td, th, [data-cell="text"], [data-role="title"], a[data-role="button"]');
+    });
+  }
+
+  /**
+   * anc 를 node 앞·뒤에서 나눠 node 쪽 부분만 anc 에 남긴다 (앞·뒤 내용은 anc 복제본으로 형제가 됨)
+   * @param {Node} node anc 의 자손
+   * @param {HTMLElement} anc
+   * @returns {HTMLElement} node 를 담은 anc
+   */
+  #isolate(node, anc) {
+    const hasContent = (frag) => frag.textContent.replace(new RegExp(ZWSP, 'g'), '') !== '' || !!frag.querySelector?.('img, br');
+    const pre = document.createRange();
+    pre.setStart(anc, 0); pre.setEndBefore(node);
+    if (!pre.collapsed) {
+      const f = pre.extractContents();
+      if (hasContent(f)) { const a = anc.cloneNode(false); a.appendChild(f); anc.parentNode.insertBefore(a, anc); }
+    }
+    const post = document.createRange();
+    post.setStartAfter(node); post.setEnd(anc, anc.childNodes.length);
+    if (!post.collapsed) {
+      const f = post.extractContents();
+      if (hasContent(f)) { const b = anc.cloneNode(false); b.appendChild(f); anc.parentNode.insertBefore(b, anc.nextSibling); }
+    }
+    return anc;
+  }
+
+  /** 요소를 풀어 자식만 남긴다 */
+  #unwrapEl(el) {
+    while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el);
+    el.remove();
+  }
+
+  /** 바로 옆 형제가 같은 태그·같은 속성이면 하나로 합친다 (조각별 감싸기 후 정리) */
+  #mergeSiblings(el) {
+    const same = (n) => n && n.nodeType === Node.ELEMENT_NODE && n.tagName === el.tagName
+      && n.attributes.length === el.attributes.length
+      && Array.from(el.attributes).every((at) => n.getAttribute(at.name) === at.value);
+    const prev = el.previousSibling;
+    if (same(prev)) { while (el.firstChild) prev.appendChild(el.firstChild); el.remove(); return this.#mergeSiblings(prev); }
+    const next = el.nextSibling;
+    if (same(next)) { while (next.firstChild) el.appendChild(next.firstChild); next.remove(); }
+    return el;
+  }
+
+  /** 처리한 조각 전체를 다시 선택 */
+  #selectPieces(pieces) {
+    const live = pieces.filter((t) => t.isConnected);
+    if (!live.length) return;
+    const r = document.createRange();
+    r.setStartBefore(live[0]);
+    r.setEndAfter(live[live.length - 1]);
+    this.sel.setRange(r);
   }
 
   /** 노드에서 루트 방향으로 올라가며 태그 찾기 */
@@ -126,19 +190,6 @@ export class Commands {
       n = n.parentNode;
     }
     return null;
-  }
-
-  /** 노드 트리 안의 특정 태그를 모두 언래핑 */
-  #unwrapTag(container, upper) {
-    container.querySelectorAll(upper.toLowerCase()).forEach((el) => {
-      while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el);
-      el.remove();
-    });
-  }
-
-  /** 내용이 비었으면(ZWSP 포함) 요소 제거 */
-  #cleanEmpty(el) {
-    if (el && el.textContent.replace(ZWSP, '') === '' && !el.querySelector('img,br')) el.remove();
   }
 
   // ───────────── 글자색 / 배경색 (span style) ─────────────
@@ -171,38 +222,24 @@ export class Commands {
       return;
     }
 
-    // 선택 영역: 잘라내기 → 안쪽의 같은 속성 제거 → (적용이면) span 으로 감싸기
-    const frag = range.extractContents();
-    this.#stripStyle(frag, prop);
-    let node;
-    if (value) {
-      node = document.createElement('span');
-      node.style.setProperty(prop, value);
-      node.appendChild(frag);
-    } else {
-      node = frag;
-    }
-    const first = node.nodeType === Node.DOCUMENT_FRAGMENT_NODE ? node.firstChild : node;
-    const last = node.nodeType === Node.DOCUMENT_FRAGMENT_NODE ? node.lastChild : node;
-
-    // 잘라낸 지점이 같은 속성 span 안이면 분할해서 바깥에 삽입
-    const wrapper = this.#findStyledAncestor(range.startContainer, prop);
-    if (wrapper) {
-      const tailRange = document.createRange();
-      tailRange.setStart(range.startContainer, range.startOffset);
-      tailRange.setEnd(wrapper, wrapper.childNodes.length);
-      const tailEl = wrapper.cloneNode(false);
-      tailEl.appendChild(tailRange.extractContents());
-      wrapper.parentNode.insertBefore(node, wrapper.nextSibling);
-      if (last) wrapper.parentNode.insertBefore(tailEl, last.nextSibling);
-      this.#cleanEmpty(wrapper);
-      this.#cleanEmpty(tailEl);
-    } else {
-      range.insertNode(node);
-    }
-    if (first && last) {
-      const r = document.createRange(); r.setStartBefore(first); r.setEndAfter(last); this.sel.setRange(r);
-    }
+    // 선택 영역: 텍스트 조각마다 같은 속성을 가진 span 에서 꺼내(속성 제거) → 적용이면 새 span 으로 감싼다
+    const pieces = this.#textPieces(range);
+    pieces.forEach((t) => {
+      let styled;
+      while ((styled = this.#findStyledAncestor(t, prop))) {
+        const mid = this.#isolate(t, styled);
+        mid.style.removeProperty(prop);
+        if (!mid.getAttribute('style')?.trim()) this.#unwrapEl(mid);
+      }
+      if (value) {
+        const span = document.createElement('span');
+        span.style.setProperty(prop, value);
+        t.parentNode.insertBefore(span, t);
+        span.appendChild(t);
+        this.#mergeSiblings(span);
+      }
+    });
+    this.#selectPieces(pieces);
     this.editor.commit();
   }
 
@@ -214,17 +251,6 @@ export class Commands {
       n = n.parentNode;
     }
     return null;
-  }
-
-  /** 트리 안의 span 에서 prop 제거. 스타일이 남지 않는 span 은 언래핑 */
-  #stripStyle(container, prop) {
-    container.querySelectorAll('span').forEach((el) => {
-      el.style.removeProperty(prop);
-      if (!el.getAttribute('style') || el.style.length === 0) {
-        while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el);
-        el.remove();
-      }
-    });
   }
 
   /** 현재 커서 위치의 글자색/배경색 */
@@ -336,28 +362,35 @@ export class Commands {
    */
   setLink(url) {
     const range = this.sel.getRange();
-    if (!range) return;
+    if (!range) return undefined;
+    // 주소 검증: javascript: 등은 거부(false 반환 → 툴바가 안내), 도메인만 쓰면 https:// 를 붙임
+    const href = url ? Sanitizer.normalizeHref(url) : null;
+    if (url && !href) return false;
     const existing = this.sel.closest('a');
 
     if (existing) {
-      if (url) { this.editor.constructor.setHref(existing, url); } // 기존 링크: 주소만 수정
-      else {                                                 // 해제
-        while (existing.firstChild) existing.parentNode.insertBefore(existing.firstChild, existing);
-        existing.remove();
-      }
+      if (href) { this.editor.constructor.setHref(existing, href); } // 기존 링크: 주소만 수정
+      else this.#unwrapEl(existing);                                // 해제
       this.editor.commit();
-      return;
+      return true;
     }
-    if (!url || range.collapsed) return;
+    if (!href || range.collapsed) return undefined;
 
-    const a = document.createElement('a');
-    this.editor.constructor.setHref(a, url);
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    a.appendChild(range.extractContents());
-    range.insertNode(a);
-    this.sel.placeCursor(a, true);
+    // 문단 여러 개에 걸쳐도 문단마다 따로 링크를 건다 (a 안에 문단이 들어가지 않게). 선택한 이미지도 포함
+    const pieces = this.#textPieces(range, true).filter((t) => !t.parentElement.closest('a'));
+    if (!pieces.length) return undefined;
+    pieces.forEach((t) => {
+      const a = document.createElement('a');
+      this.editor.constructor.setHref(a, href);
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      t.parentNode.insertBefore(a, t);
+      a.appendChild(t);
+      this.#mergeSiblings(a); // 같은 주소로 이어진 조각(글자·이미지)은 하나의 링크로
+    });
+    this.#selectPieces(pieces);
     this.editor.commit();
+    return true;
   }
 
   // ───────────── 이미지 / 임의 HTML 삽입 ─────────────
@@ -397,10 +430,56 @@ export class Commands {
     range.deleteContents();
     const tpl = document.createElement('template');
     tpl.innerHTML = html;
-    const last = tpl.content.lastChild;
-    range.insertNode(tpl.content);
-    if (last) this.sel.placeCursor(last, true);
+    const frag = tpl.content;
+    const hasBlock = Array.from(frag.childNodes).some((n) => n.nodeType === Node.ELEMENT_NODE && Commands.#isBlockEl(n));
+    const block = this.sel.getBlock();
+
+    // 문단·제목 안에 블록(문단·표·목록 등)이 섞인 조각을 넣으면: 문단을 커서 위치에서 둘로 나누고 그 사이에 넣는다
+    // (p 안에 p 가 들어가 저장 후 다시 열 때 구조가 바뀌는 것 방지)
+    if (hasBlock && block && /^(P|H1|H2|H3)$/.test(block.tagName)) {
+      this.#wrapLooseInline(frag);
+      const tail = document.createRange();
+      tail.setStart(range.startContainer, range.startOffset);
+      tail.setEnd(block, block.childNodes.length);
+      const after = block.cloneNode(false);
+      after.appendChild(tail.extractContents());
+      const last = frag.lastChild;
+      block.parentNode.insertBefore(after, block.nextSibling);
+      block.parentNode.insertBefore(frag, after);
+      const isEmpty = (el) => !el.textContent.replace(new RegExp(ZWSP, 'g'), '').trim() && !el.querySelector('img');
+      if (isEmpty(block)) block.remove();
+      if (isEmpty(after)) after.remove();
+      if (last?.isConnected) this.sel.placeCursor(last, true);
+      this.editor.commit();
+      return;
+    }
+
+    const last = frag.lastChild;
+    range.insertNode(frag);
+    if (last) {
+      // 넣은 내용 바로 뒤에 커서 (텍스트면 끝, 요소면 그 뒤)
+      const r = document.createRange();
+      r.setStartAfter(last);
+      r.collapse(true);
+      this.sel.setRange(r);
+    }
     this.editor.commit();
+  }
+
+  /** 블록 요소(문단·제목·목록·인용·표·블록 레이어)인지 */
+  static #isBlockEl(el) {
+    return /^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE|DIV)$/.test(el.tagName);
+  }
+
+  /** 조각 최상위의 연속된 인라인·텍스트 노드를 p 로 묶는다 (블록과 섞여 들어올 때) */
+  #wrapLooseInline(frag) {
+    let p = null;
+    Array.from(frag.childNodes).forEach((n) => {
+      if (n.nodeType === Node.ELEMENT_NODE && Commands.#isBlockEl(n)) { p = null; return; }
+      if (n.nodeType === Node.TEXT_NODE && !n.textContent.trim() && !p) { n.remove(); return; }
+      if (!p) { p = document.createElement('p'); frag.insertBefore(p, n); }
+      p.appendChild(n);
+    });
   }
 
   /**

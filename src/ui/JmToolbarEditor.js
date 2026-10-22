@@ -4,6 +4,7 @@
  * - 버튼 mousedown 에서 preventDefault 하여 에디터 포커스/선택이 유지되도록 한다.
  */
 import { JmEditor } from '../core/JmEditor.js';
+import { Sanitizer } from '../core/Sanitizer.js';
 import { TableGridPicker } from './TableGridPicker.js';
 import { ColorPicker } from './ColorPicker.js';
 import { FormatPicker, SAMPLE_FORMATS } from './FormatPicker.js';
@@ -313,8 +314,13 @@ export class JmToolbarEditor {
   #onCommand(cmd) {
     if (cmd === 'link') {
       const a = this.editor.sel.closest('a');
-      if (a) this.#openInput('링크 URL (비우면 해제)', JmEditor.getHref(a), (v) => { this.editor.exec(v ? 'link' : 'unlink', v); return true; });
-      else this.#openInput('링크 URL', 'https://', (v) => { if (v) this.editor.exec('link', v); return true; });
+      // 허용되지 않는 주소(javascript: 등)면 입력줄을 닫지 않고 안내
+      const apply = (v) => {
+        if (v && this.editor.exec('link', v) === false) { this.inputField.setCustomValidity('http(s)·mailto·tel 주소나 / 로 시작하는 경로만 쓸 수 있습니다'); this.inputField.reportValidity(); return false; }
+        return true;
+      };
+      if (a) this.#openInput('링크 URL (비우면 해제)', JmEditor.getHref(a), (v) => (v ? apply(v) : (this.editor.exec('unlink'), true)));
+      else this.#openInput('링크 URL', 'https://', apply);
       return;
     }
     if (cmd === 'youtube') {
@@ -429,12 +435,11 @@ export class JmToolbarEditor {
     this.source.hidden = mode !== 'html';
     this.previewPane.hidden = mode !== 'preview';
 
+    // 미리보기를 떠나면 미리보기 런타임(슬라이드 타이머 등) 정리
+    if (mode !== 'preview') { this.#stopPreviewLayout?.(); this.#stopPreviewLayout = null; }
     if (mode === 'html') { this.source.value = JmToolbarEditor.prettify(this.editor.getHTML()); this.source.focus(); }
     else if (mode === 'preview') {
-      this.previewPane.innerHTML = this.editor.getHTML();
-      this.#stopPreviewLayout?.();
-      this.#stopPreviewLayout = observeGalleries(this.previewPane); // 갤러리 저스티파이드 배치 (뷰어와 동일)
-      initSliders(this.previewPane);                                  // 슬라이드 자동 전환
+      this.#renderPreview();
     }
     else this.area.focus();
 
@@ -462,9 +467,23 @@ export class JmToolbarEditor {
 
   #stopPreviewLayout = null;
 
-  getHTML() { return this.mode === 'html' ? this.source.value : this.editor.getHTML(); }
-  setHTML(html) { this.editor.setHTML(html); if (this.mode === 'html') this.source.value = JmToolbarEditor.prettify(html); if (this.mode === 'preview') this.previewPane.innerHTML = this.editor.getHTML(); }
+  /** 저장할 HTML. HTML 모드에서는 입력 중인 소스를 Sanitizer 로 거른 결과 */
+  getHTML() { return this.mode === 'html' ? Sanitizer.clean(this.source.value) : this.editor.getHTML(); }
+  setHTML(html) { this.editor.setHTML(html); if (this.mode === 'html') this.source.value = JmToolbarEditor.prettify(html); if (this.mode === 'preview') this.#renderPreview(); }
+
+  /** 미리보기 그리기: 이전 런타임(갤러리 배치 감시·슬라이드 타이머)을 정리하고 Sanitizer 를 거친 HTML 로 다시 그림 */
+  #renderPreview() {
+    this.#stopPreviewLayout?.();
+    this.previewPane.innerHTML = Sanitizer.clean(this.editor.getHTML());
+    const stopGalleries = observeGalleries(this.previewPane); // 갤러리 저스티파이드 배치 (뷰어와 동일)
+    const stopSliders = initSliders(this.previewPane);       // 슬라이드 자동 전환
+    this.#stopPreviewLayout = () => { stopGalleries(); stopSliders(); };
+  }
   /** 서식 관리에서 변경 후 호출하면 다음 열 때 다시 불러옴 */
   refreshFormats() { this.formatPicker.refresh(); }
-  destroy() { this.gridPicker.destroy(); this.colorPicker.destroy(); this.formatPicker.destroy(); this.listMenu.destroy(); this.editor.destroy(); }
+  destroy() {
+    this.#stopPreviewLayout?.(); // 미리보기 런타임(갤러리 감시·슬라이드 타이머) 정리
+    this.#stopPreviewLayout = null;
+    this.gridPicker.destroy(); this.colorPicker.destroy(); this.formatPicker.destroy(); this.listMenu.destroy(); this.editor.destroy();
+  }
 }

@@ -33,7 +33,8 @@ public class HtmlSanitizer {
     private final Safelist safelist = new Safelist()
             .addTags("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
                      "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe")
-            .addAttributes("a", "href", "target", "rel", "data-role", "data-style", "data-size")
+            .addAttributes("a", "href", "target", "rel", "data-role", "data-style", "data-size",
+                           "data-color", "data-tone", "data-icon", "data-icon-pos", "style")   // 버튼: 색·아이콘 (값 검사는 cleanButton)
             .addAttributes("img", "src", "alt", "width", "height", "data-float", "style")   // 글 감싸기: 방향 + 폭(%)
             .addAttributes("p", "style")
             .addAttributes("h1", "style").addAttributes("h2", "style").addAttributes("h3", "style")
@@ -67,6 +68,19 @@ public class HtmlSanitizer {
     /** 제목 p[data-role=title] 을 가질 수 있는 블록 */
     private static final java.util.Set<String> TITLED_BLOCKS = java.util.Set.of("gallery", "slider");
 
+    /** 버튼 전용 속성 (일반 링크에서는 제거) */
+    private static final java.util.List<String> BUTTON_ATTRS = java.util.List.of("data-role", "data-style", "data-size", "data-color", "data-tone", "data-icon", "data-icon-pos", "style");
+    /** 버튼 모양·테마 색·아이콘 허용 값 — 클라이언트 src/plugins/buttons/button-theme.js 와 같아야 한다 */
+    private static final java.util.Set<String> BUTTON_SHAPES = java.util.Set.of("primary", "outline", "soft", "gray");
+    private static final java.util.Set<String> BUTTON_COLORS = java.util.Set.of("green", "red", "orange", "purple", "gray", "black"); // blue 는 기본값이라 저장하지 않음
+    private static final java.util.Set<String> BUTTON_ICONS = java.util.Set.of("arrow", "external", "download", "phone", "mail", "calendar", "pin", "search",
+            "play", "check", "info", "heart", "star", "plus", "chat", "file");
+    /** 버튼 직접 색: style 의 --jm-btn: #rgb | #rrggbb */
+    private static final Pattern BUTTON_COLOR = Pattern.compile("(?:^|;)\\s*--jm-btn\\s*:\\s*(#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?)\\s*(?:;|$)");
+
+    /** img src 에 허용하는 data: 주소: 이미지 base64 만 (img 안의 svg 는 스크립트가 실행되지 않아 허용, data:text/html 등은 제거) */
+    private static final Pattern DATA_IMAGE = Pattern.compile("^data:image/(png|jpeg|jpg|gif|webp|svg\\+xml);base64,", Pattern.CASE_INSENSITIVE);
+
     /** 글 감싸기 이미지 폭: 10~100 % 정수 */
     private static final Pattern IMG_WIDTH = Pattern.compile("^width:\\s*(\\d{1,3})%$");
 
@@ -94,8 +108,9 @@ public class HtmlSanitizer {
         String cleaned = Jsoup.clean(html, PROTOCOL_CHECK_BASE_URI, safelist, new Document.OutputSettings().prettyPrint(false));
         Document doc = Jsoup.parseBodyFragment(cleaned);
 
-        // style 은 color / background-color 만 남김
+        // style 은 허용 속성·값 형식만 남김 (버튼 링크의 직접 색 --jm-btn 은 아래 cleanButton 에서 따로 처리)
         for (Element el : doc.select("[style]")) {
+            if (el.tagName().equals("a")) continue;
             String style = Arrays.stream(el.attr("style").split(";"))
                     .map(d -> d.split(":", 2))
                     .filter(kv -> kv.length == 2)
@@ -109,7 +124,10 @@ public class HtmlSanitizer {
         for (Element span : doc.select("span:not([style])")) span.unwrap();
 
         // 글 감싸기 이미지: data-float 는 left/right, style 은 width 10~100% 만
+        // data: 주소는 이미지(png·jpeg·gif·webp·svg) base64 만 — data:text/html 등 다른 형식은 src 제거
         for (Element img : doc.select("img")) {
+            String src = img.attr("src");
+            if (src.regionMatches(true, 0, "data:", 0, 5) && !DATA_IMAGE.matcher(src).lookingAt()) img.removeAttr("src");
             String f = img.attr("data-float");
             if (!f.equals("left") && !f.equals("right")) img.removeAttr("data-float");
             var m = IMG_WIDTH.matcher(Arrays.stream(img.attr("style").split(";")).map(String::trim)
@@ -123,11 +141,8 @@ public class HtmlSanitizer {
 
         // 버튼 링크: data-role=button 일 때만 data-style 허용
         for (Element a : doc.select("a")) {
-            if (!"button".equals(a.attr("data-role"))) { a.removeAttr("data-role"); a.removeAttr("data-style"); a.removeAttr("data-size"); }
-            else {
-                if (!java.util.Set.of("primary", "outline", "gray").contains(a.attr("data-style"))) a.attr("data-style", "primary");
-                if (!java.util.Set.of("sm", "lg").contains(a.attr("data-size"))) a.removeAttr("data-size");
-            }
+            if (!"button".equals(a.attr("data-role"))) BUTTON_ATTRS.forEach(a::removeAttr);
+            else cleanButton(a);
         }
         // iframe 은 유튜브 블록 안의 embed 주소만 허용
         Pattern yt = Pattern.compile("^https://www\\.(youtube|youtube-nocookie)\\.com/embed/([A-Za-z0-9_-]{11})([?#].*)?$");
@@ -135,6 +150,7 @@ public class HtmlSanitizer {
             var m = yt.matcher(f.attr("src"));
             boolean inBlock = f.parent() != null && "youtube".equals(f.parent().attr("data-type"));
             if (!inBlock || !m.matches()) { f.remove(); continue; }
+            f.empty(); // iframe 안 내용은 쓰이지 않음 — 남기면 저장할 때마다 escape 가 겹쳐 늘어남
             f.clearAttributes();
             f.attr("src", "https://www.youtube-nocookie.com/embed/" + m.group(2));
             f.attr("title", "YouTube video");
@@ -237,6 +253,38 @@ public class HtmlSanitizer {
             if (img != null) cell.appendChild(img);
             box.appendChild(cell);
         }
+    }
+
+    /**
+     * 버튼 링크 속성 정리: 모양·테마 색·아이콘은 허용 값만, 직접 색은 style 의 --jm-btn(#hex) 만 남기고
+     * data-tone 은 그 색의 밝기로 다시 계산 (클라이언트 Sanitizer 와 같은 규칙)
+     */
+    private void cleanButton(Element a) {
+        if (!BUTTON_SHAPES.contains(a.attr("data-style"))) a.attr("data-style", "primary");
+        if (!java.util.Set.of("sm", "lg").contains(a.attr("data-size"))) a.removeAttr("data-size");
+        if (!BUTTON_COLORS.contains(a.attr("data-color"))) a.removeAttr("data-color");
+        if (!BUTTON_ICONS.contains(a.attr("data-icon"))) a.removeAttr("data-icon");
+        if (!a.hasAttr("data-icon") || !"right".equals(a.attr("data-icon-pos"))) a.removeAttr("data-icon-pos");
+        a.removeAttr("data-tone");
+        var m = BUTTON_COLOR.matcher(a.attr("style"));
+        a.removeAttr("style");
+        if (m.find()) {
+            String hex = m.group(1).toLowerCase();
+            if (hex.length() == 4) hex = "#" + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2) + hex.charAt(3) + hex.charAt(3);
+            a.removeAttr("data-color"); // 직접 색이 테마 색보다 우선
+            a.attr("style", "--jm-btn: " + hex);
+            if (isLightColor(hex)) a.attr("data-tone", "light");
+        }
+    }
+
+    /** 흰 글자 대비 4.5:1 미만인 밝은 색인지 (WCAG 상대 휘도 > 0.183) */
+    private static boolean isLightColor(String hex) {
+        double[] c = new double[3];
+        for (int i = 0; i < 3; i++) {
+            double v = Integer.parseInt(hex.substring(1 + i * 2, 3 + i * 2), 16) / 255.0;
+            c[i] = v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        }
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] > 0.183;
     }
 
     private static int parseIntOr(String s, int def) {

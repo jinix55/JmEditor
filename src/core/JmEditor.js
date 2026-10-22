@@ -157,6 +157,7 @@ export class JmEditor {
   /** HTML 로드 (sanitize 후) */
   setHTML(html) {
     this.image?.clear();
+    this.slider?.stopAll(); // 이전 내용의 슬라이드 타이머 정리
     this.root.innerHTML = Sanitizer.clean(html || '');
     this.table.wrapAll();
     this.gallery.wrapAll();
@@ -351,13 +352,22 @@ export class JmEditor {
 
     const html = cd.getData('text/html');
     const text = cd.getData('text/plain');
+    const escape = (s) => s.replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
+    // 갤러리·슬라이드 제목, 버튼 글자처럼 한 줄짜리 편집 영역에는 서식 없이 글자만
+    const start = this.sel.getRange()?.startContainer;
+    const startEl = start?.nodeType === Node.TEXT_NODE ? start.parentElement : start;
+    if (startEl?.closest?.('[data-role="title"], a[data-role="button"]')) {
+      const plain = text || new DOMParser().parseFromString(html || '', 'text/html').body.textContent || '';
+      if (plain) this.commands.insertHTML(escape(plain.replace(/\s*\r?\n\s*/g, ' ')));
+      return;
+    }
     if (html) {
       this.commands.insertHTML(Sanitizer.clean(html));
     } else if (text) {
-      // 줄바꿈은 단락으로
-      const escaped = text.replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
-      const paragraphs = escaped.split(/\r?\n/).map((l) => `<p>${l || '<br>'}</p>`).join('');
-      this.commands.insertHTML(paragraphs);
+      // 한 줄이면 커서 위치에 글자로, 여러 줄이면 줄마다 단락으로 (현재 문단을 나눠 그 사이에)
+      const lines = text.split(/\r?\n/);
+      if (lines.length === 1) this.commands.insertHTML(escape(text));
+      else this.commands.insertHTML(lines.map((l) => `<p>${escape(l) || '<br>'}</p>`).join(''));
     }
   }
 
@@ -434,11 +444,15 @@ export class JmEditor {
     this.root.querySelectorAll('a[href]').forEach((a) => JmEditor.setHref(a, a.getAttribute('href')));
   }
 
-  /** 저장용 HTML 에서 보관 속성을 href 로 되돌린다 */
+  /** 저장용 HTML 에서 보관 속성을 href 로 되돌린다. 허용되지 않는 주소(javascript: 등)는 href 없이 둔다 */
   static #restoreLinks(html) {
     const tpl = document.createElement('template');
     tpl.innerHTML = html;
-    tpl.content.querySelectorAll(`a[${HREF_ATTR}]`).forEach((a) => { a.setAttribute('href', a.getAttribute(HREF_ATTR)); a.removeAttribute(HREF_ATTR); });
+    tpl.content.querySelectorAll(`a[${HREF_ATTR}]`).forEach((a) => {
+      const url = a.getAttribute(HREF_ATTR);
+      if (Sanitizer.isSafeHref(url)) a.setAttribute('href', url);
+      a.removeAttribute(HREF_ATTR);
+    });
     return tpl.innerHTML;
   }
 
@@ -464,6 +478,7 @@ export class JmEditor {
   /** 히스토리 복원 */
   #restore(html) {
     this.image.clear();
+    this.slider.stopAll();
     this.root.innerHTML = html;
     this.table.wrapAll();
     this.gallery.wrapAll();

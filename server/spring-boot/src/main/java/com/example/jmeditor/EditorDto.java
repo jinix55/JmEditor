@@ -9,10 +9,17 @@ import java.time.LocalDateTime;
 public final class EditorDto {
     private EditorDto() {}
 
+    /**
+     * 본문 최대 길이(문자 수). 이미지는 업로드 API 로 올려 주소만 넣는 것을 전제로 한 값 —
+     * base64 이미지를 본문에 넣는 방식으로 업로드 크기 제한을 우회하거나 DB 를 부풀리는 것을 막는다. 서비스에 맞게 조정.
+     */
+    public static final int MAX_CONTENT_LENGTH = 2_000_000;
+
     /** 등록/수정 요청 */
     public record SaveRequest(
-            @Size(max = 200) String title,
-            @NotBlank String content
+            @Size(max = 200, message = "제목은 200자까지 입력할 수 있습니다") String title,
+            @NotBlank(message = "본문이 비어 있습니다")
+            @Size(max = MAX_CONTENT_LENGTH, message = "본문이 너무 큽니다. 이미지는 파일로 올려 주세요") String content
     ) {}
 
     /** 콘텐츠 응답 */

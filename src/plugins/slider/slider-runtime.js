@@ -78,7 +78,8 @@ export function initSlider(block) {
   const start = () => {
     stop();
     const ms = interval();
-    if (ms > 0 && imgs().length > 1 && !stopped) timer = setInterval(() => { if (!paused) api.next(); }, ms);
+    // 블록이 문서에서 빠지면(실행 취소·미리보기 갱신 등) 스스로 멈춘다 — 타이머가 계속 쌓이지 않게
+    if (ms > 0 && imgs().length > 1 && !stopped) timer = setInterval(() => { if (!block.isConnected) { api.destroy(); return; } if (!paused) api.next(); }, ms);
   };
   const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
   const onEnter = () => { paused = true; };
@@ -107,9 +108,22 @@ export function initSlider(block) {
   return api;
 }
 
-/** root 아래 모든 슬라이드 블록 초기화 */
+/**
+ * root 아래 모든 슬라이드 블록 초기화
+ * @param {HTMLElement|Document} [root=document]
+ * @returns {() => void} 해제 함수 (자동 전환 타이머·UI 정리)
+ */
 export function initSliders(root = document) {
   root.querySelectorAll('div[data-type="slider"]').forEach(initSlider);
+  return () => destroySliders(root);
+}
+
+/**
+ * root 아래 슬라이드 블록의 런타임 정리 (타이머 중지·UI 제거)
+ * @param {HTMLElement|Document} [root=document]
+ */
+export function destroySliders(root = document) {
+  root.querySelectorAll('div[data-type="slider"]').forEach((b) => b._slider?.destroy());
 }
 
 /** 저장용: 런타임 UI 와 상태 클래스 제거 (문자열 HTML) */

@@ -66,13 +66,13 @@ export class SelectionUtil {
   }
 
   /**
-   * 블록(표·이미지·서식 등) 삽입 기준 블록: 이미지+글 배치 블록의 글 칸 안이면 배치 블록 레이어로 바꾼다
-   * (글 칸에는 블록을 넣지 않으므로 칸 밖, 배치 블록 뒤에 삽입되게)
+   * 블록(표·이미지·서식 등) 삽입 기준 블록: 배치 블록 글 칸·갤러리/슬라이드 제목처럼 블록 안 편집 영역이면
+   * 그 블록의 레이어로 바꾼다 (블록 안에 블록이 들어가 저장 시 사라지지 않게 — 레이어 뒤에 삽입)
    * @param {HTMLElement|null} block getBlock() 결과
    * @returns {HTMLElement|null}
    */
   static blockAnchor(block) {
-    return block?.closest?.('.jm-layout-layer') || block;
+    return block?.closest?.('.jm-layout-layer, .jm-gallery-layer, .jm-slider-layer') || block;
   }
 
   /** 커서가 특정 태그(strong/em 등) 안에 있는지 */

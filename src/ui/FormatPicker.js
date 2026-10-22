@@ -5,6 +5,8 @@
  * - 서식 데이터 규격: { id, name, description?, html, category? }  category 로 묶어 보여준다 (없으면 '기타')
  *   → 별도 서식 관리 화면/DB 테이블(예: format_template: id, name, description, html, sort_order, use_yn)에서 관리.
  */
+import { Sanitizer } from '../core/Sanitizer.js';
+
 export class FormatPicker {
   /**
    * @param {object} options
@@ -118,7 +120,7 @@ export class FormatPicker {
       const preview = document.createElement('div');
       preview.className = 'jm-formatpicker-preview jm-editor';
       preview.contentEditable = 'false';
-      preview.innerHTML = f.html;
+      preview.innerHTML = Sanitizer.clean(f.html || ''); // 서식 HTML 은 외부(서버·연동 코드)에서 오므로 미리보기도 거름
 
       item.append(name, desc, preview);
       this.el.appendChild(item);
