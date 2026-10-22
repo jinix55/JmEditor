@@ -65,6 +65,16 @@ export class SelectionUtil {
     return null;
   }
 
+  /**
+   * 블록(표·이미지·서식 등) 삽입 기준 블록: 이미지+글 배치 블록의 글 칸 안이면 배치 블록 레이어로 바꾼다
+   * (글 칸에는 블록을 넣지 않으므로 칸 밖, 배치 블록 뒤에 삽입되게)
+   * @param {HTMLElement|null} block getBlock() 결과
+   * @returns {HTMLElement|null}
+   */
+  static blockAnchor(block) {
+    return block?.closest?.('.jm-layout-layer') || block;
+  }
+
   /** 커서가 특정 태그(strong/em 등) 안에 있는지 */
   isInside(tagName) {
     return !!this.closest(tagName);

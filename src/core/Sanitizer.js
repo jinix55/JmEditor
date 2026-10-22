@@ -3,6 +3,7 @@
  * - 외부에서 들어오는 HTML(붙여넣기, setHTML)을 허용 태그/속성만 남기고 정리한다.
  * - XSS 1차 방어. 서버 저장 시에도 반드시 별도 sanitize(jsoup 등) 할 것.
  */
+import { normalizeLayout, normalizeSplit, cellsOf, isImageRole } from '../plugins/layout/layout-presets.js';
 
 /** 허용 태그와 각 태그에서 허용하는 속성 */
 const ALLOWED = {
@@ -11,7 +12,7 @@ const ALLOWED = {
   ul: ['style'], ol: ['style', 'start'], li: ['style'],
   blockquote: ['style'],
   a: ['href', 'target', 'rel', 'data-role', 'data-style', 'data-size'], // data-role=button → 버튼 모양 링크
-  img: ['src', 'alt', 'width', 'height'],
+  img: ['src', 'alt', 'width', 'height', 'data-float', 'style'], // 글 감싸기: 방향 + 폭(%) — 값 검사는 #cleanImage
   table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style'],
   tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
   span: ['style'],
@@ -165,6 +166,9 @@ export class Sanitizer {
       return b;
     }
 
+    // 이미지+글 배치 블록: div[data-type=layout] 안에는 배치 순서대로 이미지 칸·글 칸만
+    if (tag === 'div' && node.getAttribute('data-type') === 'layout') return Sanitizer.#cleanLayout(node);
+
     tag = TAG_ALIAS[tag] || tag;
 
     // 허용되지 않은 태그 → 자식만 모아서 반환(언래핑)
@@ -209,11 +213,56 @@ export class Sanitizer {
         if (!['sm', 'lg'].includes(el.getAttribute('data-size'))) el.removeAttribute('data-size');
       }
     }
+    if (tag === 'img') Sanitizer.#cleanImage(el);
 
     Array.from(node.childNodes).forEach((c) => {
       const r = Sanitizer.#cleanNode(c);
       if (r) el.appendChild(r);
     });
     return el;
+  }
+
+  /** 글 감싸기 이미지: data-float 는 left/right, style 은 width 10~100% 만 */
+  static #cleanImage(img) {
+    if (!['left', 'right'].includes(img.getAttribute('data-float'))) img.removeAttribute('data-float');
+    const m = (img.getAttribute('style') || '').match(/(?:^|;)\s*width:\s*(\d{1,3})%/);
+    const w = m ? +m[1] : 0;
+    if (w >= 10 && w <= 100) img.setAttribute('style', `width: ${w}%`);
+    else img.removeAttribute('style');
+  }
+
+  /**
+   * 배치 블록 정리: preset·variant 는 허용 값(아니면 기본값), split 은 20~80 의 5 배수만.
+   * 칸은 variant 의 저장 순서대로 다시 세우고, 모자라면 빈 칸을 채우고 넘치면 버린다.
+   * 이미지 칸은 img 1장만, 글 칸에는 표·이미지·iframe·블록(div)을 넣지 않는다. (서버 HtmlSanitizer 와 같은 규칙)
+   */
+  static #cleanLayout(node) {
+    const { preset, variant } = normalizeLayout(node.getAttribute('data-preset'), node.getAttribute('data-variant'));
+    const box = document.createElement('div');
+    box.setAttribute('data-type', 'layout');
+    box.setAttribute('data-preset', preset);
+    box.setAttribute('data-variant', variant);
+    const split = normalizeSplit(node.getAttribute('data-split'));
+    if (split != null) box.setAttribute('data-split', String(split));
+
+    const cells = Array.from(node.children).filter((c) => c.tagName === 'DIV');
+    const images = cells.filter((c) => c.getAttribute('data-cell') === 'image');
+    const texts = cells.filter((c) => c.getAttribute('data-cell') === 'text');
+    cellsOf(preset, variant).forEach((role) => {
+      const isImg = isImageRole(role);
+      const src = isImg ? images.shift() : texts.shift();
+      const cell = document.createElement('div');
+      cell.setAttribute('data-cell', isImg ? 'image' : 'text');
+      if (src && isImg) {
+        const img = src.querySelector('img');
+        const r = img && Sanitizer.#cleanNode(img);
+        if (r) cell.appendChild(r);
+      } else if (src) {
+        Array.from(src.childNodes).forEach((c) => { const r = Sanitizer.#cleanNode(c); if (r) cell.appendChild(r); });
+        cell.querySelectorAll('table, img, iframe, div').forEach((el) => el.remove());
+      }
+      box.appendChild(cell);
+    });
+    return box;
   }
 }

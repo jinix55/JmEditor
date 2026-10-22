@@ -15,6 +15,8 @@ import { GalleryCommands, GALLERY_LAYER_CLASS } from '../plugins/gallery/Gallery
 import { EmbedCommands, EMBED_LAYER_CLASS } from '../plugins/embed/EmbedCommands.js';
 import { ButtonsCommands, BUTTONS_LAYER_CLASS } from '../plugins/buttons/ButtonsCommands.js';
 import { SliderCommands, SLIDER_LAYER_CLASS } from '../plugins/slider/SliderCommands.js';
+import { LayoutCommands, LAYOUT_LAYER_CLASS } from '../plugins/layout/LayoutCommands.js';
+import { ImageCommands } from '../plugins/image/ImageCommands.js';
 import { History } from './History.js';
 import { BlockDrag } from './BlockDrag.js';
 import { Sanitizer } from './Sanitizer.js';
@@ -59,6 +61,8 @@ export class JmEditor {
     this.embed = new EmbedCommands(this);
     this.buttons = new ButtonsCommands(this);
     this.slider = new SliderCommands(this);
+    this.layout = new LayoutCommands(this); // 이미지+글 배치 블록
+    this.image = new ImageCommands(this);   // 본문 이미지 글 감싸기·크기 조절
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
 
     this.#ensureBlock();
@@ -81,6 +85,7 @@ export class JmEditor {
    *                      |youtube (value: 유튜브 주소 또는 동영상 ID)
    *                      |buttons (value: {align} — 버튼 그룹 블록 삽입)
    *                      |slider (value: {interval, ratio} — 이미지 슬라이드 블록 삽입)
+   *                      |layout (value: 'side'|'one'|'diagonal'|'pair' 또는 {preset, variant} — 이미지+글 배치 블록 삽입)
    * @param {*} [value] link 의 url, image 의 {src, alt}, table 의 {rows, cols, header}
    */
   exec(name, value) {
@@ -106,6 +111,7 @@ export class JmEditor {
       image: () => c.insertImage(value?.src, value?.alt),
       format: () => c.insertBlockHTML(Sanitizer.clean(value || '')),
       gallery: () => c.insertBlockHTML(GalleryCommands.template()),
+      layout: () => c.insertBlockHTML(LayoutCommands.template(value?.preset ?? value, value?.variant)),
       youtube: () => this.embed.insertYouTube(value),
       buttons: () => c.insertBlockHTML(ButtonsCommands.template(value?.align)),
       slider: () => c.insertBlockHTML(SliderCommands.template(value?.interval, value?.ratio)),
@@ -142,18 +148,22 @@ export class JmEditor {
     html = EmbedCommands.unwrapHTML(html);
     html = ButtonsCommands.unwrapHTML(html);
     html = SliderCommands.unwrapHTML(html);
+    html = LayoutCommands.unwrapHTML(html);
+    html = ImageCommands.unwrapHTML(html);
     html = JmEditor.#restoreLinks(html);
     return BlockDrag.cleanHTML(html);
   }
 
   /** HTML 로드 (sanitize 후) */
   setHTML(html) {
+    this.image?.clear();
     this.root.innerHTML = Sanitizer.clean(html || '');
     this.table.wrapAll();
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
     this.slider.wrapAll();
+    this.layout.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
@@ -181,6 +191,7 @@ export class JmEditor {
     this.embed.wrapAll();
     this.buttons.wrapAll();
     this.slider.wrapAll();
+    this.layout.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.history.push();
@@ -194,6 +205,8 @@ export class JmEditor {
     this.menu.destroy();
     this.gallery.destroy();
     this.slider.destroy();
+    this.layout.destroy();
+    this.image.destroy();
     this.blockDrag.destroy();
     this.gapBar?.remove();
   }
@@ -351,7 +364,7 @@ export class JmEditor {
   /** 드롭: 이미지 파일만 처리 */
   async #handleDrop(e) {
     if (BlockDrag.isBlockDrag(e)) return;                       // 블록 이동은 BlockDrag 가 처리
-    if (e.target.closest?.(`.${GALLERY_LAYER_CLASS}`)) return; // 갤러리 레이어가 직접 처리
+    if (e.target.closest?.(`.${GALLERY_LAYER_CLASS}, .${LAYOUT_LAYER_CLASS}`)) return; // 갤러리·배치 블록 레이어가 직접 처리
     const file = Array.from(e.dataTransfer?.files || []).find((f) => f.type.startsWith('image/'));
     if (!file) return;
     e.preventDefault();
@@ -439,7 +452,7 @@ export class JmEditor {
     Array.from(r.childNodes).forEach((n) => {
       // 블록 사이 줄바꿈 같은 공백 텍스트는 단락으로 만들지 않고 제거
       if (n.nodeType === Node.TEXT_NODE && !n.textContent.replace(/[\s\u200B]/g, '')) { n.remove(); return; }
-      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider'].includes(n.dataset?.type));
+      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout'].includes(n.dataset?.type));
       if (!isBlock) {
         const p = document.createElement('p');
         r.insertBefore(p, n);
@@ -450,12 +463,14 @@ export class JmEditor {
 
   /** 히스토리 복원 */
   #restore(html) {
+    this.image.clear();
     this.root.innerHTML = html;
     this.table.wrapAll();
     this.gallery.wrapAll();
     this.embed.wrapAll();
     this.buttons.wrapAll();
     this.slider.wrapAll();
+    this.layout.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.sel.placeCursor(this.root.lastChild || this.root, true);
