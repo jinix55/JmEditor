@@ -63,7 +63,7 @@ ES Module 은 `…@v0.0.2/dist/jm-editor.esm.js` 를 import 합니다. 설정은
 </script>
 ```
 
-Thymeleaf, JSP 모두 이 형태 그대로입니다. 전체 예시는 [examples/thymeleaf/notice-form.html](examples/thymeleaf/notice-form.html).
+Thymeleaf, JSP 모두 이 형태 그대로입니다. 전체 예시는 [examples/thymeleaf/notice-form.html](examples/thymeleaf/notice-form.html)(등록·수정), [notice-view.html](examples/thymeleaf/notice-view.html)(조회).
 
 API 없이 폼으로만 보낼 거면 `api` 옵션을 빼고 submit 직전에 `editor.getHTML()` 을 hidden input 에 넣으면 됩니다.
 
@@ -139,7 +139,14 @@ ES Module 로 쓰려면:
 
 ### React / Next.js
 
-`npm i github:jinix55/JmEditor` 또는 저장소를 받아 `import { JmEditor } from 'jm-editor'` (ESM 번들). 컴포넌트 예시는 [examples/react/JmEditor.jsx](examples/react/JmEditor.jsx), Next.js App Router 에서는 `'use client'` 가 필요합니다.
+`npm i github:jinix55/JmEditor` 후 `import { JmToolbarEditor } from 'jm-editor'`, 뷰어는 `jm-editor/viewer`, CSS 는 `jm-editor/css` 입니다. 툴바까지 그대로 쓰는 편집 컴포넌트(`JmEditor`)와 조회 컴포넌트(`JmContent`) 예시는 [examples/react/JmEditor.jsx](examples/react/JmEditor.jsx). Next.js App Router 에서는 `'use client'` 가 필요합니다.
+
+```jsx
+const editorRef = useRef(null);
+<JmEditor ref={editorRef} api={{ baseUrl: '' }} contentId={id} />   // 등록·수정
+<button onClick={() => editorRef.current.save({ title })}>저장</button>
+<JmContent html={record.content} />                                // 조회
+```
 
 ### 서버
 

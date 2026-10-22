@@ -1,103 +1,96 @@
 /**
- * React 래퍼 (차후 React/Next.js 전환용)
- * - 코어 JmEditor 를 그대로 사용한다. 툴바만 React 로 그린다.
+ * React / Next.js 예시 — 편집 컴포넌트(JmEditor)와 조회 컴포넌트(JmContent)
+ * - 편집: 바닐라와 같은 JmToolbarEditor(툴바·서식·갤러리·버튼·표·HTML 보기 등 전체 기능)를 그대로 감싼다.
+ * - 조회: 저장된 HTML 을 .jm-content 에 출력하고 뷰어 런타임(갤러리 배치·슬라이드)을 초기화한다.
  * - Next.js App Router 에서는 'use client' 필요 (window/document 사용).
+ * - 설치: npm i github:jinix55/JmEditor
  */
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { JmEditor as JmEditorCore } from '../../src/core/JmEditor.js';
-
-/** 툴바 버튼 정의 (vanilla 와 동일 규격) */
-const BUTTONS = [
-  ['bold', 'B', (s) => s.strong],
-  ['italic', 'I', (s) => s.em],
-  ['underline', 'U', (s) => s.u],
-  ['strike', 'S', (s) => s.s],
-  ['h1', 'H1', (s) => s.block === 'h1'],
-  ['h2', 'H2', (s) => s.block === 'h2'],
-  ['h3', 'H3', (s) => s.block === 'h3'],
-  ['quote', '❝', (s) => s.block === 'blockquote'],
-  ['ul', '• 목록', (s) => s.list === 'ul'],
-  ['ol', '1. 목록', (s) => s.list === 'ol'],
-  ['link', '링크', (s) => s.a],
-  ['image', '이미지', () => false],
-  ['undo', '↶', () => false],
-  ['redo', '↷', () => false],
-];
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { JmToolbarEditor } from 'jm-editor';
+import { initViewer } from 'jm-editor/viewer';
+import 'jm-editor/css';
 
 /**
+ * 편집 컴포넌트. ref 로 getHTML / setHTML / save / reset 을 쓸 수 있다.
  * @param {object} props
- * @param {string} [props.value] 초기 HTML
- * @param {(html: string) => void} [props.onChange]
- * @param {(file: File) => Promise<string>} [props.uploadImage]
+ * @param {string} [props.value] 초기 HTML (api 를 쓰면 contentId 로 조회하므로 생략)
+ * @param {(html: string) => void} [props.onChange] 내용이 바뀔 때
+ * @param {object} [props.api] JmEditorApi 생성 옵션 { baseUrl, headers, endpoints } — 지정 시 조회·저장·업로드·서식을 API 로
+ * @param {string|number} [props.contentId] 수정 화면이면 글 id (api 필요)
+ * @param {(file: File) => Promise<string>} [props.uploadImage] api 없이 이미지 업로드만 직접 처리할 때
+ * @param {() => Promise<Array>} [props.loadFormats] 서식 목록 공급 함수 (없으면 api → 기본 서식)
+ * @param {(rec: object) => void} [props.onLoaded] 조회 완료
+ * @param {(rec: object) => void} [props.onSaved] 저장 완료
  * @param {string} [props.placeholder]
  */
-export default function JmEditor({ value = '', onChange, uploadImage, placeholder }) {
-  const areaRef = useRef(null);
+export const JmEditor = forwardRef(function JmEditor(
+  { value = '', onChange, api, contentId, uploadImage, loadFormats, onLoaded, onSaved, placeholder },
+  ref,
+) {
+  const boxRef = useRef(null);
   const editorRef = useRef(null);
-  const fileRef = useRef(null);
-  const [state, setState] = useState({});
+  // 콜백은 최신 것을 쓰도록 ref 에 둔다 (에디터는 마운트 때 한 번만 만든다)
+  const cb = useRef({});
+  cb.current = { onChange, onLoaded, onSaved };
 
   // 에디터 생성/해제 (마운트 1회)
   useEffect(() => {
-    const editor = new JmEditorCore(areaRef.current, {
+    const editor = new JmToolbarEditor(boxRef.current, {
       placeholder,
+      api,
+      contentId,
       uploadImage,
-      onChange,
-      onSelectionChange: () => setState(editor.getState()),
+      loadFormats,
+      initialHTML: value,
+      onChange: (html) => cb.current.onChange?.(html),
+      onLoaded: (rec) => cb.current.onLoaded?.(rec),
+      onSaved: (rec) => cb.current.onSaved?.(rec),
     });
-    editor.setHTML(value);
     editorRef.current = editor;
     return () => editor.destroy();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 외부에서 value 가 바뀐 경우 반영 (수정 화면 데이터 로드 등)
+  // 외부에서 value 가 바뀐 경우 반영 (api 없이 수정 화면 데이터를 직접 넣을 때)
   useEffect(() => {
     const ed = editorRef.current;
-    if (ed && ed.getHTML() !== value) ed.setHTML(value);
-  }, [value]);
+    if (ed && !api && ed.getHTML() !== value) ed.setHTML(value);
+  }, [value, api]);
 
-  const run = useCallback((cmd) => {
-    const ed = editorRef.current;
-    if (!ed) return;
-    if (cmd === 'link') {
-      if (ed.getState().a) { ed.exec('unlink'); return; }
-      const url = window.prompt('링크 URL 을 입력하세요', 'https://');
-      if (url) ed.exec('link', url);
-      return;
-    }
-    if (cmd === 'image') { fileRef.current?.click(); return; }
-    ed.exec(cmd);
-  }, []);
+  // 부모에서 쓸 메서드
+  useImperativeHandle(ref, () => ({
+    getHTML: () => editorRef.current?.getHTML() ?? '',
+    setHTML: (html) => editorRef.current?.setHTML(html),
+    save: (extra) => editorRef.current?.save(extra), // api 필요. contentId 유무로 등록/수정
+    reset: () => editorRef.current?.reset(),
+    get dirty() { return !!editorRef.current?.dirty; },
+  }), []);
 
-  return (
-    <div className="jm-container">
-      <div className="jm-toolbar">
-        {BUTTONS.map(([cmd, label, isActive]) => (
-          <button
-            key={cmd}
-            type="button"
-            className={`jm-btn ${isActive(state) ? 'is-active' : ''}`}
-            onMouseDown={(e) => e.preventDefault()} // 선택 영역 유지
-            onClick={() => run(cmd)}
-          >
-            {label}
-          </button>
-        ))}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => {
-            editorRef.current?.insertImageFile(e.target.files?.[0]);
-            e.target.value = '';
-          }}
-        />
-      </div>
-      <div ref={areaRef} />
-    </div>
-  );
+  return <div ref={boxRef} />;
+});
+
+/**
+ * 조회 컴포넌트. 서버에서 sanitize 된 HTML 만 넘길 것.
+ * @param {object} props
+ * @param {string} props.html 저장된 본문 HTML
+ */
+export function JmContent({ html }) {
+  const ref = useRef(null);
+  // 본문이 바뀔 때마다 뷰어 런타임 다시 초기화 (갤러리 배치·슬라이드 전환)
+  useEffect(() => initViewer(ref.current), [html]);
+  return <div ref={ref} className="jm-content" dangerouslySetInnerHTML={{ __html: html }} />;
 }
+
+/*
+ * 사용 예
+ *
+ * // 등록·수정 화면
+ * const editorRef = useRef(null);
+ * <JmEditor ref={editorRef} api={{ baseUrl: '' }} contentId={id} onLoaded={(rec) => setTitle(rec.title)} />
+ * <button onClick={() => editorRef.current.save({ title })}>저장</button>
+ *
+ * // 조회 화면
+ * <JmContent html={record.content} />
+ */

@@ -6018,6 +6018,7 @@ class ColorPicker {
   /** 색상 띠는 고정이므로 1회만 그림 */
   #drawHue() {
     const ctx = this.hue.getContext('2d');
+    if (!ctx) return; // 캔버스 미지원 환경
     const g = ctx.createLinearGradient(0, 0, this.hue.width, 0);
     for (let i = 0; i <= 6; i++) g.addColorStop(i / 6, `hsl(${i * 60}, 100%, 50%)`);
     ctx.fillStyle = g;
@@ -6028,6 +6029,7 @@ class ColorPicker {
   #render(updateHex) {
     const { h, s, v } = this.hsv;
     const ctx = this.sv.getContext('2d');
+    if (!ctx) return; // 캔버스 미지원 환경
     ctx.fillStyle = `hsl(${h}, 100%, 50%)`;
     ctx.fillRect(0, 0, this.sv.width, this.sv.height);
     const white = ctx.createLinearGradient(0, 0, this.sv.width, 0);
