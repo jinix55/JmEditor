@@ -2,17 +2,28 @@
  * gallery-layout — 이미지 갤러리 저스티파이드 배치 (에디터·뷰어 공용)
  *
  * - 각 줄의 높이를 같게 두고, 이미지 폭은 원본 비율대로 잡은 뒤 한 줄이 컨테이너 폭을 꽉 채우도록 스케일한다.
- *   세로 사진이 섞여도 줄이 가지런하고 가로가 남지 않는다.
+ *   세로 사진이 섞여도 줄이 가지런하고 가로가 남지 않는다. 마지막 줄은 늘리지 않고 목표 줄 높이로 왼쪽에 둔다.
+ * - 목표 줄 높이·이미지 간격은 디자인에서 정한다: CSS 변수 --jm-gallery-row-height / --jm-gallery-gap (px).
  * - 원본 비율은 img 의 width / height 속성에 저장한다 (저장 HTML 에 포함, 뷰어에서 이미지 로딩 전에도 계산 가능).
- * - data-layout="justify" 인 갤러리만 처리. "cover"(칸 고정·잘라 채움) 는 CSS 만으로 동작하므로 건드리지 않는다.
- * - data-cols 는 한 줄에 들어갈 대략적인 장 수로 쓰여 목표 줄 높이를 정한다.
+ * - data-layout="justify" 인 갤러리만 처리. 예전에 저장된 "cover"(칸 고정·잘라 채움) 는 CSS 만으로 보이므로 건드리지 않는다.
  *
  * 뷰어 페이지에서는 아래 한 줄이면 된다:
  *   import { observeGalleries } from '/js/jm-editor/plugins/gallery/gallery-layout.js';
  *   observeGalleries(document.querySelector('.jm-content'));
  */
-const GAP = 8;             // 이미지 사이 간격(px) — CSS gap 과 같아야 함
-const MAX_LAST_ROW_SCALE = 1.6; // 마지막 줄이 너무 커지지 않도록 확대 상한
+const DEFAULT_ROW_HEIGHT = 200; // CSS 변수가 없을 때 목표 줄 높이(px)
+const DEFAULT_GAP = 8;          // CSS 변수가 없을 때 이미지 간격(px)
+
+/**
+ * 갤러리에 적용된 CSS 변수(px)를 숫자로 읽는다
+ * @param {CSSStyleDeclaration} cs
+ * @param {string} name 변수 이름 (--jm-gallery-…)
+ * @param {number} fallback 없거나 숫자가 아닐 때 기본값
+ */
+function cssPx(cs, name, fallback) {
+  const v = parseFloat(cs.getPropertyValue(name));
+  return Number.isFinite(v) && v >= 0 ? v : fallback;
+}
 
 /** img 의 원본 비율 (w/h). width/height 속성 → naturalWidth/Height 순으로 읽고, 없으면 4:3 */
 function ratioOf(img) {
@@ -21,9 +32,13 @@ function ratioOf(img) {
   return w > 0 && h > 0 ? w / h : 4 / 3;
 }
 
-/** 로드된 이미지의 원본 크기를 width/height 속성에 기록 (저장 HTML 에 비율이 남도록) */
-export function stampSize(img) {
-  if (img.naturalWidth && img.naturalHeight && !img.getAttribute('width')) {
+/**
+ * 로드된 이미지의 원본 크기를 width/height 속성에 기록 (저장 HTML 에 비율이 남도록)
+ * @param {HTMLImageElement} img
+ * @param {boolean} [force=false] 이미 기록돼 있어도 덮어씀 (이미지 교체 시)
+ */
+export function stampSize(img, force = false) {
+  if (img.naturalWidth && img.naturalHeight && (force || !img.getAttribute('width'))) {
     img.setAttribute('width', img.naturalWidth);
     img.setAttribute('height', img.naturalHeight);
   }
@@ -39,11 +54,12 @@ export function layoutGallery(gallery) {
     imgs.forEach((img) => { img.style.width = ''; img.style.height = ''; img.style.flex = ''; });
     return;
   }
-  const width = gallery.clientWidth - (parseFloat(getComputedStyle(gallery).paddingLeft) || 0) * 2;
+  const cs = getComputedStyle(gallery);
+  const width = gallery.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
   if (!imgs.length || width <= 0) return;
 
-  const cols = Math.max(1, parseInt(gallery.dataset.cols, 10) || 3);
-  const targetH = (width - GAP * (cols - 1)) / cols / (4 / 3); // 4:3 사진이 cols 장 들어가는 높이
+  const GAP = cssPx(cs, '--jm-gallery-gap', DEFAULT_GAP);
+  const targetH = cssPx(cs, '--jm-gallery-row-height', DEFAULT_ROW_HEIGHT) || DEFAULT_ROW_HEIGHT;
 
   // 줄 나누기: 목표 높이 기준 폭 합이 컨테이너를 넘을 때,
   // 이 이미지를 포함한 폭과 제외한 폭 중 컨테이너 폭에 더 가까운 쪽을 택한다 (한 줄이 과하게 확대/축소되는 것 방지)
@@ -66,8 +82,8 @@ export function layoutGallery(gallery) {
     const sumRatio = items.reduce((a, it) => a + it.r, 0);
     const avail = width - GAP * (items.length - 1);
     let h = avail / sumRatio;
-    // 마지막 줄은 너무 커지지 않게 상한 적용 (그 이상이면 왼쪽 정렬로 남김)
-    if (idx === rows.length - 1 && h > targetH * MAX_LAST_ROW_SCALE) h = targetH * MAX_LAST_ROW_SCALE;
+    // 마지막 줄은 늘리지 않고 목표 높이로 왼쪽에 둔다 (폭을 넘칠 때만 줄여서 맞춤)
+    if (idx === rows.length - 1) h = Math.min(h, targetH);
     items.forEach(({ img, r }) => {
       img.style.flex = '0 0 auto';
       img.style.width = `${Math.floor(r * h)}px`;

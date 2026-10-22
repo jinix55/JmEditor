@@ -86,8 +86,9 @@ export class Sanitizer {
     if (tag === 'div' && node.getAttribute('data-type') === 'gallery') {
       const g = document.createElement('div');
       g.setAttribute('data-type', 'gallery');
+      // data-cols 는 예전 cover 갤러리 호환용 — 있을 때만 남긴다 (새 갤러리는 쓰지 않음)
       const cols = parseInt(node.getAttribute('data-cols'), 10);
-      g.setAttribute('data-cols', String(cols >= 1 && cols <= 6 ? cols : 3));
+      if (cols >= 1 && cols <= 6) g.setAttribute('data-cols', String(cols));
       if (node.getAttribute('data-auto') === '1') g.setAttribute('data-auto', '1');
       const layout = node.getAttribute('data-layout');
       if (layout === 'justify' || layout === 'cover') g.setAttribute('data-layout', layout);

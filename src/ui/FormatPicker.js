@@ -180,8 +180,8 @@ export const SAMPLE_FORMATS = [
     id: 'image-gallery',
     category: '미디어',
     name: '이미지 갤러리',
-    description: '이미지만 넣는 블록. 드롭/추가 시 자동 균등 배치, 헤더에서 선택·전체 삭제',
-    html: `<div data-type="gallery" data-cols="3" data-auto="1"></div>`,
+    description: '이미지만 넣는 블록. 비율을 유지하며 줄을 채워 자동 배치, 순서 변경·교체·삭제',
+    html: `<div data-type="gallery" data-layout="justify"></div>`,
   },
   {
     id: 'divider-note',

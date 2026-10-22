@@ -12,4 +12,6 @@ await build({ entryPoints: ['src/index.js'], bundle: true, minify: true, format:
 await build({ entryPoints: ['src/viewer.js'], bundle: true, minify: true, format: 'iife', globalName: 'JmViewer', outfile: 'dist/jm-viewer.min.js', banner, target: ['es2020'] });
 await build({ entryPoints: ['src/viewer.js'], bundle: true, minify: true, format: 'esm', outfile: 'dist/jm-viewer.esm.js', banner, target: ['es2020'] });
 copyFileSync('src/styles/jm-editor.css', 'dist/jm-editor.css');
+// 설정 파일 (업로드 제한 등) — 번들에 넣지 않고 그대로 복사해 빌드 없이 고쳐 쓰게 함
+copyFileSync('src/jm-editor.config.js', 'dist/jm-editor.config.js');
 console.log('built dist/');

@@ -147,8 +147,10 @@ public class HtmlSanitizer {
                 continue;
             }
             if (!"gallery".equals(div.attr("data-type"))) { div.tagName("p"); div.clearAttributes(); continue; }
-            int cols = parseIntOr(div.attr("data-cols"), 3);
-            div.attr("data-cols", String.valueOf(Math.max(1, Math.min(6, cols))));
+            // data-cols 는 예전 cover 갤러리 호환용 — 있을 때만 1~6 으로 맞춰 남긴다
+            int cols = parseIntOr(div.attr("data-cols"), 0);
+            if (cols == 0) div.removeAttr("data-cols");
+            else div.attr("data-cols", String.valueOf(Math.max(1, Math.min(6, cols))));
             if (!"1".equals(div.attr("data-auto"))) div.removeAttr("data-auto");
             String layout = div.attr("data-layout");
             if (!layout.equals("justify") && !layout.equals("cover")) div.removeAttr("data-layout");
