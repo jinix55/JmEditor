@@ -69,13 +69,22 @@ spring:
 
 | 파일 | 내용 |
 |---|---|
-| `schema-postgresql.sql` | `editor_content`(본문), `editor_format`(서식) 테이블 |
-| `sample-formats-postgresql.sql` | 서식 샘플 데이터 8건 (클라이언트 기본 서식 `SAMPLE_FORMATS` 와 같은 내용) |
+| `schema-postgresql.sql` | `editor_content`(본문), `editor_format`(서식) 테이블 — PostgreSQL |
+| `sample-formats-postgresql.sql` | 서식 샘플 데이터 13건 (클라이언트 기본 서식 `SAMPLE_FORMATS` 와 같은 내용) — PostgreSQL |
+| `schema-mariadb.sql` | 같은 테이블 — MariaDB 10.3+ / MySQL 8+ (utf8mb4, 본문·서식 HTML 은 `MEDIUMTEXT`) |
+| `sample-formats-mariadb.sql` | 같은 서식 샘플 13건 — MariaDB / MySQL |
 
 ```bash
+# PostgreSQL
 psql -d <DB> -f schema-postgresql.sql
 psql -d <DB> -f sample-formats-postgresql.sql
+
+# MariaDB / MySQL
+mariadb --default-character-set=utf8mb4 <DB> < schema-mariadb.sql
+mariadb --default-character-set=utf8mb4 <DB> < sample-formats-mariadb.sql
 ```
+
+MariaDB 의 `TEXT` 는 64KB 까지라 본문(최대 200만 자)이 잘릴 수 있어 `MEDIUMTEXT` 로 만듭니다. JPA `ddl-auto` 로 테이블을 만들면 엔티티의 `columnDefinition = "TEXT"` 대로 생성되므로, MariaDB 에서는 위 스키마 파일로 만들거나 엔티티를 `MEDIUMTEXT` 로 바꿔 쓰세요.
 
 `api` 옵션을 쓰면 서식 목록을 `/api/editor/formats`, 즉 `editor_format` 테이블에서 받습니다. 테이블이 비어 있으면 서식 목록도 비어 보이므로 샘플 데이터를 넣거나 서식 관리 화면에서 등록하세요. 샘플 쿼리는 같은 이름의 서식이 있으면 건너뛰어서 여러 번 실행해도 됩니다.
 
