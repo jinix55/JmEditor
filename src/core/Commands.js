@@ -204,33 +204,44 @@ export class Commands {
     if (!range) return;
 
     if (range.collapsed) {
-      // 커서만 있을 때: 빈 span 을 넣어 이후 입력에 적용 (해제는 span 밖으로)
-      const inside = this.#findStyledAncestor(range.startContainer, prop);
-      if (!value) {
-        if (!inside) return;
-        const after = document.createTextNode(ZWSP);
-        inside.parentNode.insertBefore(after, inside.nextSibling);
-        const r = document.createRange(); r.setStart(after, 1); r.collapse(true); this.sel.setRange(r);
-      } else {
+      // 커서가 단어 한가운데면 그 단어에 적용하고 커서는 제자리 (구글 문서 방식)
+      const word = this.#wordRangeAt(range);
+      if (word) {
+        this.#placeCaretIn(this.#styleRange(word.range, prop, value), word.offset);
+        this.editor.commit();
+        return;
+      }
+      // 커서만 있을 때(단어 끝·공백): 커서 자리에 빈 글자(ZWSP)를 두고 같은 속성 span 들에서 모두 꺼낸 뒤(중첩 방지),
+      // 값이 있으면 새 span 으로 감싸 이후 입력에 적용. 빈 글자만 남은 기존 span 은 #isolate 가 버린다(줄 높이 잔재 방지)
+      const caret = document.createTextNode(ZWSP);
+      range.insertNode(caret);
+      this.#unstyle(caret, prop);
+      if (value) {
         const span = document.createElement('span');
         span.style.setProperty(prop, value);
-        span.appendChild(document.createTextNode(ZWSP));
-        range.insertNode(span);
-        const r = document.createRange(); r.setStart(span.firstChild, 1); r.collapse(true); this.sel.setRange(r);
+        caret.parentNode.insertBefore(span, caret);
+        span.appendChild(caret);
       }
+      const r = document.createRange(); r.setStart(caret, 1); r.collapse(true); this.sel.setRange(r);
       this.editor.commit();
       return;
     }
 
-    // 선택 영역: 텍스트 조각마다 같은 속성을 가진 span 에서 꺼내(속성 제거) → 적용이면 새 span 으로 감싼다
+    this.#selectPieces(this.#styleRange(range, prop, value));
+    this.editor.commit();
+  }
+
+  /**
+   * 범위의 텍스트 조각마다 같은 속성을 가진 span 에서 꺼내(속성 제거) → 값이 있으면 새 span 으로 감싼다
+   * @param {Range} range
+   * @param {string} prop
+   * @param {string|null} value
+   * @returns {Text[]} 처리한 텍스트 조각
+   */
+  #styleRange(range, prop, value) {
     const pieces = this.#textPieces(range);
     pieces.forEach((t) => {
-      let styled;
-      while ((styled = this.#findStyledAncestor(t, prop))) {
-        const mid = this.#isolate(t, styled);
-        mid.style.removeProperty(prop);
-        if (!mid.getAttribute('style')?.trim()) this.#unwrapEl(mid);
-      }
+      this.#unstyle(t, prop);
       if (value) {
         const span = document.createElement('span');
         span.style.setProperty(prop, value);
@@ -239,8 +250,72 @@ export class Commands {
         this.#mergeSiblings(span);
       }
     });
-    this.#selectPieces(pieces);
-    this.editor.commit();
+    return pieces;
+  }
+
+  /**
+   * 커서가 단어 한가운데(앞뒤 모두 글자)면 그 단어 범위와 단어 안 커서 위치를 돌려준다. 단어 끝·공백이면 null.
+   * ZWSP(커서용 빈 글자)는 없는 글자로 보고 건너뛴다.
+   * @param {Range} range 접힌 범위
+   * @returns {{range: Range, offset: number}|null} offset: 단어 시작부터 커서까지 글자 수 (ZWSP 제외)
+   */
+  #wordRangeAt(range) {
+    const block = this.sel.getBlock();
+    const { startContainer: sc, startOffset: so } = range;
+    if (!block || sc.nodeType !== Node.TEXT_NODE || !block.contains(sc)) return null;
+    // 블록 글자를 한 줄로 이은 위치표 [텍스트 노드, 오프셋]
+    const chars = [];
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walker.nextNode())) for (let i = 0; i < n.length; i++) chars.push([n, i]);
+    const base = chars.findIndex(([t]) => t === sc);
+    if (base < 0) return null;
+    const at = base + so; // 커서 바로 뒤 글자
+    const ch = (k) => (k >= 0 && k < chars.length ? chars[k][0].data[chars[k][1]] : '');
+    const isZ = (k) => ch(k) === ZWSP;
+    const isWord = (k) => /\S/.test(ch(k)) && !isZ(k);
+    let l = at - 1; while (isZ(l)) l--;
+    let r = at; while (isZ(r)) r++;
+    if (!isWord(l) || !isWord(r)) return null;
+    while (isWord(l - 1) || isZ(l - 1)) l--;
+    while (isWord(r + 1) || isZ(r + 1)) r++;
+    let offset = 0;
+    for (let k = l; k < at; k++) if (!isZ(k)) offset++;
+    const w = document.createRange();
+    w.setStart(chars[l][0], chars[l][1]);
+    w.setEnd(chars[r][0], chars[r][1] + 1);
+    return { range: w, offset };
+  }
+
+  /**
+   * 텍스트 조각들 안에서 앞에서 offset 번째 글자(ZWSP 제외) 앞에 커서를 둔다
+   * @param {Text[]} pieces
+   * @param {number} offset
+   */
+  #placeCaretIn(pieces, offset) {
+    const live = pieces.filter((t) => t.isConnected);
+    let left = offset;
+    for (const t of live) {
+      for (let i = 0; i < t.length; i++) {
+        if (t.data[i] === ZWSP) continue;
+        if (left-- === 0) { const r = document.createRange(); r.setStart(t, i); r.collapse(true); this.sel.setRange(r); return; }
+      }
+    }
+    this.#selectPieces(live);
+  }
+
+  /**
+   * 텍스트 노드를 prop 스타일을 가진 모든 조상 span 에서 꺼낸다 (span 을 쪼개 그 부분만 속성 제거, 다른 속성은 유지)
+   * @param {Text} t
+   * @param {string} prop
+   */
+  #unstyle(t, prop) {
+    let styled;
+    while ((styled = this.#findStyledAncestor(t, prop))) {
+      const mid = this.#isolate(t, styled);
+      mid.style.removeProperty(prop);
+      if (!mid.getAttribute('style')?.trim()) this.#unwrapEl(mid);
+    }
   }
 
   /** 노드에서 루트 방향으로 올라가며 prop 스타일을 가진 span 찾기 */

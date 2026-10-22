@@ -33,15 +33,16 @@
 .jm-btn:hover { background: #f2f4f7; }
 .jm-btn.is-active { background: var(--jm-active); border-color: #a9c4ff; }
 
-.jm-select { height: 30px; padding: 0 6px; border: 1px solid var(--jm-border); border-radius: 4px; background: var(--jm-bg); color: var(--jm-text); font-size: 13px; }
-.jm-select:disabled { opacity: .4; }
 /* 드롭다운 버튼 (아이콘 + 꺾쇠) */
 .jm-btn-dropdown { gap: 2px; padding-right: 4px; }
 .jm-btn-dropdown svg:last-child { opacity: .6; }
+/* 값 고르기 버튼 (글자 크기·제목): 값이 바뀌어도 툴바가 흔들리지 않게 최소 폭 */
+.jm-btn-select { display: inline-flex; align-items: center; justify-content: space-between; min-width: 64px; padding-left: 8px; border-color: var(--jm-border); }
 
 /* 스플릿 버튼 (목록 + 유형 꺾쇠) */
 .jm-btn-split-main { border-radius: 4px 0 0 4px; border-color: var(--jm-border); }
-.jm-btn-split-arrow { min-width: 22px; padding: 0 4px; margin-left: -5px; /* 툴바 gap(4px)+테두리 1px 상쇄 */ border-radius: 0 4px 4px 0; border-color: var(--jm-border); border-left-color: transparent; background: #f8fafc; }
+.jm-btn-split { display: inline-flex; flex: none; } /* 본 버튼+꺾쇠 묶음: 줄바꿈 때 함께 이동 */
+.jm-btn-split-arrow { min-width: 22px; padding: 0 4px; margin-left: -1px; /* 테두리 겹치기 */ border-radius: 0 4px 4px 0; border-color: var(--jm-border); border-left-color: transparent; background: #f8fafc; }
 .jm-btn-split-main:hover + .jm-btn-split-arrow, .jm-btn-split-arrow:hover { border-left-color: var(--jm-border); }
 .jm-btn-split-main.is-active + .jm-btn-split-arrow { border-color: #a9c4ff; }
 .jm-btn-right { margin-left: auto; }               /* 툴바 우측 끝으로 */
@@ -57,7 +58,7 @@
 .jm-container [hidden] { display: none !important; }  /* hidden 속성이 display 지정보다 우선하도록 */
 .jm-source {
   display: block; width: 100%; min-height: 240px; padding: 12px 14px; border: 0; outline: none; resize: vertical;
-  font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; color: var(--jm-text); background: #fafbfc; box-sizing: border-box;
+  font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; color: var(--jm-text); background: var(--jm-bg); box-sizing: border-box; /* 헤더(회색)와 구분되게 본문과 같은 배경 */
 }
 .jm-btn:disabled { opacity: .4; cursor: default; }
 
@@ -118,20 +119,6 @@
 }
 .jm-editor blockquote[data-style="quote"]::before, .jm-content blockquote[data-style="quote"]::before { content: "\201C"; margin-right: 6px; }
 .jm-editor blockquote[data-style="quote"]::after, .jm-content blockquote[data-style="quote"]::after { content: "\201D"; margin-left: 6px; }
-/* 인용 스타일 선택 팝업 (에디터 전용) */
-.jm-quotepicker { position: absolute; z-index: 1000; padding: 12px; background: #fff; border: 1px solid var(--jm-border, #d0d5dd); border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,.12); }
-.jm-quotepicker[hidden] { display: none; }
-.jm-quotepicker-title { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: #101828; }
-.jm-quotepicker-list { display: flex; gap: 8px; }
-.jm-quotepicker-card { display: flex; flex-direction: column; width: 136px; padding: 10px 10px 8px; border: 1px solid #e4e7ec; border-radius: 10px; background: #fff; cursor: pointer; text-align: left; font: inherit; }
-.jm-quotepicker-card:hover { border-color: #a9c4ff; }
-.jm-quotepicker-card.is-on { border: 2px solid #1d4ed8; padding: 9px 9px 7px; }
-.jm-quotepicker-preview { flex: 1; min-height: 64px; display: flex; align-items: center; font-size: 13px; }
-.jm-quotepicker-preview blockquote { box-sizing: border-box; width: 100%; margin: 0; }
-.jm-quotepicker-name { margin-top: 8px; font-size: 12px; text-align: center; color: #344054; }
-.jm-quotepicker-card.is-on .jm-quotepicker-name { color: #1d4ed8; font-weight: 600; }
-.jm-quotepicker-remove { margin-top: 8px; width: 100%; height: 28px; border: 1px solid #e4e7ec; border-radius: 6px; background: #fff; color: #b42318; font-size: 12px; cursor: pointer; }
-.jm-quotepicker-remove[hidden] { display: none; }
 .jm-editor ul, .jm-editor ol { margin: 0 0 8px; padding-left: 24px; }
 /* 한글 목록 번호: list-style-type: hangul 은 비표준이라 counter 로 표시 (뷰어 .jm-content 도 동일) */
 ol[style*="hangul"] { list-style: none; counter-reset: jm-hangul; }
@@ -164,6 +151,18 @@ ol[style*="hangul"] > li::before { content: counter(jm-hangul, hangul) ". "; pos
 .jm-ctxmenu-divider { height: 1px; margin: 4px 6px; background: #e4e7ec; }
 .jm-ctxmenu-item:disabled { opacity: .4; cursor: default; }
 .jm-ctxmenu-item.has-sub::after { content: "›"; float: right; margin-left: 12px; color: #98a2b3; }
+.jm-ctxmenu-item.is-checked { color: #1d4ed8; font-weight: 600; }
+/* 툴바 드롭다운 목록: 내용 폭에 맞춤 (우클릭 메뉴는 기본 폭 유지) */
+.jm-listmenu { min-width: 96px; }
+.jm-listmenu .jm-ctxmenu-item { padding-right: 14px; white-space: nowrap; }
+/* 인용 스타일 목록: 항목을 그 스타일 모양으로 */
+.jm-quote-item { margin: 2px 0; }
+.jm-quote-item-line { box-shadow: inset 3px 0 0 #475467; padding-left: 14px; border-radius: 0 4px 4px 0; }
+.jm-quote-item-box { background: #eef0f4; border-radius: 6px; padding-left: 12px; }
+.jm-quote-item-box:hover, .jm-quote-item-box:focus-visible { background: #e2e6ec; }
+.jm-quote-item-quote::before, .jm-quote-item-quote::after { font: 700 1.5em/0 Georgia, "Times New Roman", serif; color: #98a2b3; vertical-align: -0.3em; }
+.jm-quote-item-quote::before { content: "\201C"; margin-right: 4px; }
+.jm-quote-item-quote::after { content: "\201D"; margin-left: 4px; }
 
 /* 표 크기 선택 격자 */
 .jm-gridpicker { position: fixed; z-index: 1000; padding: 8px; border: 1px solid #d0d5dd; border-radius: 6px; background: #fff; box-shadow: 0 6px 20px rgba(0,0,0,.12); }
