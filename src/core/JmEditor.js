@@ -103,7 +103,8 @@ export class JmEditor {
       paragraph: () => c.setBlock('p'),
       heading: (v) => c.setBlock(['h1', 'h2', 'h3'].includes(v) ? v : 'p'), // 툴바 제목 셀렉트
 
-      quote: () => c.setBlock('blockquote'),
+      // 값 없이 부르면 인용 토글, 'line'·'box'·'quote' 면 그 스타일로, null 이면 인용 해제
+      quote: () => (value === undefined ? c.setBlock('blockquote') : c.setQuote(value)),
       ul: () => c.toggleList('ul', value),
       ol: () => c.toggleList('ol', value),
       link: () => c.setLink(value),

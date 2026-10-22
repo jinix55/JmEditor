@@ -137,16 +137,18 @@ export function computeJustifiedLayout(ratios, W, gap, T) {
     const isEnd = r2.next >= n;
     const a1 = 1 / sumR(r1.idx), a2 = 1 / sumR(r2.idx);
     const c1 = gap * (r1.idx.length - 1), c2 = gap * (r2.idx.length - 1);
+    // 두 줄 모두 남은 폭을 꽉 채우는 높이 (연립식)
     let H = ((W - gap - c1) * a1 + (W - gap - c2) * a2 + gap) / (1 + rt * (a1 + a2));
-    let h1, h2;
-    if (isEnd && H > H0) {
-      // 마지막 블록은 늘리지 않음: 목표 높이로 두되, 옆 폭(S0)을 넘는 줄은 그 폭에 맞게 줄인다
-      h1 = Math.min(T, (S0 - c1) * a1);
-      h2 = Math.min(T, (S0 - c2) * a2);
-      H = h1 + h2 + gap;
-    } else {
-      const S = W - rt * H - gap;
-      h1 = (S - c1) * a1; h2 = (S - c2) * a2;
+    let S = W - rt * H - gap;
+    let h1 = (S - c1) * a1, h2 = (S - c2) * a2;
+    // 마지막 블록의 아래 줄은 갤러리의 마지막 줄 — 목표 높이보다 커지면 목표 높이로 왼쪽 정렬하고,
+    // 긴 사진과 위 줄은 그대로 폭을 꽉 채운다 (마지막 줄만 덜 찰 수 있음)
+    // 아래 줄을 줄이면 H 가 줄어 긴 사진이 좁아지고 S 는 넓어지므로, 목표 높이의 아래 줄은 항상 S 안에 들어간다
+    if (isEnd && h2 > T) {
+      h2 = T;
+      H = ((W - gap - c1) * a1 + gap + h2) / (1 + rt * a1);
+      S = W - rt * H - gap;
+      h1 = (S - c1) * a1;
     }
     if (h1 < T * 0.5 || h2 < T * 0.5 || H > 4 * T) {  // 한쪽 줄이 지나치게 납작·길어지면 블록 대신 일반 배치
       noBlock.add(t);
@@ -155,9 +157,7 @@ export function computeJustifiedLayout(ratios, W, gap, T) {
     }
     const tallW = rt * H;
     const xSub = side === 'left' ? tallW + gap : 0;
-    // 오른쪽 배치: 옆 줄이 폭을 채우면 오른쪽 끝, 늘리지 않은 마지막 블록이면 옆 줄 바로 뒤 (가운데가 비지 않게)
-    const subW = Math.max(sumR(r1.idx) * h1 + c1, sumR(r2.idx) * h2 + c2);
-    boxes[t] = { x: side === 'left' ? 0 : Math.min(W - tallW, subW + gap), y, w: tallW, h: H };
+    boxes[t] = { x: side === 'left' ? 0 : W - tallW, y, w: tallW, h: H };
     place(r1.idx, xSub, y, h1);
     place(r2.idx, xSub, y + h1 + gap, h2);
     y += H + gap;
@@ -204,14 +204,17 @@ export function layoutGallery(gallery) {
   if (title && title.offsetParent === gallery) {
     top = title.offsetTop + title.offsetHeight + (parseFloat(getComputedStyle(title).marginBottom) || 0) + GAP;
   }
+  // 좌·우(위·아래) 끝을 각각 반올림해 크기를 정한다 — 줄 끝이 반올림 오차 없이 정확히 폭에 닿고 간격도 고르게
   imgs.forEach((img, k) => {
     const b = boxes[k];
+    const left = Math.round(padL + b.x), right = Math.round(padL + b.x + b.w);
+    const y0 = Math.round(top + b.y), y1 = Math.round(top + b.y + b.h);
     img.style.position = 'absolute';
     img.style.flex = 'none';
-    img.style.left = `${Math.round(padL + b.x)}px`;
-    img.style.top = `${Math.round(top + b.y)}px`;
-    img.style.width = `${Math.max(1, Math.floor(b.w))}px`;
-    img.style.height = `${Math.max(1, Math.floor(b.h))}px`;
+    img.style.left = `${left}px`;
+    img.style.top = `${y0}px`;
+    img.style.width = `${Math.max(1, right - left)}px`;
+    img.style.height = `${Math.max(1, y1 - y0)}px`;
   });
   const contentH = top - padT + height;
   gallery.style.height = `${Math.ceil(cs.boxSizing === 'border-box' ? contentH + padT + padB : contentH)}px`;
