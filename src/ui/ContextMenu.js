@@ -1,13 +1,17 @@
 /**
  * ContextMenu
  * - 에디터 안에서 쓰는 우클릭 메뉴. 프레임워크 독립.
- * - 항목: { label, action, divider, disabled, children: [...] }  children 이 있으면 하위 메뉴(마우스 오버로 펼침).
+ * - 항목: { label, action, divider, disabled, children: [...], className, checked }  children 이 있으면 하위 메뉴(마우스 오버로 펼침).
+ *   className: 항목 모양용 추가 클래스, checked: 현재 선택된 항목 표시(is-checked·aria-checked)
  * - 바깥 클릭 / Escape / 스크롤 시 닫힌다.
  */
 export class ContextMenu {
-  constructor() {
+  /**
+   * @param {{className?: string}} [opts] className: 메뉴에 붙일 추가 클래스 (툴바 목록은 jm-listmenu — 내용 폭에 맞춤)
+   */
+  constructor({ className } = {}) {
     this.el = document.createElement('div');
-    this.el.className = 'jm-ctxmenu';
+    this.el.className = 'jm-ctxmenu' + (className ? ` ${className}` : '');
     this.el.hidden = true;
     this.el.setAttribute('role', 'menu');
     document.body.appendChild(this.el);
@@ -66,8 +70,9 @@ export class ContextMenu {
       }
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'jm-ctxmenu-item' + (it.children ? ' has-sub' : '');
-      b.setAttribute('role', 'menuitem');
+      b.className = 'jm-ctxmenu-item' + (it.children ? ' has-sub' : '') + (it.className ? ` ${it.className}` : '') + (it.checked ? ' is-checked' : '');
+      b.setAttribute('role', it.checked == null ? 'menuitem' : 'menuitemradio');
+      if (it.checked != null) b.setAttribute('aria-checked', String(!!it.checked));
       b.textContent = it.label;
       b.disabled = !!it.disabled;
       b.addEventListener('mousedown', (e) => e.preventDefault()); // 에디터 선택 유지

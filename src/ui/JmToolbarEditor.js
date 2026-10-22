@@ -12,7 +12,6 @@ import { JmEditorApi } from '../api/JmEditorApi.js';
 import { observeGalleries } from '../plugins/gallery/gallery-layout.js';
 import { initSliders } from '../plugins/slider/slider-runtime.js';
 import { ContextMenu } from './ContextMenu.js';
-import { QuoteStylePicker } from './QuoteStylePicker.js';
 
 /** 서식 버튼 아이콘 (자체 제작 SVG) */
 const FORMAT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>';
@@ -59,6 +58,8 @@ const TABLE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" 
 const CHEVRON_ICON = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 
 /** 목록 유형 (list-style-type) */
+/** 인용 스타일 메뉴 [값, 이름] — 세로선은 기본 */
+const QUOTE_ITEMS = [['line', '세로선'], ['box', '박스'], ['quote', '따옴표']];
 const UL_TYPES = [['disc', '● 기본'], ['circle', '○ 원'], ['square', '■ 사각']];
 const OL_TYPES = [['decimal', '1. 숫자'], ['decimal-leading-zero', '01. 숫자(0 채움)'], ['lower-alpha', 'a. 소문자'], ['upper-alpha', 'A. 대문자'], ['lower-roman', 'i. 로마 소문자'], ['upper-roman', 'I. 로마 대문자'], ['hangul', '가. 한글']];
 
@@ -194,11 +195,8 @@ export class JmToolbarEditor {
       onPick: (f) => this.editor.exec('format', f.html),
     });
 
-    // 인용 스타일 선택 (세로선·박스·따옴표 미리보기 카드)
-    this.quotePicker = new QuoteStylePicker({ onPick: (style) => this.editor.exec('quote', style) });
-
     // 목록 유형 메뉴
-    this.listMenu = new ContextMenu();
+    this.listMenu = new ContextMenu({ className: 'jm-listmenu' }); // 툴바 드롭다운 목록 (내용 폭)
 
     // 색상 선택 팝업 (툴바 글자색/배경색 + 표 셀 배경색 공용)
     this.colorPicker = new ColorPicker();
@@ -272,16 +270,19 @@ export class JmToolbarEditor {
       const [cmd, label, , tableOnly, opts = {}] = def;
       const bar = opts.row === 'top' ? this.toolbarTop : this.toolbar;
       if (opts.select) {
-        // 셀렉트형 컨트롤 (글자 크기 등): 값 선택 시 exec(cmd, value)
-        const sel = document.createElement('select');
-        sel.className = 'jm-select';
-        sel.dataset.cmd = cmd;
-        if (opts.tip) sel.title = opts.tip;
-        [opts.selectDefault, ...opts.select].filter(Boolean).forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); });
-        sel.addEventListener('mousedown', () => this.editor.sel.save());
-        sel.addEventListener('change', () => { this.editor.exec(cmd, sel.value || null); this.editor.focus?.(); });
-        bar.appendChild(sel);
-        this.buttons[cmd] = sel;
+        // 값 고르기 컨트롤 (글자 크기·제목): 현재 값을 보여 주는 버튼, 누르면 다른 메뉴와 같은 목록
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'jm-btn jm-btn-dropdown jm-btn-select';
+        btn.dataset.cmd = cmd;
+        btn.dataset.value = opts.selectDefault?.[0] ?? '';
+        if (opts.tip) { btn.title = opts.tip; btn.setAttribute('aria-label', opts.tip); }
+        btn.innerHTML = `<span class="jm-btn-select-label"></span>${CHEVRON_ICON}`;
+        btn.firstChild.textContent = opts.selectDefault?.[1] ?? label;
+        btn.addEventListener('mousedown', (e) => e.preventDefault()); // 선택 영역 유지
+        btn.addEventListener('click', () => this.#openSelectMenu(cmd, opts));
+        bar.appendChild(btn);
+        this.buttons[cmd] = btn;
         return;
       }
       const btn = document.createElement('button');
@@ -309,9 +310,47 @@ export class JmToolbarEditor {
       // mousedown 에서 포커스 이동 방지 → 선택 영역 유지
       btn.addEventListener('mousedown', (e) => e.preventDefault());
       btn.addEventListener('click', () => this.#onCommand(cmd));
-      bar.appendChild(btn);
+      // 스플릿 버튼(본 버튼 + 꺾쇠)은 한 묶음에 넣어 줄바꿈 때 서로 떨어지지 않게
+      if (opts.splitMain) {
+        const pair = document.createElement('span');
+        pair.className = 'jm-btn-split';
+        bar.appendChild(pair);
+        pair.appendChild(btn);
+      } else if (opts.splitArrow && bar.lastElementChild?.classList.contains('jm-btn-split')) {
+        bar.lastElementChild.appendChild(btn);
+      } else {
+        bar.appendChild(btn);
+      }
       this.buttons[cmd] = btn;
     });
+  }
+
+  /**
+   * 값 고르기 버튼(글자 크기·제목)의 목록 열기. 현재 값은 강조, 고르면 exec(cmd, 값)
+   * @param {string} cmd
+   * @param {{select: Array<[string,string]>, selectDefault?: [string,string]}} opts
+   */
+  #openSelectMenu(cmd, opts) {
+    const btn = this.buttons[cmd];
+    const r = btn.getBoundingClientRect();
+    this.editor.sel.save();
+    this.listMenu.open(r.left, r.bottom + 4, [opts.selectDefault, ...opts.select].filter(Boolean).map(([v, text]) => ({
+      label: text, checked: v === btn.dataset.value, action: () => this.editor.exec(cmd, v || null),
+    })));
+  }
+
+  /**
+   * 값 고르기 버튼에 현재 값 표시
+   * @param {string} cmd
+   * @param {string} value 목록에 없으면 기본 값
+   */
+  #setSelectValue(cmd, value) {
+    const btn = this.buttons[cmd];
+    const opts = BUTTONS.find((d) => d?.[0] === cmd)?.[4];
+    if (!btn || !opts) return;
+    const [v, text] = opts.select.find(([x]) => x === value) || opts.selectDefault;
+    btn.dataset.value = v;
+    btn.firstChild.textContent = text;
   }
 
   /** 버튼 클릭 → 명령 실행. 링크/이미지는 입력 UI 를 거친다 */
@@ -364,7 +403,18 @@ export class JmToolbarEditor {
       })));
       return;
     }
-    if (cmd === 'quote') { this.editor.sel.save(); this.quotePicker.toggle(this.buttons.quote, this.editor.getState().quote); return; }
+    if (cmd === 'quote') {
+      // 인용 스타일 목록: 항목을 그 스타일 모양(세로선·박스·따옴표)으로 보여 주고 현재 스타일은 강조, 인용 안이면 「인용 해제」
+      const r = this.buttons.quote.getBoundingClientRect();
+      this.editor.sel.save();
+      const current = this.editor.getState().quote;
+      const items = QUOTE_ITEMS.map(([v, label]) => ({
+        label, className: `jm-quote-item jm-quote-item-${v}`, checked: current === v, action: () => this.editor.exec('quote', v),
+      }));
+      if (current) items.push({ divider: true }, { label: '인용 해제', action: () => this.editor.exec('quote', null) });
+      this.listMenu.open(r.left, r.bottom + 4, items);
+      return;
+    }
     if (cmd === 'table') { this.editor.sel.save(); this.gridPicker.toggle(this.buttons.table); return; }
     if (cmd === 'format') { this.editor.sel.save(); this.formatPicker.toggle(this.buttons.format); return; }
     if (cmd === 'modeEditor') { this.setMode('editor'); return; }
@@ -390,8 +440,8 @@ export class JmToolbarEditor {
     setIcon('alignMenu', (ALIGN_ITEMS.find(([v]) => v === state.align) || ALIGN_ITEMS[0])[2]);
     setIcon('valignMenu', (VALIGN_ITEMS.find(([v]) => v === state.valign) || VALIGN_ITEMS[0])[2]);
     // 현재 글자 크기 표시
-    if (this.buttons.heading) this.buttons.heading.value = ['h1', 'h2', 'h3'].includes(state.block) ? state.block : 'p';
-    if (this.buttons.fontSize) this.buttons.fontSize.value = FONT_SIZES.map((n) => `${n}px`).includes(state.fontSize) ? state.fontSize : '';
+    this.#setSelectValue('heading', state.block);
+    this.#setSelectValue('fontSize', state.fontSize);
     // 현재 색을 버튼 하단 띠로 표시
     this.buttons.color.style.setProperty('--jm-swatch', state.color || 'transparent');
     this.buttons.bgColor.style.setProperty('--jm-swatch', state.bg || 'transparent');
@@ -489,6 +539,6 @@ export class JmToolbarEditor {
   destroy() {
     this.#stopPreviewLayout?.(); // 미리보기 런타임(갤러리 감시·슬라이드 타이머) 정리
     this.#stopPreviewLayout = null;
-    this.gridPicker.destroy(); this.quotePicker.destroy(); this.colorPicker.destroy(); this.formatPicker.destroy(); this.listMenu.destroy(); this.editor.destroy();
+    this.gridPicker.destroy(); this.colorPicker.destroy(); this.formatPicker.destroy(); this.listMenu.destroy(); this.editor.destroy();
   }
 }

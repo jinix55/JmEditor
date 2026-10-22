@@ -23,18 +23,18 @@ header p{margin:0;color:var(--muted);font-size:.92rem}
 .jm-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .jm-btn.is-active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .jm-sep{width:1px;height:22px;margin:0 4px;background:var(--line)}
-.jm-select{height:30px;padding:0 6px;border:1px solid var(--line);border-radius:5px;background:var(--panel);color:var(--fg);font:13px var(--sans)}
-.jm-select:disabled{opacity:.4}
+.jm-btn-select{display:inline-flex;align-items:center;justify-content:space-between;min-width:64px;padding-left:8px;border-color:var(--line)} /* 값 고르기 버튼 (글자 크기·제목) */
 .jm-btn-dropdown{gap:2px;padding-right:4px}
 .jm-btn-dropdown svg:last-child{opacity:.6}
 .jm-btn-split-main{border-radius:5px 0 0 5px;border-color:var(--line)}
-.jm-btn-split-arrow{min-width:22px;padding:0 4px;margin-left:-5px;border-radius:0 5px 5px 0;border-color:var(--line);border-left-color:transparent;background:var(--code)}
+.jm-btn-split{display:inline-flex;flex:none} /* 본 버튼+꺾쇠 묶음: 줄바꿈 때 함께 이동 */
+.jm-btn-split-arrow{min-width:22px;padding:0 4px;margin-left:-1px;border-radius:0 5px 5px 0;border-color:var(--line);border-left-color:transparent;background:var(--code)}
 .jm-btn-split-main:hover+.jm-btn-split-arrow,.jm-btn-split-arrow:hover{border-left-color:var(--line)}
 .jm-btn-split-main.is-active+.jm-btn-split-arrow{border-color:var(--accent)}
 .jm-btn-right{margin-left:auto}
 .jm-btn:disabled{opacity:.4;cursor:default}
 .jm-container [hidden]{display:none!important}
-.jm-source{display:block;width:100%;min-height:260px;padding:12px 14px;border:0;outline:none;resize:vertical;font:13px/1.5 var(--mono);color:var(--fg);background:var(--code);box-sizing:border-box}
+.jm-source{display:block;width:100%;min-height:260px;padding:12px 14px;border:0;outline:none;resize:vertical;font:13px/1.5 var(--mono);color:var(--fg);background:var(--panel);box-sizing:border-box} /* 헤더와 구분: 본문과 같은 배경 */
 .jm-btn-seg{border-color:var(--line);border-radius:0;margin-left:-1px}
 .jm-btn-seg-first{margin-left:0;border-radius:5px 0 0 5px}
 .jm-btn-seg-last{border-radius:0 5px 5px 0}
@@ -416,19 +416,15 @@ div[data-type="layout"] [data-cell="text"] > :last-child { margin-bottom: 0; }
 .jm-editor blockquote[data-style="quote"]::before,.jm-content blockquote[data-style="quote"]::before,.jm-editor blockquote[data-style="quote"]::after,.jm-content blockquote[data-style="quote"]::after{font:700 1.9em/0 Georgia,"Times New Roman",serif;color:var(--muted);vertical-align:-.35em}
 .jm-editor blockquote[data-style="quote"]::before,.jm-content blockquote[data-style="quote"]::before{content:"\201C";margin-right:6px}
 .jm-editor blockquote[data-style="quote"]::after,.jm-content blockquote[data-style="quote"]::after{content:"\201D";margin-left:6px}
-.jm-quotepicker{position:absolute;z-index:1000;padding:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.18)}
-.jm-quotepicker[hidden]{display:none}
-.jm-quotepicker-title{margin:0 0 8px;font-size:13px;font-weight:700;color:var(--fg)}
-.jm-quotepicker-list{display:flex;gap:8px}
-.jm-quotepicker-card{display:flex;flex-direction:column;width:136px;padding:10px 10px 8px;border:1px solid var(--line);border-radius:10px;background:var(--panel);cursor:pointer;text-align:left;font:inherit;color:var(--fg)}
-.jm-quotepicker-card:hover{border-color:var(--accent)}
-.jm-quotepicker-card.is-on{border:2px solid var(--accent);padding:9px 9px 7px}
-.jm-quotepicker-preview{flex:1;min-height:64px;display:flex;align-items:center;font-size:13px}
-.jm-quotepicker-preview blockquote{box-sizing:border-box;width:100%;margin:0}
-.jm-quotepicker-name{margin-top:8px;font-size:12px;text-align:center;color:var(--muted)}
-.jm-quotepicker-card.is-on .jm-quotepicker-name{color:var(--accent);font-weight:600}
-.jm-quotepicker-remove{margin-top:8px;width:100%;height:28px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:#d14343;font-size:12px;cursor:pointer}
-.jm-quotepicker-remove[hidden]{display:none}
+.jm-ctxmenu-item.is-checked{color:var(--accent);font-weight:600}
+.jm-listmenu{min-width:96px} /* 툴바 드롭다운 목록: 내용 폭 */
+.jm-listmenu .jm-ctxmenu-item{padding-right:14px;white-space:nowrap}
+.jm-quote-item{margin:2px 0}
+.jm-quote-item-line{box-shadow:inset 3px 0 0 var(--accent);padding-left:14px;border-radius:0 4px 4px 0}
+.jm-quote-item-box{background:var(--code);border-radius:6px;padding-left:12px}
+.jm-quote-item-quote::before,.jm-quote-item-quote::after{font:700 1.5em/0 Georgia,"Times New Roman",serif;color:var(--muted);vertical-align:-.3em}
+.jm-quote-item-quote::before{content:"\201C";margin-right:4px}
+.jm-quote-item-quote::after{content:"\201D";margin-left:4px}
 </style>
 </head>
 <body>
@@ -1375,33 +1371,44 @@ class Commands {
     if (!range) return;
 
     if (range.collapsed) {
-      // 커서만 있을 때: 빈 span 을 넣어 이후 입력에 적용 (해제는 span 밖으로)
-      const inside = this.#findStyledAncestor(range.startContainer, prop);
-      if (!value) {
-        if (!inside) return;
-        const after = document.createTextNode(ZWSP);
-        inside.parentNode.insertBefore(after, inside.nextSibling);
-        const r = document.createRange(); r.setStart(after, 1); r.collapse(true); this.sel.setRange(r);
-      } else {
+      // 커서가 단어 한가운데면 그 단어에 적용하고 커서는 제자리 (구글 문서 방식)
+      const word = this.#wordRangeAt(range);
+      if (word) {
+        this.#placeCaretIn(this.#styleRange(word.range, prop, value), word.offset);
+        this.editor.commit();
+        return;
+      }
+      // 커서만 있을 때(단어 끝·공백): 커서 자리에 빈 글자(ZWSP)를 두고 같은 속성 span 들에서 모두 꺼낸 뒤(중첩 방지),
+      // 값이 있으면 새 span 으로 감싸 이후 입력에 적용. 빈 글자만 남은 기존 span 은 #isolate 가 버린다(줄 높이 잔재 방지)
+      const caret = document.createTextNode(ZWSP);
+      range.insertNode(caret);
+      this.#unstyle(caret, prop);
+      if (value) {
         const span = document.createElement('span');
         span.style.setProperty(prop, value);
-        span.appendChild(document.createTextNode(ZWSP));
-        range.insertNode(span);
-        const r = document.createRange(); r.setStart(span.firstChild, 1); r.collapse(true); this.sel.setRange(r);
+        caret.parentNode.insertBefore(span, caret);
+        span.appendChild(caret);
       }
+      const r = document.createRange(); r.setStart(caret, 1); r.collapse(true); this.sel.setRange(r);
       this.editor.commit();
       return;
     }
 
-    // 선택 영역: 텍스트 조각마다 같은 속성을 가진 span 에서 꺼내(속성 제거) → 적용이면 새 span 으로 감싼다
+    this.#selectPieces(this.#styleRange(range, prop, value));
+    this.editor.commit();
+  }
+
+  /**
+   * 범위의 텍스트 조각마다 같은 속성을 가진 span 에서 꺼내(속성 제거) → 값이 있으면 새 span 으로 감싼다
+   * @param {Range} range
+   * @param {string} prop
+   * @param {string|null} value
+   * @returns {Text[]} 처리한 텍스트 조각
+   */
+  #styleRange(range, prop, value) {
     const pieces = this.#textPieces(range);
     pieces.forEach((t) => {
-      let styled;
-      while ((styled = this.#findStyledAncestor(t, prop))) {
-        const mid = this.#isolate(t, styled);
-        mid.style.removeProperty(prop);
-        if (!mid.getAttribute('style')?.trim()) this.#unwrapEl(mid);
-      }
+      this.#unstyle(t, prop);
       if (value) {
         const span = document.createElement('span');
         span.style.setProperty(prop, value);
@@ -1410,8 +1417,72 @@ class Commands {
         this.#mergeSiblings(span);
       }
     });
-    this.#selectPieces(pieces);
-    this.editor.commit();
+    return pieces;
+  }
+
+  /**
+   * 커서가 단어 한가운데(앞뒤 모두 글자)면 그 단어 범위와 단어 안 커서 위치를 돌려준다. 단어 끝·공백이면 null.
+   * ZWSP(커서용 빈 글자)는 없는 글자로 보고 건너뛴다.
+   * @param {Range} range 접힌 범위
+   * @returns {{range: Range, offset: number}|null} offset: 단어 시작부터 커서까지 글자 수 (ZWSP 제외)
+   */
+  #wordRangeAt(range) {
+    const block = this.sel.getBlock();
+    const { startContainer: sc, startOffset: so } = range;
+    if (!block || sc.nodeType !== Node.TEXT_NODE || !block.contains(sc)) return null;
+    // 블록 글자를 한 줄로 이은 위치표 [텍스트 노드, 오프셋]
+    const chars = [];
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walker.nextNode())) for (let i = 0; i < n.length; i++) chars.push([n, i]);
+    const base = chars.findIndex(([t]) => t === sc);
+    if (base < 0) return null;
+    const at = base + so; // 커서 바로 뒤 글자
+    const ch = (k) => (k >= 0 && k < chars.length ? chars[k][0].data[chars[k][1]] : '');
+    const isZ = (k) => ch(k) === ZWSP;
+    const isWord = (k) => /\S/.test(ch(k)) && !isZ(k);
+    let l = at - 1; while (isZ(l)) l--;
+    let r = at; while (isZ(r)) r++;
+    if (!isWord(l) || !isWord(r)) return null;
+    while (isWord(l - 1) || isZ(l - 1)) l--;
+    while (isWord(r + 1) || isZ(r + 1)) r++;
+    let offset = 0;
+    for (let k = l; k < at; k++) if (!isZ(k)) offset++;
+    const w = document.createRange();
+    w.setStart(chars[l][0], chars[l][1]);
+    w.setEnd(chars[r][0], chars[r][1] + 1);
+    return { range: w, offset };
+  }
+
+  /**
+   * 텍스트 조각들 안에서 앞에서 offset 번째 글자(ZWSP 제외) 앞에 커서를 둔다
+   * @param {Text[]} pieces
+   * @param {number} offset
+   */
+  #placeCaretIn(pieces, offset) {
+    const live = pieces.filter((t) => t.isConnected);
+    let left = offset;
+    for (const t of live) {
+      for (let i = 0; i < t.length; i++) {
+        if (t.data[i] === ZWSP) continue;
+        if (left-- === 0) { const r = document.createRange(); r.setStart(t, i); r.collapse(true); this.sel.setRange(r); return; }
+      }
+    }
+    this.#selectPieces(live);
+  }
+
+  /**
+   * 텍스트 노드를 prop 스타일을 가진 모든 조상 span 에서 꺼낸다 (span 을 쪼개 그 부분만 속성 제거, 다른 속성은 유지)
+   * @param {Text} t
+   * @param {string} prop
+   */
+  #unstyle(t, prop) {
+    let styled;
+    while ((styled = this.#findStyledAncestor(t, prop))) {
+      const mid = this.#isolate(t, styled);
+      mid.style.removeProperty(prop);
+      if (!mid.getAttribute('style')?.trim()) this.#unwrapEl(mid);
+    }
   }
 
   /** 노드에서 루트 방향으로 올라가며 prop 스타일을 가진 span 찾기 */
@@ -2588,13 +2659,17 @@ class TableCommands {
 /**
  * ContextMenu
  * - 에디터 안에서 쓰는 우클릭 메뉴. 프레임워크 독립.
- * - 항목: { label, action, divider, disabled, children: [...] }  children 이 있으면 하위 메뉴(마우스 오버로 펼침).
+ * - 항목: { label, action, divider, disabled, children: [...], className, checked }  children 이 있으면 하위 메뉴(마우스 오버로 펼침).
+ *   className: 항목 모양용 추가 클래스, checked: 현재 선택된 항목 표시(is-checked·aria-checked)
  * - 바깥 클릭 / Escape / 스크롤 시 닫힌다.
  */
 class ContextMenu {
-  constructor() {
+  /**
+   * @param {{className?: string}} [opts] className: 메뉴에 붙일 추가 클래스 (툴바 목록은 jm-listmenu — 내용 폭에 맞춤)
+   */
+  constructor({ className } = {}) {
     this.el = document.createElement('div');
-    this.el.className = 'jm-ctxmenu';
+    this.el.className = 'jm-ctxmenu' + (className ? ` ${className}` : '');
     this.el.hidden = true;
     this.el.setAttribute('role', 'menu');
     document.body.appendChild(this.el);
@@ -2653,8 +2728,9 @@ class ContextMenu {
       }
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'jm-ctxmenu-item' + (it.children ? ' has-sub' : '');
-      b.setAttribute('role', 'menuitem');
+      b.className = 'jm-ctxmenu-item' + (it.children ? ' has-sub' : '') + (it.className ? ` ${it.className}` : '') + (it.checked ? ' is-checked' : '');
+      b.setAttribute('role', it.checked == null ? 'menuitem' : 'menuitemradio');
+      if (it.checked != null) b.setAttribute('aria-checked', String(!!it.checked));
       b.textContent = it.label;
       b.disabled = !!it.disabled;
       b.addEventListener('mousedown', (e) => e.preventDefault()); // 에디터 선택 유지
@@ -5194,6 +5270,7 @@ class JmEditor {
       h2: () => c.setBlock('h2'),
       h3: () => c.setBlock('h3'),
       paragraph: () => c.setBlock('p'),
+      heading: () => c.setBlock(['h1', 'h2', 'h3'].includes(value) ? value : 'p'), // 툴바 제목 셀렉트
       // 값 없이 부르면 인용 토글, 'line'·'box'·'quote' 면 그 스타일로, null 이면 인용 해제
       quote: () => (value === undefined ? c.setBlock('blockquote') : c.setQuote(value)),
       ul: () => c.toggleList('ul', value),
@@ -5599,107 +5676,6 @@ class JmEditor {
 }
 
 
-
-/**
- * QuoteStylePicker
- * - 툴바 「인용」 버튼 아래에 인용 스타일 카드(세로선·박스·따옴표)를 미리보기로 보여 주고, 고르면 onPick(style) 호출.
- * - 현재 커서가 인용 안이면 그 스타일을 강조하고 「인용 해제」를 함께 보여 준다 (onPick(null)).
- * - 미리보기는 실제 저장 스타일(.jm-content blockquote[data-style]) 그대로 그린다.
- */
-const QUOTE_STYLE_ITEMS = Object.freeze([['line', '세로선'], ['box', '박스'], ['quote', '따옴표']]);
-
-class QuoteStylePicker {
-  /**
-   * @param {object} options
-   * @param {(style: 'line'|'box'|'quote'|null) => void} options.onPick
-   */
-  constructor({ onPick }) {
-    this.onPick = onPick;
-    this.el = document.createElement('div');
-    this.el.className = 'jm-quotepicker';
-    this.el.hidden = true;
-    this.el.setAttribute('role', 'dialog');
-    this.el.setAttribute('aria-label', '인용 스타일');
-
-    const title = document.createElement('div');
-    title.className = 'jm-quotepicker-title';
-    title.textContent = '인용 스타일';
-    const list = document.createElement('div');
-    list.className = 'jm-quotepicker-list';
-    this.cards = QUOTE_STYLE_ITEMS.map(([style, label]) => {
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'jm-quotepicker-card';
-      card.dataset.style = style;
-      const preview = document.createElement('div');
-      preview.className = 'jm-quotepicker-preview jm-content';
-      const bq = document.createElement('blockquote');
-      if (style !== 'line') bq.dataset.style = style;
-      bq.textContent = '인용 예시';
-      preview.appendChild(bq);
-      const name = document.createElement('span');
-      name.className = 'jm-quotepicker-name';
-      name.textContent = label;
-      card.append(preview, name);
-      card.addEventListener('mousedown', (e) => e.preventDefault()); // 에디터 선택 유지
-      card.addEventListener('click', () => this.#pick(style));
-      list.appendChild(card);
-      return card;
-    });
-    this.removeBtn = document.createElement('button');
-    this.removeBtn.type = 'button';
-    this.removeBtn.className = 'jm-quotepicker-remove';
-    this.removeBtn.textContent = '인용 해제';
-    this.removeBtn.addEventListener('mousedown', (e) => e.preventDefault());
-    this.removeBtn.addEventListener('click', () => this.#pick(null));
-
-    this.el.append(title, list, this.removeBtn);
-    document.body.appendChild(this.el);
-
-    this.anchor = null;
-    this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.anchor?.contains(e.target)) this.close(); };
-    this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
-  }
-
-  /**
-   * 버튼 아래에 열기
-   * @param {HTMLElement} anchorEl
-   * @param {'line'|'box'|'quote'|null} current 커서가 있는 인용의 스타일 (인용이 아니면 null)
-   */
-  open(anchorEl, current) {
-    this.anchor = anchorEl;
-    this.cards.forEach((c) => c.classList.toggle('is-on', c.dataset.style === current));
-    this.removeBtn.hidden = !current;
-    this.el.hidden = false;
-    const r = anchorEl.getBoundingClientRect();
-    this.el.style.left = `${Math.max(8, Math.min(r.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - this.el.offsetWidth - 8))}px`;
-    this.el.style.top = `${r.bottom + window.scrollY + 4}px`;
-    document.addEventListener('mousedown', this.onDocDown, true);
-    document.addEventListener('keydown', this.onKey, true);
-  }
-
-  close() {
-    if (this.el.hidden) return;
-    this.el.hidden = true;
-    document.removeEventListener('mousedown', this.onDocDown, true);
-    document.removeEventListener('keydown', this.onKey, true);
-  }
-
-  /** 열려 있으면 닫고, 닫혀 있으면 연다 */
-  toggle(anchorEl, current) {
-    if (this.el.hidden) this.open(anchorEl, current); else this.close();
-  }
-
-  destroy() {
-    this.close();
-    this.el.remove();
-  }
-
-  #pick(style) {
-    this.close();
-    this.onPick?.(style);
-  }
-}
 
 /**
  * TableGridPicker
@@ -6428,8 +6404,7 @@ const out=document.getElementById('html'), len=document.getElementById('len');
 const linkbar=document.getElementById('linkbar'), linkUrl=document.getElementById('linkUrl');
 const fileInput=document.getElementById('file');
 const colorPicker=new ColorPicker();
-const listMenu=new ContextMenu();
-const quotePicker=new QuoteStylePicker({onPick:s=>editor.exec('quote',s)}); // 인용 스타일 카드
+const listMenu=new ContextMenu({className:'jm-listmenu'}); // 툴바 드롭다운 목록 (내용 폭)
 const ALIGN_ITEMS=[['left','왼쪽',ALIGN_LEFT_ICON],['center','가운데',ALIGN_CENTER_ICON],['right','오른쪽',ALIGN_RIGHT_ICON]];
 const VALIGN_ITEMS=[['top','위',VALIGN_TOP_ICON],['middle','중간',VALIGN_MIDDLE_ICON],['bottom','아래',VALIGN_BOTTOM_ICON]];
 const UL_TYPES=[['disc','● 기본'],['circle','○ 원'],['square','■ 사각']];
@@ -6448,7 +6423,11 @@ const editor=new JmEditor(document.getElementById('editor'),{
 BUTTONS.forEach(def=>{
   if(!def){const s=document.createElement('span');s.className='jm-sep';toolbar.appendChild(s);return;}
   const [cmd,label,,tableOnly,opts={}]=def;
-  if(opts.select){const sel=document.createElement('select');sel.className='jm-select';sel.dataset.cmd=cmd;sel.title=opts.tip||'';[opts.selectDefault,...opts.select].filter(Boolean).forEach(([v,tx])=>{const o=document.createElement('option');o.value=v;o.textContent=tx;sel.appendChild(o);});sel.addEventListener('mousedown',()=>editor.sel.save());sel.addEventListener('change',()=>editor.exec(cmd,sel.value||null));(opts.row==='top'?toolbarTop:toolbar).appendChild(sel);btns[cmd]=sel;return;}
+  if(opts.select){ // 값 고르기 버튼 (글자 크기·제목): 현재 값 표시, 누르면 다른 메뉴와 같은 목록
+    const b=document.createElement('button');b.type='button';b.className='jm-btn jm-btn-dropdown jm-btn-select';b.dataset.cmd=cmd;b.dataset.value=opts.selectDefault?.[0]??'';b.title=opts.tip||cmd;b.setAttribute('aria-label',opts.tip||cmd);
+    b.innerHTML='<span class="jm-btn-select-label"></span>'+CHEVRON_ICON;b.firstChild.textContent=opts.selectDefault?.[1]??label;
+    b.addEventListener('mousedown',e=>e.preventDefault());b.addEventListener('click',()=>openSelectMenu(cmd,opts));
+    (opts.row==='top'?toolbarTop:toolbar).appendChild(b);btns[cmd]=b;return;}
   const b=document.createElement('button');
   b.type='button';b.className='jm-btn';b.title=opts.tip||cmd;b.dataset.cmd=cmd;
   if(opts.icon){b.classList.add('jm-btn-icon');b.innerHTML=opts.iconOnly?opts.icon:opts.icon+'<span>'+label+'</span>';if(opts.dropdown){b.classList.add('jm-btn-dropdown');b.innerHTML+=CHEVRON_ICON;}b.setAttribute('aria-label',label);b.title=label;}else b.textContent=label;
@@ -6456,8 +6435,17 @@ BUTTONS.forEach(def=>{
   if(tableOnly)b.hidden=true; // 표 안에서만 표시
   b.addEventListener('mousedown',e=>e.preventDefault()); // 선택 영역 유지
   b.addEventListener('click',()=>run(cmd));
-  (opts.row==='top'?toolbarTop:toolbar).appendChild(b);btns[cmd]=b;
+  const bar=opts.row==='top'?toolbarTop:toolbar;
+  // 스플릿 버튼(본 버튼 + 꺾쇠)은 한 묶음에 넣어 줄바꿈 때 서로 떨어지지 않게
+  if(opts.splitMain){const pair=document.createElement('span');pair.className='jm-btn-split';bar.appendChild(pair);pair.appendChild(b);}
+  else if(opts.splitArrow&&bar.lastElementChild?.classList.contains('jm-btn-split'))bar.lastElementChild.appendChild(b);
+  else bar.appendChild(b);
+  btns[cmd]=b;
 });
+/** 값 고르기 버튼(글자 크기·제목)의 목록 열기. 현재 값은 강조 */
+function openSelectMenu(cmd,opts){const b=btns[cmd];const r=b.getBoundingClientRect();editor.sel.save();listMenu.open(r.left,r.bottom+4,[opts.selectDefault,...opts.select].filter(Boolean).map(([v,tx])=>({label:tx,checked:v===b.dataset.value,action:()=>editor.exec(cmd,v||null)})));}
+/** 값 고르기 버튼에 현재 값 표시 (목록에 없으면 기본 값) */
+function setSelectValue(cmd,value){const b=btns[cmd];const opts=BUTTONS.find(d=>d?.[0]===cmd)?.[4];if(!b||!opts)return;const [v,tx]=opts.select.find(([x])=>x===value)||opts.selectDefault;b.dataset.value=v;b.firstChild.textContent=tx;}
 function run(cmd){
   if(cmd==='link'){
     const a=editor.sel.closest('a');
@@ -6473,7 +6461,7 @@ function run(cmd){
   if(cmd==='color'||cmd==='bgColor'){const s=editor.getState();editor.sel.save();colorPicker.toggleAt(btns[cmd],c=>editor.exec(cmd,c),{current:cmd==='color'?s.color:s.bg,sampleMode:cmd==='color'?'color':'background'});return;}
   if(cmd==='alignMenu'||cmd==='valignMenu'){const r=btns[cmd].getBoundingClientRect();editor.sel.save();const items=cmd==='alignMenu'?ALIGN_ITEMS:VALIGN_ITEMS;const prefix=cmd==='alignMenu'?'align':'valign';listMenu.open(r.left,r.bottom+4,items.map(([v,label])=>({label,action:()=>editor.exec(prefix+v.charAt(0).toUpperCase()+v.slice(1))})));return;}
   if(cmd==='ulType'||cmd==='olType'){const tag=cmd==='ulType'?'ul':'ol';const r=btns[cmd].getBoundingClientRect();editor.sel.save();listMenu.open(r.left,r.bottom+4,(tag==='ul'?UL_TYPES:OL_TYPES).map(([v,label])=>({label,action:()=>editor.exec(tag,v)})));return;}
-  if(cmd==='quote'){editor.sel.save();quotePicker.toggle(btns.quote,editor.getState().quote);return;}
+  if(cmd==='quote'){const r=btns.quote.getBoundingClientRect();editor.sel.save();const cur=editor.getState().quote;const items=[['line','세로선'],['box','박스'],['quote','따옴표']].map(([v,l])=>({label:l,className:'jm-quote-item jm-quote-item-'+v,checked:cur===v,action:()=>editor.exec('quote',v)}));if(cur)items.push({divider:true},{label:'인용 해제',action:()=>editor.exec('quote',null)});listMenu.open(r.left,r.bottom+4,items);return;} // 인용 스타일 목록
   if(cmd==='table'){editor.sel.save();gridPicker.toggle(btns.table);return;}
   if(cmd==='format'){editor.sel.save();formatPicker.toggle(btns.format);return;}
   if(cmd==='modeEditor'){setMode('editor');return;}
@@ -6495,8 +6483,7 @@ fileInput.addEventListener('change',()=>{editor.insertImageFile(fileInput.files[
 function refresh(){if(mode!=='editor')return;const s=editor.getState();BUTTONS.forEach(d=>{if(!d)return;btns[d[0]].classList.toggle('is-active',!!d[2](s));if(d[3])btns[d[0]].hidden=!s.table;if(d[4]?.tableEnabled)btns[d[0]].disabled=!s.table;});
   const setIcon=(c,icon)=>{if(btns[c])btns[c].innerHTML=icon+CHEVRON_ICON;};
   setIcon('alignMenu',(ALIGN_ITEMS.find(([v])=>v===s.align)||ALIGN_ITEMS[0])[2]);setIcon('valignMenu',(VALIGN_ITEMS.find(([v])=>v===s.valign)||VALIGN_ITEMS[0])[2]);
-  if(btns.heading)btns.heading.value=['h1','h2','h3'].includes(s.block)?s.block:'p';
-  if(btns.fontSize)btns.fontSize.value=FONT_SIZES.map(n=>n+'px').includes(s.fontSize)?s.fontSize:'';
+  setSelectValue('heading',s.block);setSelectValue('fontSize',s.fontSize);
   btns.color.style.setProperty('--jm-swatch',s.color||'transparent');btns.bgColor.style.setProperty('--jm-swatch',s.bg||'transparent');}
 
 /* 모드 전환: editor / html / preview. html 모드에서 나갈 때 textarea 내용을 setHTML 로 반영 */
@@ -6531,8 +6518,7 @@ editor.setHTML(`<h2>공지사항 작성 샘플</h2>
 <div data-type="slider" data-interval="3000" data-ratio="16:9" data-indicator="dots" data-indicator-pos="bottom-center" data-width="75" data-align="center"><p data-role="title">행사 사진 — 3초마다 자동 전환</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjMmY2ZjRlIi8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMTwvdGV4dD48L3N2Zz4=" alt="슬라이드 1" width="1280" height="720"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjM2I2ZWE1Ii8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMjwvdGV4dD48L3N2Zz4=" alt="슬라이드 2" width="1280" height="720"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgwIiBoZWlnaHQ9IjcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjQwIiB5PSIzNzQiIGZvbnQtc2l6ZT0iNDQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7siqzrnbzsnbTrk5wgMzwvdGV4dD48L3N2Zz4=" alt="슬라이드 3" width="1280" height="720"></div>
 <div data-type="youtube" data-width="75" data-align="center"><iframe src="https://www.youtube-nocookie.com/embed/M2lu8RiZhW0" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>
 <div data-type="gallery" data-layout="justify"><p data-role="title">현장 사진 — 사진은 드래그로 순서 변경·선택 후 교체, 헤더의 ⠿ 로 블록 이동</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJmNmY0ZSIvPjx0ZXh0IHg9IjQwMCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDQ6MzwvdGV4dD48L3N2Zz4=" alt="가로 4:3" width="800" height="600"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzNiNmVhNSIvPjx0ZXh0IHg9IjMwMCIgeT0iNDEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDM6NDwvdGV4dD48L3N2Zz4=" alt="세로 3:4" width="600" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjUwMCI+PHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNTAwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjAwIiB5PSIyNjIiIGZvbnQtc2l6ZT0iNjIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7tjIzrhbjrnbzrp4g8L3RleHQ+PC9zdmc+" alt="파노라마" width="1200" height="500"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NTAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNDUwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzZiNGZhMCIvPjx0ZXh0IHg9IjIyNSIgeT0iNDEyIiBmb250LXNpemU9IjU2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDk6MTY8L3RleHQ+PC9zdmc+" alt="세로 9:16" width="450" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MDAiIGhlaWdodD0iNzAwIj48cmVjdCB3aWR0aD0iNzAwIiBoZWlnaHQ9IjcwMCIgZmlsbD0iIzhhNmQzYiIvPjx0ZXh0IHg9IjM1MCIgeT0iMzYyIiBmb250LXNpemU9Ijg3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7KCV7IKs6rCBPC90ZXh0Pjwvc3ZnPg==" alt="정사각" width="700" height="700"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iOTAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJhN2Y4ZiIvPjx0ZXh0IHg9IjQ1MCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDM6MjwvdGV4dD48L3N2Zz4=" alt="가로 3:2" width="900" height="600"></div>
-<div data-type="buttons" data-align="center"><a href="https://github.com/jinix55/JmEditor" data-role="button" data-style="primary">GitHub 저장소</a><a href="https://jinix55.github.io/JmEditor/" data-role="button" data-style="outline">데모 페이지</a></div>
-<p>참고 링크: <a href="https://developer.mozilla.org/ko/docs/Web/API/Range">MDN Range API</a></p>`);
+<div data-type="buttons" data-align="center"><a href="https://github.com/jinix55/JmEditor" data-role="button" data-style="primary">GitHub 저장소</a><a href="https://jinix55.github.io/JmEditor/" data-role="button" data-style="outline">데모 페이지</a></div>`);
 </script>
 </body>
 </html>
