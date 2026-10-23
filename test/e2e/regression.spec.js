@@ -157,8 +157,9 @@ test.describe('표·블록 플러그인', () => {
   test('유튜브 주소로 영상 블록', async ({ page }) => {
     await setHTML(page, '<p>앞</p>');
     await caret(page, 'p', -1);
-    expect(await exec(page, 'youtube', 'https://youtu.be/dQw4w9WgXcQ')).toBeTruthy();
-    expect(await html(page)).toContain('src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"');
+    // 예시 영상: Big Buck Bunny © Blender Foundation (CC BY 3.0)
+    expect(await exec(page, 'youtube', 'https://youtu.be/aqz-KE-bpKQ')).toBeTruthy();
+    expect(await html(page)).toContain('src="https://www.youtube-nocookie.com/embed/aqz-KE-bpKQ"');
   });
 
   test('지도 퍼가기 코드를 본문에 붙여 넣으면 지도 블록', async ({ page }) => {

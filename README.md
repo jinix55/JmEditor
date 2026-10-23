@@ -385,5 +385,6 @@ npm run test:e2e
 | 에디터·뷰어 코드, 툴바·버튼 아이콘(SVG) | `src/`, `dist/` | 직접 작성 — MIT (위와 같음) |
 | [esbuild](https://github.com/evanw/esbuild) | 빌드 도구 (배포 파일에 포함되지 않음) | MIT |
 | [jsoup](https://jsoup.org/) | 서버 연동 샘플의 HTML sanitize (직접 추가하는 의존성) | MIT |
+| [Big Buck Bunny](https://peach.blender.org/) © Blender Foundation | 데모 예시 본문의 유튜브 영상 | CC BY 3.0 |
 
 에디터 자체는 실행 시 외부 라이브러리에 의존하지 않습니다. 유튜브 삽입은 `youtube-nocookie.com` 의 iframe 을 그대로 쓰므로, 영상 재생에는 YouTube 이용약관이 적용됩니다.
