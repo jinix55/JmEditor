@@ -30,6 +30,14 @@ export class History {
     this.last = cur;
   }
 
+  /**
+   * 사용자 동작이 아닌 자동 보정(지도 장소명 채우기 등)을 마지막 상태에 덮어쓴다.
+   * 되돌리기 단계를 만들지 않고 redo 도 지우지 않는다.
+   */
+  amend() {
+    this.last = this.getState();
+  }
+
   /** 타이핑용 지연 기록 (input 이벤트마다 호출) */
   pushDebounced(delay = 400) {
     clearTimeout(this.timer);

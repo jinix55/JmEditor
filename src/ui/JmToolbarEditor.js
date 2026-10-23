@@ -11,6 +11,7 @@ import { FormatPicker, SAMPLE_FORMATS } from './FormatPicker.js';
 import { JmEditorApi } from '../api/JmEditorApi.js';
 import { observeGalleries } from '../plugins/gallery/gallery-layout.js';
 import { initSliders } from '../plugins/slider/slider-runtime.js';
+import { initMaps } from '../plugins/map/map-runtime.js';
 import { ContextMenu } from './ContextMenu.js';
 
 /** 서식 버튼 아이콘 (자체 제작 SVG) */
@@ -532,7 +533,8 @@ export class JmToolbarEditor {
     this.previewPane.innerHTML = Sanitizer.clean(this.editor.getHTML());
     const stopGalleries = observeGalleries(this.previewPane); // 갤러리 저스티파이드 배치 (뷰어와 동일)
     const stopSliders = initSliders(this.previewPane);       // 슬라이드 자동 전환
-    this.#stopPreviewLayout = () => { stopGalleries(); stopSliders(); };
+    const stopMaps = initMaps(this.previewPane);             // 카카오 지도
+    this.#stopPreviewLayout = () => { stopGalleries(); stopSliders(); stopMaps(); };
   }
   /** 서식 관리에서 변경 후 호출하면 다음 열 때 다시 불러옴 */
   refreshFormats() { this.formatPicker.refresh(); }
