@@ -6,7 +6,7 @@ import { expect, test } from '@playwright/test';
 /**
  * 하네스를 열고 에디터가 준비될 때까지 기다린다
  * @param {import('@playwright/test').Page} page
- * @param {string} [query] 예: '?structure=1'. 없으면 프로젝트 설정(metadata.query)을 따른다
+ * @param {string} [query] 예: '?structure=0'(구조 모드 끔). 없으면 프로젝트 설정(metadata.query)을 따른다
  */
 export async function open(page, query = test.info().project.metadata?.query || '') {
   await page.goto(`/test/e2e/harness.html${query}`);

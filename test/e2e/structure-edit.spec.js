@@ -140,7 +140,7 @@ test.describe('Codex 단계 2 검토 반영', () => {
 });
 
 test('기본 모드(구조 끔)에서는 중첩된 표도 손잡이가 보인다 (기존 동작)', async ({ page }) => {
-  await open(page, '');
+  await open(page, '?structure=0');
   await setHTML(page, '<blockquote><table><tbody><tr><td>a</td></tr></tbody></table></blockquote><table><tbody><tr><td>b</td></tr></tbody></table>');
   const handles = page.locator('.jm-editor .jm-table-handle');
   await expect(handles).toHaveCount(2);

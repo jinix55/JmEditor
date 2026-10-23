@@ -90,14 +90,14 @@ MariaDB 의 `TEXT` 는 64KB 까지라 본문(최대 200만 자)이 잘릴 수 �
 
 ## 서버 sanitize 규칙 (`HtmlSanitizer`)
 
-### 퍼블리싱 구조 정책 (선택)
+### 퍼블리싱 구조 정책 (기본 켜짐)
 
-`StructureConfig` 가 `application.yml` 의 값으로 `StructurePolicy` 를 만들고 `HtmlSanitizer` 에 넣습니다. 클라이언트 `window.JmEditorConfig.structure` 와 같은 값으로 맞추세요(기본 꺼짐).
+`StructureConfig` 가 `application.yml` 의 값으로 `StructurePolicy` 를 만들고 `HtmlSanitizer` 에 넣습니다. 클라이언트 `window.JmEditorConfig.structure` 와 같은 값으로 맞추세요. 기본 켜짐이고, 끄려면 `enabled: false` 입니다(`new HtmlSanitizer()` 를 직접 만들면 꺼진 상태).
 
 ```yaml
 jm-editor:
   structure:
-    enabled: true
+    enabled: true        # 생략하면 켜짐, 끄려면 false
     tags: [section, article, aside, div, dl, dt, dd, figure, figcaption, caption]
     class-pattern: "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
     class-allow: [tit-*, box-gray]   # 생략하면 형식만 검사

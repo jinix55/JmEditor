@@ -20,7 +20,7 @@ export const DEFAULT_CONFIG = Object.freeze({
     maxTotalSizeMB: 100,    // 글당 용량 (축소 후)
     maxDimension: 2000,     // 긴 변 상한(px), 넘으면 축소 (GIF 제외)
   }),
-  // 퍼블리싱 구조(class·section·dl 등) 보존 — 기본 꺼짐. 서버 HtmlSanitizer 도 같은 값으로 켜야 한다 (core/structure-policy.js)
+  // 퍼블리싱 구조(class·section·dl 등) 보존 — 기본 켜짐(끄려면 enabled: false). 서버 HtmlSanitizer 도 같은 값으로 켜야 한다 (core/structure-policy.js)
   structure: STRUCTURE_DEFAULTS,
 });
 

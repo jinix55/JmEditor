@@ -500,7 +500,7 @@ div[data-type="layout"] [data-cell="text"] > :last-child { margin-bottom: 0; }
 </header>
 <div class="pubbar">
   <span id="structState"></span>
-  <a id="structLink" href="?structure=1"></a>
+  <a id="structLink" href="?structure=0"></a>
   <label>퍼블 샘플 불러오기 <select id="pubSample"><option value="">선택…</option></select></label>
   <span class="hint">구조 모드를 켜면 section·div·dl 같은 구조와 class 가 그대로 남고, 그 안에서 글을 고칠 수 있습니다.</span>
 </div>
@@ -3165,8 +3165,8 @@ class ContextMenu {
 
 /**
  * structure-policy — 퍼블리싱 구조 보존 정책 (구조 태그·class 허용 범위)
- * - 기본은 꺼짐: 지금처럼 class 를 지우고 div→p, 모르는 태그는 벗긴다.
- * - 켜면 tags 의 구조 태그와 허용 태그의 class(토큰 검사 통과분)를 남긴다. 플러그인 블록(div[data-type]) 안은 예외(지금 규칙).
+ * - 기본은 켜짐. 끄면(enabled: false) 예전 규칙: class 를 지우고 div→p, 모르는 태그는 벗긴다.
+ * - 켜져 있으면 tags 의 구조 태그와 허용 태그의 class(토큰 검사 통과분)를 남긴다. 플러그인 블록(div[data-type]) 안은 예외(지금 규칙).
  * - 서버 HtmlSanitizer 와 같은 규칙이어야 한다 (application.yml jm-editor.structure.*).
  *
  * 설정 (생성 옵션 structure > window.JmEditorConfig.structure > 기본값):
@@ -3174,9 +3174,9 @@ class ContextMenu {
  *   classAllow·classDeny 의 'xxx-*' 는 접두어, 나머지는 정확한 이름.
  */
 
-/** 기본 정책 (꺼짐) */
+/** 기본 정책 (켜짐 — 끄려면 enabled: false, 서버도 같은 값으로) */
 const STRUCTURE_DEFAULTS = Object.freeze({
-  enabled: false,
+  enabled: true,
   tags: Object.freeze(['section', 'article', 'aside', 'div', 'dl', 'dt', 'dd', 'figure', 'figcaption', 'caption']),
   classPattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
   classAllow: null,
@@ -3258,7 +3258,7 @@ const DEFAULT_CONFIG = Object.freeze({
     maxTotalSizeMB: 100,    // 글당 용량 (축소 후)
     maxDimension: 2000,     // 긴 변 상한(px), 넘으면 축소 (GIF 제외)
   }),
-  // 퍼블리싱 구조(class·section·dl 등) 보존 — 기본 꺼짐. 서버 HtmlSanitizer 도 같은 값으로 켜야 한다 (core/structure-policy.js)
+  // 퍼블리싱 구조(class·section·dl 등) 보존 — 기본 켜짐(끄려면 enabled: false). 서버 HtmlSanitizer 도 같은 값으로 켜야 한다 (core/structure-policy.js)
   structure: STRUCTURE_DEFAULTS,
 });
 
@@ -7408,13 +7408,13 @@ const OL_TYPES=[['decimal','1. 숫자'],['decimal-leading-zero','01. 숫자(0 �
 const formatPicker=new FormatPicker({loadFormats:async()=>SAMPLE_FORMATS,onPick:f=>editor.exec('format',f.html),policy:()=>editor?.structure});
 const gridPicker=new TableGridPicker({onPick:(rows,cols)=>editor.exec('table',{rows,cols,header:true})});
 
-/* 퍼블 구조 모드: 주소에 ?structure=1 이면 켬 (서버 HtmlSanitizer 도 같은 값으로 켜야 저장 때 남음) */
-const STRUCTURE_ON=new URLSearchParams(location.search).get('structure')==='1';
+/* 퍼블 구조 모드: 기본 켜짐, 주소에 ?structure=0 이면 끔 (서버 HtmlSanitizer 도 같은 값이어야 저장 때 남음) */
+const STRUCTURE_ON=new URLSearchParams(location.search).get('structure')!=='0';
 /* 퍼블 샘플 (test/fixtures/publisher/*.html 과 같은 내용) */
 const PUB_SAMPLES={"인사말": "<section class=\"sub-greeting\">\n  <div class=\"greeting-top\">\n    <h3 class=\"tit-h3\">인사말</h3>\n    <p class=\"desc\">함께 성장하는 내일을 만들어 가겠습니다.</p>\n  </div>\n  <div class=\"greeting-cont\">\n    <div class=\"img-area\"><img src=\"/img/sub/greeting.jpg\" alt=\"협회장 사진\" width=\"400\" height=\"500\"></div>\n    <div class=\"txt-area\">\n      <p class=\"lead\"><strong>안녕하십니까.</strong> 협회 홈페이지를 찾아 주신 여러분을 진심으로 환영합니다.</p>\n      <p>저희 협회는 회원 여러분과 함께 교육 데이터의 가치를 높이고, 누구나 배우고 나누는 환경을 만들기 위해 노력하고 있습니다.</p>\n      <p>앞으로도 투명하고 열린 운영으로 신뢰받는 협회가 되겠습니다.</p>\n      <p class=\"sign\">협회장 <span class=\"name\">홍길동</span></p>\n    </div>\n  </div>\n</section>\n", "연혁": "<div class=\"history-wrap\">\n  <div class=\"history-year\">\n    <h3 class=\"year\">2026</h3>\n    <dl class=\"history-list\">\n      <dt>03월</dt>\n      <dd>교육 데이터 표준 가이드 발간</dd>\n      <dt>01월</dt>\n      <dd>제5회 정기총회 개최</dd>\n    </dl>\n  </div>\n  <div class=\"history-year\">\n    <h3 class=\"year\">2025</h3>\n    <dl class=\"history-list\">\n      <dt>10월</dt>\n      <dd>회원사 <strong>100곳</strong> 돌파</dd>\n      <dt>06월</dt>\n      <dd>지역 교육센터 3곳 개소</dd>\n    </dl>\n  </div>\n</div>\n", "주요사업": "<section class=\"sub-business\">\n  <h3 class=\"tit-h3\">주요사업</h3>\n  <ul class=\"biz-list\">\n    <li class=\"biz-item\">\n      <div class=\"biz-icon\"><span class=\"ico ico-edu\"></span></div>\n      <strong class=\"biz-tit\">교육 지원</strong>\n      <p class=\"biz-txt\">현장 맞춤형 데이터 교육 과정을 운영합니다.</p>\n    </li>\n    <li class=\"biz-item\">\n      <div class=\"biz-icon\"><span class=\"ico ico-research\"></span></div>\n      <strong class=\"biz-tit\">연구·조사</strong>\n      <p class=\"biz-txt\">교육 데이터 활용 실태를 조사하고 정책을 제안합니다.</p>\n    </li>\n    <li class=\"biz-item\">\n      <div class=\"biz-icon\"><span class=\"ico ico-network\"></span></div>\n      <strong class=\"biz-tit\">네트워크</strong>\n      <p class=\"biz-txt\">회원사와 기관을 잇는 협력 네트워크를 만듭니다.</p>\n    </li>\n  </ul>\n  <div class=\"box-gray\">\n    <p class=\"txt-point\">사업 문의: <a href=\"tel:0312223333\">031-222-3333</a></p>\n  </div>\n</section>\n", "조직안내": "<section class=\"sub-org\">\n  <h3 class=\"tit-h3\">조직안내</h3>\n  <div class=\"org-chart\">\n    <div class=\"org-top\"><span class=\"org-box type-main\">협회장</span></div>\n    <ul class=\"org-depth2\">\n      <li><span class=\"org-box\">사무국</span></li>\n      <li><span class=\"org-box\">교육사업팀</span></li>\n      <li><span class=\"org-box\">연구지원팀</span></li>\n    </ul>\n  </div>\n  <div class=\"tbl-wrap\">\n    <table class=\"tbl-basic\">\n      <caption>부서별 업무 및 연락처</caption>\n      <colgroup><col style=\"width: 25%\"><col><col style=\"width: 25%\"></colgroup>\n      <thead>\n        <tr><th scope=\"col\">부서</th><th scope=\"col\">담당 업무</th><th scope=\"col\">연락처</th></tr>\n      </thead>\n      <tbody>\n        <tr><td>사무국</td><td class=\"txt-left\">총무·회계·회원 관리</td><td>031-222-3331</td></tr>\n        <tr><td>교육사업팀</td><td class=\"txt-left\">교육 과정 운영</td><td>031-222-3332</td></tr>\n      </tbody>\n    </table>\n  </div>\n</section>\n", "오시는 길·FAQ": "<section class=\"sub-location\">\n  <h3 class=\"tit-h3\">오시는 길</h3>\n  <div class=\"location-info\">\n    <dl class=\"info-row\">\n      <dt>주소</dt>\n      <dd>경기도 성남시 분당구 운중로 227</dd>\n    </dl>\n    <dl class=\"info-row\">\n      <dt>전화</dt>\n      <dd><a href=\"tel:0312223333\">031-222-3333</a></dd>\n    </dl>\n  </div>\n  <ul class=\"traffic-list\">\n    <li><span class=\"badge bus\">버스</span> 판교역 하차 후 도보 10분</li>\n    <li><span class=\"badge subway\">지하철</span> 신분당선 판교역 1번 출구</li>\n  </ul>\n</section>\n<section class=\"sub-faq\">\n  <h3 class=\"tit-h3\">자주 묻는 질문</h3>\n  <dl class=\"faq-list\">\n    <dt class=\"q\">회원 가입은 어떻게 하나요?</dt>\n    <dd class=\"a\"><p>홈페이지 상단의 회원가입 메뉴에서 신청할 수 있습니다.</p></dd>\n    <dt class=\"q\">교육 신청 기간은 언제인가요?</dt>\n    <dd class=\"a\"><p>매 분기 시작 2주 전부터 신청을 받습니다.</p><ul class=\"list-dot\"><li>1분기: 12월 중순</li><li>2분기: 3월 중순</li></ul></dd>\n  </dl>\n</section>\n"};
 const editor=new JmEditor(document.getElementById('editor'),{
   placeholder:'내용을 입력하세요',
-  structure:STRUCTURE_ON?{enabled:true}:undefined,
+  structure:{enabled:STRUCTURE_ON},
   onChange:h=>{out.textContent=h; len.textContent=h.length+' chars';},
   onSelectionChange:refresh,
   pickColor:(x,y,cb)=>colorPicker.open(x,y,cb,{sampleMode:'background'}), // 표 셀/행 배경색 메뉴용
@@ -7423,7 +7423,7 @@ const editor=new JmEditor(document.getElementById('editor'),{
 document.getElementById('structState').textContent=STRUCTURE_ON?'퍼블 구조 모드: 켜짐':'퍼블 구조 모드: 꺼짐';
 const structLink=document.getElementById('structLink');
 structLink.textContent=STRUCTURE_ON?'끄기':'켜기';
-structLink.href=STRUCTURE_ON?location.pathname:'?structure=1';
+structLink.href=STRUCTURE_ON?'?structure=0':location.pathname;
 const pubSample=document.getElementById('pubSample');
 Object.keys(PUB_SAMPLES).forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;pubSample.appendChild(o);});
 // 샘플 이미지 파일은 없으므로 자리 표시 그림으로 (이미지를 클릭해 「교체」로 바꿀 수 있음)

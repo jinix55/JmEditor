@@ -12,7 +12,7 @@ export default defineConfig({
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'webkit', use: { ...devices['Desktop Safari'] } }, // 사파리 엔진 — contenteditable 동작 차이 확인
-    // 같은 테스트를 퍼블 구조 정책을 켠 채로 (기존 기능이 그대로인지) — 하네스 ?structure=1
-    { name: 'chromium-structure', use: { ...devices['Desktop Chrome'] }, metadata: { query: '?structure=1' } },
+    // 같은 테스트를 구조 모드를 끈 채로 (끈 사이트의 예전 동작이 그대로인지) — 하네스 ?structure=0
+    { name: 'chromium-off', use: { ...devices['Desktop Chrome'] }, metadata: { query: '?structure=0' } },
   ],
 });

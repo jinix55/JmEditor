@@ -9,11 +9,11 @@ import java.util.List;
 
 /**
  * 퍼블리싱 구조 보존 설정 (application.yml jm-editor.structure.*) → {@link StructurePolicy} 빈.
- * 클라이언트 window.JmEditorConfig.structure 와 같은 값으로 맞춘다.
+ * 클라이언트 window.JmEditorConfig.structure 와 같은 값으로 맞춘다. 기본 켜짐 (끄려면 enabled: false).
  * <pre>
  * jm-editor:
  *   structure:
- *     enabled: true
+ *     enabled: true        # 생략하면 켜짐
  *     tags: [section, article, aside, div, dl, dt, dd, figure, figcaption, caption]
  *     class-pattern: "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
  *     class-allow: [tit-*, box-gray]   # 없으면 형식만 검사
@@ -24,13 +24,13 @@ import java.util.List;
 @EnableConfigurationProperties(StructureConfig.Props.class)
 public class StructureConfig {
 
-    /** 설정값 (없는 항목은 null → 기본값) */
+    /** 설정값 (없는 항목은 null → 기본값. enabled 가 없으면 켜짐) */
     @ConfigurationProperties("jm-editor.structure")
-    public record Props(boolean enabled, List<String> tags, String classPattern, List<String> classAllow, List<String> classDeny) {}
+    public record Props(Boolean enabled, List<String> tags, String classPattern, List<String> classAllow, List<String> classDeny) {}
 
     /** 정제에 쓰는 정책 */
     @Bean
     public StructurePolicy structurePolicy(Props p) {
-        return new StructurePolicy(p.enabled(), p.tags(), p.classPattern(), p.classAllow(), p.classDeny());
+        return new StructurePolicy(p.enabled() == null || p.enabled(), p.tags(), p.classPattern(), p.classAllow(), p.classDeny());
     }
 }

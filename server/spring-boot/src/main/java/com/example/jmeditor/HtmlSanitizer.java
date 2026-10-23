@@ -39,7 +39,7 @@ public class HtmlSanitizer {
     /** 퍼블 구조 정책 (꺼져 있으면 지금 규칙) */
     private final StructurePolicy policy;
 
-    /** 구조 정책 없이 (지금 규칙) */
+    /** 구조 정책 없이 (예전 규칙 — class 제거·div→p). Spring 에서는 StructureConfig 의 정책(기본 켜짐)으로 만들어진다 */
     public HtmlSanitizer() {
         this(StructurePolicy.disabled());
     }

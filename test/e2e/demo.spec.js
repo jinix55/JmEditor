@@ -20,16 +20,16 @@ test('데모 스크립트 안에 HTML 파서를 흔드는 글자가 없다', () 
   for (const bad of ['<!--', '<script', '</script']) expect(body.includes(bad), bad).toBe(false);
 });
 
-test('데모 ?structure=1: 퍼블 샘플을 불러오면 구조·class 가 그대로 저장 결과에 나온다', async ({ page }) => {
-  await page.goto('/examples/demo/index.html?structure=1');
+test('데모 기본(구조 켜짐): 퍼블 샘플을 불러오면 구조·class 가 그대로 저장 결과에 나온다', async ({ page }) => {
+  await page.goto('/examples/demo/index.html');
   await expect(page.locator('#structState')).toHaveText('퍼블 구조 모드: 켜짐');
   await page.locator('#pubSample').selectOption('연혁');
   const out = (await page.locator('#html').textContent()).replace(/>\s+</g, '><');
   expect(out).toContain('<div class="history-wrap"><div class="history-year"><h3 class="year">2026</h3><dl class="history-list">');
 });
 
-test('데모 기본(구조 꺼짐)에서 퍼블 샘플을 불러오면 지금 규칙대로 구조가 정리된다', async ({ page }) => {
-  await page.goto('/examples/demo/index.html');
+test('데모 ?structure=0(구조 꺼짐)에서 퍼블 샘플을 불러오면 예전 규칙대로 구조가 정리된다', async ({ page }) => {
+  await page.goto('/examples/demo/index.html?structure=0');
   await expect(page.locator('#structState')).toHaveText('퍼블 구조 모드: 꺼짐');
   await page.locator('#pubSample').selectOption('연혁');
   await expect(page.locator('#html')).not.toContainText('class=');

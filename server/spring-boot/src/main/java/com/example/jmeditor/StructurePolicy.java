@@ -11,8 +11,8 @@ import java.util.regex.PatternSyntaxException;
 /**
  * 퍼블리싱 구조 보존 정책 (구조 태그·class 허용 범위) — 클라이언트 src/core/structure-policy.js 와 같은 규칙.
  * <p>
- * 기본은 꺼짐: 지금처럼 class 를 지우고 div→p, 모르는 태그는 벗긴다.
- * 켜면 {@link #tags()} 의 구조 태그와 허용 태그의 class(토큰 검사 통과분)를 남긴다. 플러그인 블록(div[data-type]) 안은 예외.
+ * 기본은 켜짐(StructureConfig). 끄면 예전 규칙: class 를 지우고 div→p, 모르는 태그는 벗긴다.
+ * 켜져 있으면 {@link #tags()} 의 구조 태그와 허용 태그의 class(토큰 검사 통과분)를 남긴다. 플러그인 블록(div[data-type]) 안은 예외.
  * 클라이언트(window.JmEditorConfig.structure)와 같은 값으로 켜야 저장 때 구조가 지워지지 않는다.
  */
 public final class StructurePolicy {
