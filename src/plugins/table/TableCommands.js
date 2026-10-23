@@ -253,8 +253,11 @@ export class TableCommands {
       tbody.appendChild(tr);
     }
     table.appendChild(tbody);
-    const block = SelectionUtil.blockAnchor(this.sel.getBlock());
-    if (block && !this.getTable()) block.parentNode.insertBefore(table, block.nextSibling);
+    const cur = this.sel.getBlock();
+    const block = this.sel.insertAnchor(cur); // 퍼블 구조 안이면 그 구조 뒤에
+    // 표 안이면 지금처럼 문서 끝에. 단 구조 안의 표라면 그 구조 바로 뒤에
+    const useAnchor = block && (!this.getTable() || block !== SelectionUtil.blockAnchor(cur));
+    if (useAnchor) block.parentNode.insertBefore(table, block.nextSibling);
     else this.root.appendChild(table);
     const layer = this.#wrap(table);
     const after = document.createElement('p');

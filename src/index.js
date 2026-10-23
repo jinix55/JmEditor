@@ -7,3 +7,4 @@ export { TableGridPicker } from './ui/TableGridPicker.js';
 export { FormatPicker, SAMPLE_FORMATS } from './ui/FormatPicker.js';
 export { ContextMenu } from './ui/ContextMenu.js';
 export { JmEditorApi } from './api/JmEditorApi.js';
+export { makeStructurePolicy, STRUCTURE_DEFAULTS } from './core/structure-policy.js';

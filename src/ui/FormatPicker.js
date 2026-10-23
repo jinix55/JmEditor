@@ -12,10 +12,12 @@ export class FormatPicker {
    * @param {object} options
    * @param {() => Promise<Array<{id: string|number, name: string, description?: string, html: string}>>} options.loadFormats
    * @param {(format: object) => void} options.onPick
+   * @param {() => object|null} [options.policy] 미리보기 정리에 쓸 퍼블 구조 정책 (에디터와 같게)
    */
-  constructor({ loadFormats, onPick }) {
+  constructor({ loadFormats, onPick, policy }) {
     this.loadFormats = loadFormats;
     this.onPick = onPick;
+    this.policy = policy || (() => null);
     this.formats = null; // 캐시
 
     this.el = document.createElement('div');
@@ -120,7 +122,7 @@ export class FormatPicker {
       const preview = document.createElement('div');
       preview.className = 'jm-formatpicker-preview jm-editor';
       preview.contentEditable = 'false';
-      preview.innerHTML = Sanitizer.clean(f.html || ''); // 서식 HTML 은 외부(서버·연동 코드)에서 오므로 미리보기도 거름
+      preview.innerHTML = Sanitizer.clean(f.html || '', this.policy()); // 서식 HTML 은 외부(서버·연동 코드)에서 오므로 미리보기도 거름
 
       item.append(name, desc, preview);
       this.el.appendChild(item);
@@ -233,15 +235,8 @@ export const SAMPLE_FORMATS = [
   {
     id: 'map',
     category: '지도',
-    name: '카카오 지도',
-    description: '카카오맵 「지도 퍼가기」 코드를 붙여 넣어 지도 표시 (앱 키 불필요). 본문에 코드를 바로 붙여 넣어도 됨',
-    html: `<div data-type="map" data-provider="kakao-roughmap" data-height="400"></div>`,
-  },
-  {
-    id: 'directions',
-    category: '지도',
     name: '오시는 길',
-    description: '지도(주소 포함) + 교통·주차 안내 + 카카오맵 버튼. 헤더에 새 퍼가기 코드를 붙여 넣으면 장소 변경',
-    html: `<h2>오시는 길</h2><div data-type="map" data-provider="kakao-roughmap" data-timestamp="1792762389634" data-key="3rt3v4p5vvx" data-height="400" data-title="경기 성남시 분당구 운중로 227"></div><p><strong>🚌 대중교통</strong>　교통편 안내를 입력하세요.</p><p><strong>🚗 주차</strong>　주차 안내를 입력하세요.</p><div data-type="buttons" data-align="left"><a href="https://map.kakao.com/link/search/%EA%B2%BD%EA%B8%B0%20%EC%84%B1%EB%82%A8%EC%8B%9C%20%EB%B6%84%EB%8B%B9%EA%B5%AC%20%EC%9A%B4%EC%A4%91%EB%A1%9C%20227" data-role="button" data-style="primary" data-icon="pin">카카오맵에서 보기</a></div>`,
+    description: '카카오 지도 블록 (앱 키 불필요). 헤더나 본문에 카카오맵 「지도 퍼가기」 코드를 붙여 넣으면 장소 변경',
+    html: `<div data-type="map" data-provider="kakao-roughmap" data-timestamp="1792762389634" data-key="3rt3v4p5vvx" data-height="400" data-title="경기 성남시 분당구 운중로 227"></div>`,
   },
 ];

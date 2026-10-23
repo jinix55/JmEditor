@@ -8,6 +8,7 @@
  * dist/jm-editor.config.js 는 전체 항목 견본 — 자기 서버에 복사해 고쳐 불러와도 된다.
  * 크기 단위는 MB, 길이 단위는 px.
  */
+import { STRUCTURE_DEFAULTS } from './core/structure-policy.js';
 
 /** 기본 설정 */
 export const DEFAULT_CONFIG = Object.freeze({
@@ -19,11 +20,13 @@ export const DEFAULT_CONFIG = Object.freeze({
     maxTotalSizeMB: 100,    // 글당 용량 (축소 후)
     maxDimension: 2000,     // 긴 변 상한(px), 넘으면 축소 (GIF 제외)
   }),
+  // 퍼블리싱 구조(class·section·dl 등) 보존 — 기본 꺼짐. 서버 HtmlSanitizer 도 같은 값으로 켜야 한다 (core/structure-policy.js)
+  structure: STRUCTURE_DEFAULTS,
 });
 
 /**
  * 설정 파일(window.JmEditorConfig)의 한 영역을 읽는다
- * @param {'gallery'} section
+ * @param {'gallery'|'structure'} section
  * @returns {object} 없으면 빈 객체
  */
 export function fileConfig(section) {
@@ -33,7 +36,7 @@ export function fileConfig(section) {
 
 /**
  * 기본값 < 설정 파일 < 생성 옵션 순으로 합친 영역 설정
- * @param {'gallery'} section
+ * @param {'gallery'|'structure'} section
  * @param {object} [override] 에디터 생성 옵션으로 넘긴 값
  * @returns {object}
  */

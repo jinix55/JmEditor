@@ -24,9 +24,10 @@ import 'jm-editor/css';
  * @param {(rec: object) => void} [props.onLoaded] 조회 완료
  * @param {(rec: object) => void} [props.onSaved] 저장 완료
  * @param {string} [props.placeholder]
+ * @param {object} [props.structure] 퍼블 구조 보존 정책 { enabled, tags, classAllow, classDeny } — 서버와 같은 값으로
  */
 export const JmEditor = forwardRef(function JmEditor(
-  { value = '', onChange, api, contentId, uploadImage, loadFormats, onLoaded, onSaved, placeholder },
+  { value = '', onChange, api, contentId, uploadImage, loadFormats, onLoaded, onSaved, placeholder, structure },
   ref,
 ) {
   const boxRef = useRef(null);
@@ -39,6 +40,7 @@ export const JmEditor = forwardRef(function JmEditor(
   useEffect(() => {
     const editor = new JmToolbarEditor(boxRef.current, {
       placeholder,
+      structure,
       api,
       contentId,
       uploadImage,
