@@ -1,5 +1,5 @@
 -- JmEditor 서식(editor_format) 샘플 데이터 (PostgreSQL)
--- 클라이언트 기본 서식(src/ui/FormatPicker.js 의 SAMPLE_FORMATS) 15건과 같은 내용 (이미지 + 글 5건, 지도 2건 포함).
+-- 클라이언트 기본 서식(src/ui/FormatPicker.js 의 SAMPLE_FORMATS) 14건과 같은 내용 (이미지 + 글 5건, 지도 1건 포함).
 -- schema-postgresql.sql 로 테이블을 만든 뒤 실행한다. 같은 이름의 서식이 이미 있으면 건너뛰므로 여러 번 실행해도 된다.
 INSERT INTO editor_format (name, category, description, html, sort_order)
 SELECT v.name, v.category, v.description, v.html, v.sort_order
@@ -30,9 +30,7 @@ FROM (VALUES
      '<div data-type="layout" data-preset="diagonal" data-variant="tl-br"><div data-cell="image"></div><div data-cell="text"><p>위쪽 글</p></div><div data-cell="text"><p>아래쪽 글</p></div><div data-cell="image"></div></div>', 12),
     ('이미지 2장 나란히 + 글', '이미지 + 글', '이미지 2장과 각각의 글. 헤더에서 이미지 위/아래',
      '<div data-type="layout" data-preset="pair" data-variant="top"><div data-cell="image"></div><div data-cell="text"><p>왼쪽 이미지 설명</p></div><div data-cell="image"></div><div data-cell="text"><p>오른쪽 이미지 설명</p></div></div>', 13),
-    ('카카오 지도', '지도', '카카오맵 「지도 퍼가기」 코드를 붙여 넣어 지도 표시 (앱 키 불필요). 본문에 코드를 바로 붙여 넣어도 됨',
-     '<div data-type="map" data-provider="kakao-roughmap" data-height="400"></div>', 14),
-    ('오시는 길', '지도', '지도(주소 포함) + 교통·주차 안내 + 카카오맵 버튼. 헤더에 새 퍼가기 코드를 붙여 넣으면 장소 변경',
-     '<h2>오시는 길</h2><div data-type="map" data-provider="kakao-roughmap" data-timestamp="1792762389634" data-key="3rt3v4p5vvx" data-height="400" data-title="경기 성남시 분당구 운중로 227"></div><p><strong>🚌 대중교통</strong>　교통편 안내를 입력하세요.</p><p><strong>🚗 주차</strong>　주차 안내를 입력하세요.</p><div data-type="buttons" data-align="left"><a href="https://map.kakao.com/link/search/%EA%B2%BD%EA%B8%B0%20%EC%84%B1%EB%82%A8%EC%8B%9C%20%EB%B6%84%EB%8B%B9%EA%B5%AC%20%EC%9A%B4%EC%A4%91%EB%A1%9C%20227" data-role="button" data-style="primary" data-icon="pin">카카오맵에서 보기</a></div>', 15)
+    ('오시는 길', '지도', '카카오 지도 블록 (앱 키 불필요). 헤더나 본문에 카카오맵 「지도 퍼가기」 코드를 붙여 넣으면 장소 변경',
+     '<div data-type="map" data-provider="kakao-roughmap" data-timestamp="1792762389634" data-key="3rt3v4p5vvx" data-height="400" data-title="경기 성남시 분당구 운중로 227"></div>', 14)
 ) AS v(name, category, description, html, sort_order)
 WHERE NOT EXISTS (SELECT 1 FROM editor_format f WHERE f.name = v.name);

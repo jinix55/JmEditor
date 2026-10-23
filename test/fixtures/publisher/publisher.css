@@ -1,0 +1,51 @@
+/* 퍼블리싱 샘플용 사이트 CSS (테스트·확인용) — 실제 사이트의 서브 페이지 스타일을 흉내 낸 것 */
+.tit-h3 { margin: 0 0 16px; padding-left: 12px; border-left: 4px solid #2f6f4e; font-size: 22px; }
+
+/* 인사말 */
+.sub-greeting .greeting-top { margin-bottom: 24px; text-align: center; }
+.sub-greeting .greeting-top .desc { color: #2f6f4e; font-size: 20px; font-weight: 600; }
+.sub-greeting .greeting-cont { display: flex; gap: 32px; align-items: flex-start; }
+.sub-greeting .img-area { flex: 0 0 240px; }
+.sub-greeting .img-area img { width: 100%; height: auto; border-radius: 8px; background: #e4e7ec; }
+.sub-greeting .txt-area .lead { font-size: 17px; }
+.sub-greeting .sign { margin-top: 24px; text-align: right; }
+.sub-greeting .sign .name { font-size: 20px; font-weight: 700; }
+
+/* 연혁 */
+.history-wrap .history-year { display: flex; gap: 24px; padding: 16px 0; border-top: 1px solid #d0d5dd; }
+.history-wrap .year { flex: 0 0 80px; margin: 0; color: #2f6f4e; font-size: 24px; }
+.history-wrap .history-list { display: grid; grid-template-columns: 60px 1fr; gap: 6px 12px; margin: 0; }
+.history-wrap .history-list dt { font-weight: 700; }
+.history-wrap .history-list dd { margin: 0; }
+
+/* 주요사업 */
+.biz-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 0; padding: 0; list-style: none; }
+.biz-item { padding: 20px; border: 1px solid #d0d5dd; border-radius: 8px; text-align: center; }
+.biz-icon .ico { display: inline-block; width: 48px; height: 48px; border-radius: 50%; background: #e3efe8; }
+.biz-tit { display: block; margin: 10px 0 6px; font-size: 17px; }
+.biz-txt { margin: 0; color: #475467; }
+.box-gray { margin-top: 20px; padding: 16px; border-radius: 8px; background: #f2f4f7; }
+.txt-point { margin: 0; color: #2f6f4e; font-weight: 600; }
+
+/* 조직안내 */
+.org-chart { margin-bottom: 24px; text-align: center; }
+.org-box { display: inline-block; padding: 8px 18px; border: 1px solid #2f6f4e; border-radius: 6px; }
+.org-box.type-main { background: #2f6f4e; color: #fff; }
+.org-depth2 { display: flex; justify-content: center; gap: 12px; margin: 16px 0 0; padding: 0; list-style: none; }
+.tbl-basic { width: 100%; border-collapse: collapse; border-top: 2px solid #2f6f4e; }
+.tbl-basic caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.tbl-basic th, .tbl-basic td { padding: 10px; border-bottom: 1px solid #d0d5dd; text-align: center; }
+.tbl-basic .txt-left { text-align: left; }
+
+/* 오시는 길 · FAQ */
+.location-info .info-row { display: flex; gap: 12px; margin: 0 0 6px; }
+.location-info .info-row dt { flex: 0 0 60px; font-weight: 700; }
+.location-info .info-row dd { margin: 0; }
+.traffic-list { padding: 0; list-style: none; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; color: #fff; font-size: 12px; }
+.badge.bus { background: #1d4ed8; }
+.badge.subway { background: #7c3aed; }
+.faq-list dt.q { margin-top: 12px; font-weight: 700; }
+.faq-list dt.q::before { content: "Q. "; color: #2f6f4e; }
+.faq-list dd.a { margin: 6px 0 0; padding: 12px; border-radius: 6px; background: #f8fafc; }
+.list-dot { margin: 6px 0 0; padding-left: 18px; }

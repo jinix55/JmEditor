@@ -70,9 +70,9 @@ spring:
 | 파일 | 내용 |
 |---|---|
 | `schema-postgresql.sql` | `editor_content`(본문), `editor_format`(서식) 테이블 — PostgreSQL |
-| `sample-formats-postgresql.sql` | 서식 샘플 데이터 15건 (클라이언트 기본 서식 `SAMPLE_FORMATS` 와 같은 내용) — PostgreSQL |
+| `sample-formats-postgresql.sql` | 서식 샘플 데이터 14건 (클라이언트 기본 서식 `SAMPLE_FORMATS` 와 같은 내용) — PostgreSQL |
 | `schema-mariadb.sql` | 같은 테이블 — MariaDB 10.3+ / MySQL 8+ (utf8mb4, 본문·서식 HTML 은 `MEDIUMTEXT`) |
-| `sample-formats-mariadb.sql` | 같은 서식 샘플 15건 — MariaDB / MySQL |
+| `sample-formats-mariadb.sql` | 같은 서식 샘플 14건 — MariaDB / MySQL |
 
 ```bash
 # PostgreSQL
@@ -89,6 +89,25 @@ MariaDB 의 `TEXT` 는 64KB 까지라 본문(최대 200만 자)이 잘릴 수 �
 `api` 옵션을 쓰면 서식 목록을 `/api/editor/formats`, 즉 `editor_format` 테이블에서 받습니다. 테이블이 비어 있으면 서식 목록도 비어 보이므로 샘플 데이터를 넣거나 서식 관리 화면에서 등록하세요. 샘플 쿼리는 같은 이름의 서식이 있으면 건너뛰어서 여러 번 실행해도 됩니다.
 
 ## 서버 sanitize 규칙 (`HtmlSanitizer`)
+
+### 퍼블리싱 구조 정책 (선택)
+
+`StructureConfig` 가 `application.yml` 의 값으로 `StructurePolicy` 를 만들고 `HtmlSanitizer` 에 넣습니다. 클라이언트 `window.JmEditorConfig.structure` 와 같은 값으로 맞추세요(기본 꺼짐).
+
+```yaml
+jm-editor:
+  structure:
+    enabled: true
+    tags: [section, article, aside, div, dl, dt, dd, figure, figcaption, caption]
+    class-pattern: "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+    class-allow: [tit-*, box-gray]   # 생략하면 형식만 검사
+    class-deny: [btn-admin*]
+```
+
+켜면 구조 태그와 class(허용 토큰만)·`th[scope]` 를 남기고, 블록 기능(`div[data-type]`) 안의 class 는 지웁니다. 정책과 무관하게 `jm-*`·`is-selected` 등 에디터 예약 이름은 지우고, `section` 등을 설정해도 `StructurePolicy.TAG_LIMIT` 밖의 태그(script·form 등)는 열리지 않습니다.
+같은 규칙을 클라이언트와 같은 픽스처(`test/fixtures/publisher/` 와 `expected/`)로 확인합니다.
+
+공통 변경: 링크 `tel:` 허용, `b`·`i`·`strike` 를 `strong`·`em`·`s` 로 바꿈(클라이언트와 같게), 저장 HTML 은 줄 맞춤(pretty print) 없이 출력합니다.
 
 ### 태그·속성
 

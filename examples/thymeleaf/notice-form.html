@@ -35,6 +35,8 @@
 
   const editor = new JmToolbarEditor(document.getElementById('editor'), {
     placeholder: '내용을 입력하세요',
+    // 퍼블리싱 구조(class·section 등)를 지켜야 하는 화면이면 켠다 — 서버 application.yml 의 jm-editor.structure 도 같은 값으로
+    // structure: { enabled: true, classAllow: ['tit-*', 'box-*'] },
     // API 레이어: 조회/등록/수정/이미지 업로드/서식 목록을 모두 처리
     api: {
       baseUrl: ctx.replace(/\/$/, ''),

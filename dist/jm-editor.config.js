@@ -18,4 +18,12 @@ window.JmEditorConfig = {
     maxTotalSizeMB: 100,    // 글당 용량 (축소 후)
     maxDimension: 2000,     // 긴 변 상한, 넘으면 축소 (GIF 제외)
   },
+  // 퍼블리싱 구조(class·section·dl 등) 보존 — 켜면 서버 HtmlSanitizer 도 같은 값으로 켜야 저장 때 지워지지 않음
+  structure: {
+    enabled: false,
+    tags: ['section', 'article', 'aside', 'div', 'dl', 'dt', 'dd', 'figure', 'figcaption', 'caption'], // 허용할 구조 태그
+    classPattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$', // class 이름 형식
+    classAllow: null,  // null 이면 형식만 검사. ['tit-*', 'box-gray'] 처럼 주면 그 이름·접두어(xxx-*)만
+    classDeny: [],     // 막을 이름·접두어 (에디터 예약 이름 jm-* 등은 항상 제거)
+  },
 };

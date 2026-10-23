@@ -194,6 +194,7 @@ export class JmToolbarEditor {
     this.formatPicker = new FormatPicker({
       loadFormats: options.loadFormats || (async () => SAMPLE_FORMATS),
       onPick: (f) => this.editor.exec('format', f.html),
+      policy: () => this.editor?.structure, // 미리보기도 본문과 같은 정리 규칙 (에디터는 아래에서 만들어짐)
     });
 
     // 목록 유형 메뉴
@@ -524,13 +525,13 @@ export class JmToolbarEditor {
   #stopPreviewLayout = null;
 
   /** 저장할 HTML. HTML 모드에서는 입력 중인 소스를 Sanitizer 로 거른 결과 */
-  getHTML() { return this.mode === 'html' ? Sanitizer.clean(this.source.value) : this.editor.getHTML(); }
+  getHTML() { return this.mode === 'html' ? Sanitizer.clean(this.source.value, this.editor.structure) : this.editor.getHTML(); }
   setHTML(html) { this.editor.setHTML(html); if (this.mode === 'html') this.source.value = JmToolbarEditor.prettify(html); if (this.mode === 'preview') this.#renderPreview(); }
 
   /** 미리보기 그리기: 이전 런타임(갤러리 배치 감시·슬라이드 타이머)을 정리하고 Sanitizer 를 거친 HTML 로 다시 그림 */
   #renderPreview() {
     this.#stopPreviewLayout?.();
-    this.previewPane.innerHTML = Sanitizer.clean(this.editor.getHTML());
+    this.previewPane.innerHTML = Sanitizer.clean(this.editor.getHTML(), this.editor.structure);
     const stopGalleries = observeGalleries(this.previewPane); // 갤러리 저스티파이드 배치 (뷰어와 동일)
     const stopSliders = initSliders(this.previewPane);       // 슬라이드 자동 전환
     const stopMaps = initMaps(this.previewPane);             // 카카오 지도

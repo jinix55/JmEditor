@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<!--
+  E2E 테스트 하네스 — src/ 를 ES Module 로 직접 불러와 툴바 에디터를 띄운다.
+  테스트는 window.ed(JmToolbarEditor), window.core(JmEditor), window.JM(모듈 전체)를 쓴다.
+  ?structure=1 이면 퍼블 구조 정책을 켠다(단계 1 이후).
+-->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>JmEditor E2E</title>
+  <link rel="stylesheet" href="/src/styles/jm-editor.css">
+  <link rel="stylesheet" href="/test/fixtures/publisher/publisher.css">
+  <style>body { max-width: 960px; margin: 16px auto; font-family: system-ui, sans-serif; }</style>
+</head>
+<body>
+<div id="editor"></div>
+<script type="module">
+  import * as JM from '/src/index.js';
+  // ?structure=1 → 퍼블 구조 정책 켜기 (기본 태그·class 규칙)
+  const structure = new URLSearchParams(location.search).get('structure') === '1' ? { enabled: true } : undefined;
+  const ed = new JM.JmToolbarEditor(document.getElementById('editor'), { placeholder: '내용을 입력하세요', structure });
+  window.JM = JM;
+  window.ed = ed;
+  window.core = ed.editor;
+  window.ready = true;
+</script>
+</body>
+</html>

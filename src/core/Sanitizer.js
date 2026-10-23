@@ -41,13 +41,35 @@ const SAFE_URL = /^(https?:|\/|data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base
 /** href(링크)에 허용하는 주소: http(s)·mailto·tel·# 와 / 로 시작하는 내부 경로 (// 와 /\ 같은 외부 주소 우회는 제외) */
 const SAFE_HREF = /^(https?:\/\/|mailto:|tel:|#|\/(?![/\\]))/i;
 
+/** 플러그인 블록 종류 — 구조 정책을 적용하지 않는다(블록마다 정해진 형식 그대로) */
+const PLUGIN_TYPES = ['gallery', 'slider', 'buttons', 'youtube', 'layout', 'map'];
+/** 구조 모드에서 새로 허용한 태그가 가질 수 있는 속성 (class 는 따로) */
+const STRUCTURE_ATTRS = ['style'];
+/** th[scope] 허용 값 (구조 모드) */
+const TH_SCOPES = ['row', 'col', 'rowgroup', 'colgroup'];
+
 export class Sanitizer {
+  /** 지금 정리 중인 구조 정책 (clean 호출 동안만, null 이면 기본 규칙) */
+  static #policy = null;
+
   /**
    * HTML 문자열을 정리하여 반환
    * @param {string} html
+   * @param {ReturnType<typeof import('./structure-policy.js').makeStructurePolicy>} [policy] 퍼블 구조 정책 (없으면 기본 규칙)
    * @returns {string}
    */
-  static clean(html) {
+  static clean(html, policy = null) {
+    return Sanitizer.#withPolicy(policy, () => Sanitizer.#cleanRoot(html));
+  }
+
+  /** 정책을 잠시 바꿔 실행 (중첩 호출에도 원래대로 복구) */
+  static #withPolicy(policy, fn) {
+    const prev = Sanitizer.#policy;
+    Sanitizer.#policy = policy || null;
+    try { return fn(); } finally { Sanitizer.#policy = prev; }
+  }
+
+  static #cleanRoot(html) {
     const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
     const frag = document.createDocumentFragment();
     Array.from(doc.body.childNodes).forEach((n) => {
@@ -108,6 +130,9 @@ export class Sanitizer {
 
     let tag = node.tagName.toLowerCase();
     if (['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link'].includes(tag)) return null;
+    const pol = Sanitizer.#policy;
+    // 플러그인 블록 안은 구조 정책 없이 (지금 규칙 그대로)
+    if (pol && tag === 'div' && PLUGIN_TYPES.includes(node.getAttribute('data-type'))) return Sanitizer.#withPolicy(null, () => Sanitizer.#cleanNode(node));
 
     // 이미지 갤러리 블록: div[data-type=gallery] 만 예외 허용, 자식은 img 만
     if (tag === 'div' && node.getAttribute('data-type') === 'gallery') {
@@ -198,10 +223,12 @@ export class Sanitizer {
     // 카카오 지도 블록: 속성만 (안의 내용은 런타임이 그린 것이라 버림)
     if (tag === 'div' && node.getAttribute('data-type') === 'map') return Sanitizer.#cleanMap(node);
 
-    tag = TAG_ALIAS[tag] || tag;
+    // 구조 모드에서 허용한 태그(div 등)는 별칭으로 바꾸지 않는다
+    if (!pol?.tags.has(tag)) tag = TAG_ALIAS[tag] || tag;
+    const allowed = ALLOWED[tag] || (pol?.tags.has(tag) ? STRUCTURE_ATTRS : null);
 
     // 허용되지 않은 태그 → 자식만 모아서 반환(언래핑)
-    if (!ALLOWED[tag]) {
+    if (!allowed) {
       const frag = document.createDocumentFragment();
       Array.from(node.childNodes).forEach((c) => {
         const r = Sanitizer.#cleanNode(c);
@@ -211,8 +238,14 @@ export class Sanitizer {
     }
 
     const el = document.createElement(tag);
+    // 구조 모드: class 는 허용 토큰만, th[scope] 는 허용 값만
+    if (pol) {
+      const cls = pol.cleanClass(node.getAttribute('class'));
+      if (cls) el.setAttribute('class', cls);
+      if (tag === 'th' && TH_SCOPES.includes(node.getAttribute('scope'))) el.setAttribute('scope', node.getAttribute('scope'));
+    }
     // 허용 속성만 복사, URL 프로토콜 검사, style 은 색상 속성만
-    ALLOWED[tag].forEach((attr) => {
+    allowed.forEach((attr) => {
       const v = node.getAttribute(attr);
       if (v == null) return;
       if (attr === 'href' && !Sanitizer.isSafeHref(v)) return;
@@ -225,8 +258,8 @@ export class Sanitizer {
       }
       el.setAttribute(attr, v);
     });
-    // 스타일이 전부 제거된 span 은 의미가 없으므로 언래핑
-    if (tag === 'span' && !el.getAttribute('style')) {
+    // 스타일이 전부 제거된 span 은 의미가 없으므로 언래핑 (구조 모드에서 class 가 있으면 남김 — 아이콘 등)
+    if (tag === 'span' && !el.getAttribute('style') && !el.getAttribute('class')) {
       const frag = document.createDocumentFragment();
       Array.from(node.childNodes).forEach((c) => {
         const r = Sanitizer.#cleanNode(c);

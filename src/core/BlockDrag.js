@@ -31,6 +31,8 @@ export class BlockDrag {
   makeDraggable(handle, block) {
     handle.draggable = true;
     handle.addEventListener('dragstart', (e) => {
+      // 퍼블 구조 안에 있던 블록(불러온 문서의 표 등)은 끌어서 옮기지 않는다 — 루트로 빠져 구조가 바뀜
+      if (this.editor?.structure && block.parentNode !== this.root) { e.preventDefault(); return; }
       this.dragging = block;
       block.classList.add('is-block-dragging');
       e.dataTransfer.effectAllowed = 'move';

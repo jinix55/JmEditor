@@ -22,6 +22,8 @@ import { ImageCommands } from '../plugins/image/ImageCommands.js';
 import { History } from './History.js';
 import { BlockDrag } from './BlockDrag.js';
 import { Sanitizer } from './Sanitizer.js';
+import { makeStructurePolicy } from './structure-policy.js';
+import { resolveConfig } from '../config.js';
 
 const ZWSP = '​';
 
@@ -42,6 +44,7 @@ export class JmEditor {
    * @param {object} [options.galleryLimits] 갤러리 업로드 제한 (설정 파일 jm-editor.config.js 의 gallery 와 같은 키, 이 값이 우선)
    * @param {(message: string) => void} [options.notify] 업로드 제한 등 안내 문구 표시. 없으면 alert
    * @param {string} [options.placeholder]
+   * @param {object} [options.structure] 퍼블 구조 보존 정책 (window.JmEditorConfig.structure 보다 우선, core/structure-policy.js)
    * @param {(x: number, y: number, cb: (color: string|null) => void) => void} [options.pickColor]
    *        색상 선택 UI 를 띄우는 콜백 (표 셀/행 배경색 메뉴에서 사용). 래퍼가 주입한다.
    */
@@ -49,12 +52,16 @@ export class JmEditor {
     this.root = root;
     this.options = options;
     this.composing = false; // 한글 IME 조합 중 여부
+    /** 퍼블 구조 정책 (꺼져 있으면 null — 지금 정리 규칙). 생성 시 확정 */
+    this.structure = makeStructurePolicy(resolveConfig('structure', options.structure));
 
     this.root.contentEditable = 'true';
     this.root.classList.add('jm-editor');
+    if (this.structure) this.root.classList.add('jm-structure'); // 구조 모드 표시 (중첩 블록 손잡이 숨김 등 CSS 용)
     if (options.placeholder) this.root.dataset.placeholder = options.placeholder;
 
     this.sel = new SelectionUtil(root);
+    this.sel.structure = this.structure; // 블록 판정·삽입 기준이 구조를 알게
     this.commands = new Commands(this);
     this.table = new TableCommands(this);
     this.menu = new ContextMenu();
@@ -114,7 +121,7 @@ export class JmEditor {
       link: () => c.setLink(value),
       unlink: () => c.setLink(null),
       image: () => c.insertImage(value?.src, value?.alt),
-      format: () => c.insertBlockHTML(Sanitizer.clean(value || '')),
+      format: () => c.insertBlockHTML(Sanitizer.clean(value || '', this.structure)),
       gallery: () => c.insertBlockHTML(GalleryCommands.template()),
       layout: () => c.insertBlockHTML(LayoutCommands.template(value?.preset ?? value, value?.variant)),
       youtube: () => this.embed.insertYouTube(value),
@@ -165,7 +172,7 @@ export class JmEditor {
   setHTML(html) {
     this.image?.clear();
     this.slider?.stopAll(); // 이전 내용의 슬라이드 타이머 정리
-    this.root.innerHTML = Sanitizer.clean(html || '');
+    this.root.innerHTML = Sanitizer.clean(html || '', this.structure);
     this.table.wrapAll();
     this.gallery.wrapAll();
     this.embed.wrapAll();
@@ -234,6 +241,7 @@ export class JmEditor {
     const r = this.root;
     const onInput = () => {
       if (this.composing) return; // IME 조합 중에는 기록하지 않음
+      this.#cleanStraySpans();
       this.#ensureBlock();
       this.history.pushDebounced();
       this.#emitChange();
@@ -241,6 +249,7 @@ export class JmEditor {
     const onCompStart = () => { this.composing = true; };
     const onCompEnd = () => { this.composing = false; onInput(); };
     const onKeydown = (e) => this.#handleKeydown(e);
+    const onBeforeInput = (e) => this.#handleBeforeInput(e);
     const onPaste = (e) => this.#handlePaste(e);
     const onDrop = (e) => this.#handleDrop(e);
     const onDragover = (e) => e.preventDefault();
@@ -274,6 +283,7 @@ export class JmEditor {
     r.addEventListener('compositionstart', onCompStart);
     r.addEventListener('compositionend', onCompEnd);
     r.addEventListener('keydown', onKeydown);
+    r.addEventListener('beforeinput', onBeforeInput);
     r.addEventListener('paste', onPaste);
     r.addEventListener('drop', onDrop);
     r.addEventListener('dragover', onDragover);
@@ -287,6 +297,7 @@ export class JmEditor {
       r.removeEventListener('compositionstart', onCompStart);
       r.removeEventListener('compositionend', onCompEnd);
       r.removeEventListener('keydown', onKeydown);
+      r.removeEventListener('beforeinput', onBeforeInput);
       r.removeEventListener('paste', onPaste);
       r.removeEventListener('drop', onDrop);
       r.removeEventListener('dragover', onDragover);
@@ -315,6 +326,70 @@ export class JmEditor {
     this.menu.open(e.clientX, e.clientY, this.table.getMenuItems(pickColor));
   }
 
+  /**
+   * 커서가 블록 안 편집 영역(편집 불가 레이어 속 contenteditable=true)에 있으면 그 영역, 아니면 null
+   * @returns {HTMLElement|null}
+   */
+  #innerEditHost() {
+    let n = this.sel.getRange()?.startContainer;
+    if (n?.nodeType === Node.TEXT_NODE) n = n.parentNode;
+    const host = n?.closest?.('[contenteditable="true"]');
+    if (!host || host === this.root || !this.root.contains(host)) return null;
+    const cell = n.closest('td, th'); // 표는 table 전체가 편집 영역이므로 셀 단위로
+    return cell && host.contains(cell) ? cell : host;
+  }
+
+  /**
+   * 커서가 글 블록의 처음(Backspace)·끝(Delete)에 있고, 이웃 글 블록과 합치면 구조가 깨지는지
+   * @param {boolean} forward Delete 면 true
+   */
+  #blocksMerge(forward) {
+    const range = this.sel.getRange();
+    if (!range || !range.collapsed) return false; // 범위 삭제는 beforeinput 에서
+    const block = this.sel.getBlock();
+    if (!block) return false;
+    const edge = document.createRange();
+    if (forward) { edge.setStart(range.endContainer, range.endOffset); edge.setEnd(block, block.childNodes.length); }
+    else { edge.setStart(block, 0); edge.setEnd(range.startContainer, range.startOffset); }
+    const part = edge.cloneContents();
+    if (part.textContent.replace(new RegExp(ZWSP, 'g'), '') || part.querySelector('img')) return false; // 가장자리가 아님
+    // 커서 앞(뒤)에 줄바꿈(br)이 있고 블록에 글이 있으면 그 줄바꿈을 지우는 것 — 빈 블록 자리표시 br 만 있는 경우는 가장자리
+    if (part.querySelector('br') && block.textContent.replace(new RegExp(ZWSP, 'g'), '').trim()) return false;
+    const other = this.sel.adjacentTextBlock(block, forward);
+    return !!other && !this.sel.canMerge(block, other);
+  }
+
+  /**
+   * 구조 모드 beforeinput: 선택 범위가 구조 경계를 넘을 때 브라우저 기본(요소째 지움) 대신 구조를 지키는 삭제.
+   * 삭제 키·잘라내기·선택 위 글자 입력·Enter 가 대상 (붙여넣기는 #handlePaste → insertHTML 이 같은 삭제를 씀)
+   * @param {InputEvent} e
+   */
+  #handleBeforeInput(e) {
+    if (!this.structure || this.composing) return;
+    if (!/^(delete|insertText|insertReplacementText|insertParagraph|insertLineBreak)/.test(e.inputType)) return;
+    const range = this.sel.getRange();
+    if (!range) return;
+    // 접힌 커서: 키보드(keydown)가 처리하지 못한 입력(모바일 가상 키보드 등)도 같은 규칙으로
+    if (range.collapsed) {
+      if (/^delete(Content|Word|Soft|Hard)?(Backward|Forward)?$/.test(e.inputType) && this.#blocksMerge(/Forward$/.test(e.inputType))) { e.preventDefault(); return; }
+      if (e.inputType === 'insertParagraph' && this.sel.isSoftBreakBlock(this.sel.getBlock())) { e.preventDefault(); this.commands.insertLineBreak(); }
+      return;
+    }
+    if (!this.commands.crossesStructure(range)) return;
+    e.preventDefault();
+    this.commands.deleteRange(range);
+    const text = e.inputType.startsWith('insertText') || e.inputType === 'insertReplacementText' ? e.data : null;
+    if (text) {
+      const t = document.createTextNode(text);
+      const r = this.sel.getRange();
+      r.insertNode(t);
+      r.setStartAfter(t);
+      r.collapse(true);
+      this.sel.setRange(r);
+    }
+    this.commit();
+  }
+
   /** 단축키 + Enter 처리 */
   #handleKeydown(e) {
     const mod = e.ctrlKey || e.metaKey;
@@ -322,14 +397,37 @@ export class JmEditor {
       const key = e.key.toLowerCase();
       const map = { b: 'bold', i: 'italic', u: 'underline', z: e.shiftKey ? 'redo' : 'undo', y: 'redo' };
       if (map[key]) { e.preventDefault(); this.exec(map[key]); return; }
+      // 전체 선택: 블록 안 편집 영역(배치 글 칸·표 셀·제목 등)이면 그 영역만 (브라우저는 바깥 에디터 전체를 선택해 블록까지 지워짐)
+      if (key === 'a' && !e.shiftKey && !e.altKey) {
+        const host = this.#innerEditHost();
+        if (host) {
+          e.preventDefault();
+          const r = document.createRange();
+          r.selectNodeContents(host);
+          this.sel.setRange(r);
+          return;
+        }
+      }
     }
 
     if (e.key === 'Escape' && this.table.selection) { this.table.clearSelection(); return; }
     // 표 셀 안에서 Tab → 셀 이동
     if (e.key === 'Tab' && this.table.handleTab(e.shiftKey)) { e.preventDefault(); return; }
 
+    // 구조 모드: Backspace·Delete 가 다른 구조 컨테이너나 dt·dd 경계를 넘어 합치지 않게
+    if ((e.key === 'Backspace' || e.key === 'Delete') && this.structure && !this.composing && this.#blocksMerge(e.key === 'Delete')) {
+      e.preventDefault();
+      return;
+    }
+
     if (e.key === 'Enter' && !e.shiftKey && !this.composing) {
       const block = this.sel.getBlock();
+      // 구조 모드: dt·dd·캡션·글만 있는 div 에서는 새 블록 대신 줄바꿈 (브라우저 기본은 dd 를 복제함)
+      if (this.sel.isSoftBreakBlock(block)) {
+        e.preventDefault();
+        this.commands.insertLineBreak();
+        return;
+      }
       // 빈 li 에서 Enter → 목록 탈출
       if (block?.tagName === 'LI' && block.textContent.replace(ZWSP, '') === '') {
         e.preventDefault();
@@ -337,7 +435,7 @@ export class JmEditor {
         return;
       }
       // 제목/인용에서 Enter → 다음 줄은 p 로 (브라우저 기본은 같은 태그를 복제함)
-      if (block && /^(H1|H2|H3|BLOCKQUOTE)$/.test(block.tagName)) {
+      if (block && /^(H[1-6]|BLOCKQUOTE)$/.test(block.tagName)) {
         const range = this.sel.getRange();
         if (range && range.collapsed) {
           const atEnd = (() => {
@@ -381,7 +479,7 @@ export class JmEditor {
     // 카카오맵 「지도 퍼가기」 코드를 본문에 붙여 넣으면 지도 블록으로
     if (isRoughmapCode(text)) { this.map.insertFromCode(text); return; }
     if (html) {
-      this.commands.insertHTML(Sanitizer.clean(html));
+      this.commands.insertHTML(Sanitizer.clean(html, this.structure));
     } else if (text) {
       // 한 줄이면 커서 위치에 글자로, 여러 줄이면 줄마다 단락으로 (현재 문단을 나눠 그 사이에)
       const lines = text.split(/\r?\n/);
@@ -459,6 +557,26 @@ export class JmEditor {
   }
 
   /** 편집 중 링크가 열리지 않도록 href 를 보관 속성으로 옮긴다 (setHTML / commit / restore 후 호출) */
+  /**
+   * 브라우저가 문단 합치기 등에서 끼워 넣는 스타일 span(크롬의 font-family: inherit 등) 정리 — 커서가 있는 블록만.
+   * 허용되지 않는 style 속성은 빼고(저장 규칙 Sanitizer.cleanStyle 과 같게), 남는 것이 없으면 span 을 푼다.
+   */
+  #cleanStraySpans() {
+    const block = this.sel.getBlock();
+    if (!block) return;
+    block.querySelectorAll('span[style]').forEach((sp) => {
+      // 속성 하나씩 검사해 허용되지 않는 것만 뺀다 (남은 style 의 표기는 브라우저 그대로)
+      Array.from(sp.style).forEach((name) => {
+        if (!Sanitizer.cleanStyle(`${name}: ${sp.style.getPropertyValue(name)}`)) sp.style.removeProperty(name);
+      });
+      if (sp.style.length) return;
+      sp.removeAttribute('style');
+      if (sp.attributes.length) return; // 다른 속성이 있으면 span 은 둔다
+      while (sp.firstChild) sp.parentNode.insertBefore(sp.firstChild, sp);
+      sp.remove();
+    });
+  }
+
   #neutralizeLinks() {
     this.root.querySelectorAll('a[href]').forEach((a) => JmEditor.setHref(a, a.getAttribute('href')));
   }
@@ -485,7 +603,8 @@ export class JmEditor {
     Array.from(r.childNodes).forEach((n) => {
       // 블록 사이 줄바꿈 같은 공백 텍스트는 단락으로 만들지 않고 제거
       if (n.nodeType === Node.TEXT_NODE && !n.textContent.replace(/[\s\u200B]/g, '')) { n.remove(); return; }
-      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type));
+      // 구조 모드에서는 허용된 구조 태그(section·div·dl 등)도 루트 블록으로 인정 (p 로 감싸면 구조가 깨짐)
+      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || this.sel.isStructureTag(n) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type));
       if (!isBlock) {
         const p = document.createElement('p');
         r.insertBefore(p, n);

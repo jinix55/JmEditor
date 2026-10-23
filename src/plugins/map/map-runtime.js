@@ -43,7 +43,8 @@ export function parseRoughmap(code) {
  */
 export function isRoughmapCode(text) {
   const t = String(text || '').trim();
-  return t.length < 3000 && /^(<!--|<div[^>]*daumRoughmapContainer|<script|new\s+daum\.roughmap)/i.test(t) && !!parseRoughmap(t);
+  // (\x3C 는 '<' — 데모처럼 HTML 의 script 태그 안에 그대로 넣어도 주석·스크립트 시작으로 읽히지 않게)
+  return t.length < 3000 && /^(\x3C!--|\x3Cdiv[^>]*daumRoughmapContainer|\x3Cscript|new\s+daum\.roughmap)/i.test(t) && !!parseRoughmap(t);
 }
 
 /** 카카오 약도 스크립트 로드 (이미 있으면 바로) */
@@ -60,7 +61,7 @@ export function loadRoughmap() {
     };
     const timer = setTimeout(() => { restore(); reject(new Error('지도 스크립트 시간 초과')); }, LOAD_TIMEOUT);
     const done = (err) => { clearTimeout(timer); restore(); if (err) reject(err); else resolve(); };
-    // 로더가 쓰는 <script src="…roughmapLander.js"> 를 실제 script 요소로 (카카오 주소일 때만 — 다른 write 는 원래대로)
+    // 로더가 쓰는 script 태그(src="…roughmapLander.js) 를 실제 script 요소로 (카카오 주소일 때만 — 다른 write 는 원래대로)
     // (로더는 페이지 프로토콜을 따라 http 주소를 만들기도 하므로 항상 https 로)
     function hook(...args) {
       const src = String(args[0]).match(/src="(?:https?:)?(\/\/[^"]+\.js)"/)?.[1];

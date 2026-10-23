@@ -17,6 +17,47 @@ import java.util.stream.Collectors;
 @Component
 public class HtmlSanitizer {
 
+    /** 플러그인 블록 종류 — 구조 정책을 적용하지 않는다 (클라이언트 Sanitizer 의 PLUGIN_TYPES 와 같음) */
+    private static final java.util.Set<String> PLUGIN_TYPES = java.util.Set.of("gallery", "slider", "buttons", "youtube", "layout", "map");
+    /** th[scope] 허용 값 (구조 모드) */
+    private static final java.util.Set<String> TH_SCOPES = java.util.Set.of("row", "col", "rowgroup", "colgroup");
+    /** 클라이언트와 같은 태그 별칭 (b→strong 등) — 정제 전에 바꾼다 */
+    private static final java.util.Map<String, String> TAG_ALIAS = java.util.Map.of("b", "strong", "i", "em", "strike", "s");
+
+    /** 기본 허용 태그 (구조 정책 전) — 플러그인 안에서 구조 전용 태그를 가려낼 때 */
+    private static final java.util.Set<String> BASE_TAGS = java.util.Set.of("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
+            "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe");
+
+    /** 요소가 플러그인 블록(div[data-type=gallery 등]) 안이거나 그 자체인지 */
+    private static boolean insidePlugin(Element el) {
+        for (Element a = el; a != null; a = a.parent()) {
+            if (a.tagName().equals("div") && PLUGIN_TYPES.contains(a.attr("data-type"))) return true;
+        }
+        return false;
+    }
+
+    /** 퍼블 구조 정책 (꺼져 있으면 지금 규칙) */
+    private final StructurePolicy policy;
+
+    /** 구조 정책 없이 (지금 규칙) */
+    public HtmlSanitizer() {
+        this(StructurePolicy.disabled());
+    }
+
+    /**
+     * @param policy 퍼블 구조 정책 (StructureConfig 가 application.yml 에서 만든 빈)
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    public HtmlSanitizer(StructurePolicy policy) {
+        this.policy = policy == null ? StructurePolicy.disabled() : policy;
+        this.safelist = baseSafelist();
+        if (this.policy.enabled()) {
+            // 구조 태그 + 모든 태그의 class(토큰 검사는 후처리) + th[scope]. 먼저 통과시켜야 후처리에서 고를 수 있다
+            for (String t : this.policy.tags()) safelist.addTags(t).addAttributes(t, "style");
+            safelist.addAttributes(":all", "class").addAttributes("th", "scope");
+        }
+    }
+
     /** 색상 값 형식: #hex, rgb(a)(), 색 이름 */
     private static final Pattern SAFE_COLOR = Pattern.compile("^(#[0-9a-fA-F]{3,8}|rgba?\\([\\d\\s.,%]+\\)|[a-zA-Z]+)$");
     /** style 속성에서 허용하는 CSS 속성과 값 형식 (클라이언트 Sanitizer 와 동일) */
@@ -30,7 +71,11 @@ public class HtmlSanitizer {
             "font-size", Pattern.compile("^([89]|[1-8]\\d|9[0-6])px$"),
             "list-style-type", Pattern.compile("^(disc|circle|square|decimal|decimal-leading-zero|lower-alpha|upper-alpha|lower-roman|upper-roman|hangul|hangul-consonant|none)$", Pattern.CASE_INSENSITIVE));
 
-    private final Safelist safelist = new Safelist()
+    private final Safelist safelist;
+
+    /** 기본 허용 목록 (구조 정책 전) */
+    private static Safelist baseSafelist() {
+        return new Safelist()
             .addTags("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
                      "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe")
             .addAttributes("a", "href", "target", "rel", "data-role", "data-style", "data-size",
@@ -53,11 +98,12 @@ public class HtmlSanitizer {
             .addAttributes("iframe", "src", "title", "allow", "allowfullscreen")
             .addProtocols("iframe", "src", "https")   // 유튜브 블록
             .addAttributes("p", "data-role")                                 // 갤러리·슬라이드 제목
-            .addProtocols("a", "href", "http", "https", "mailto")
+            .addProtocols("a", "href", "http", "https", "mailto", "tel")
             .addProtocols("img", "src", "http", "https", "data")
             .addEnforcedAttribute("a", "rel", "noopener noreferrer")
             .addEnforcedAttribute("a", "target", "_blank")
             .preserveRelativeLinks(true);
+    }
 
     /**
      * 프로토콜 검사용 가상 기준 주소.
@@ -110,8 +156,26 @@ public class HtmlSanitizer {
      */
     public String clean(String html) {
         if (html == null || html.isBlank()) return "";
-        String cleaned = Jsoup.clean(html, PROTOCOL_CHECK_BASE_URI, safelist, new Document.OutputSettings().prettyPrint(false));
+        // 태그 별칭: 클라이언트와 같게 b·i·strike → strong·em·s (Safelist 에 없어 글자만 남던 것을 맞춤)
+        Document pre = Jsoup.parseBodyFragment(html);
+        pre.outputSettings().prettyPrint(false); // 원문 공백 그대로
+        TAG_ALIAS.forEach((from, to) -> pre.select(from).tagName(to));
+        String cleaned = Jsoup.clean(pre.body().html(), PROTOCOL_CHECK_BASE_URI, safelist, new Document.OutputSettings().prettyPrint(false));
         Document doc = Jsoup.parseBodyFragment(cleaned);
+
+        // 구조 모드: class 는 허용 토큰만, th[scope] 는 허용 값만.
+        // 플러그인 블록 안은 정책 없이(클라이언트와 같게): class 없음, 구조 전용 태그는 벗김 (div 는 아래 div 처리에서 p 로)
+        if (policy.enabled()) {
+            for (Element el : doc.select("[class]")) {
+                String cls = insidePlugin(el) ? "" : policy.cleanClass(el.attr("class"));
+                if (cls.isEmpty()) el.removeAttr("class"); else el.attr("class", cls);
+            }
+            for (String t : policy.tags()) {
+                if (BASE_TAGS.contains(t)) continue;
+                for (Element el : doc.select(t)) if (insidePlugin(el)) el.unwrap();
+            }
+            for (Element th : doc.select("th[scope]")) if (!TH_SCOPES.contains(th.attr("scope")) || insidePlugin(th)) th.removeAttr("scope");
+        }
 
         // style 은 허용 속성·값 형식만 남김 (버튼 링크의 직접 색 --jm-btn 은 아래 cleanButton 에서 따로 처리)
         for (Element el : doc.select("[style]")) {
@@ -126,7 +190,8 @@ public class HtmlSanitizer {
             if (style.isEmpty()) el.removeAttr("style"); else el.attr("style", style);
         }
         // 스타일이 없는 span 은 의미 없으므로 언래핑
-        for (Element span : doc.select("span:not([style])")) span.unwrap();
+        // (구조 모드에서 class 가 남은 span 은 둔다 — 아이콘 등)
+        for (Element span : doc.select("span:not([style]):not([class])")) span.unwrap();
 
         // 글 감싸기 이미지: data-float 는 left/right, style 은 width 10~100% 만
         // data: 주소는 이미지(png·jpeg·gif·webp·svg) base64 만 — data:text/html 등 다른 형식은 src 제거
@@ -143,6 +208,9 @@ public class HtmlSanitizer {
 
         // 이미지+글 배치 블록: 속성·칸 정리 (아래 div 일괄 처리보다 먼저)
         for (Element box : doc.select("div[data-type=layout]")) cleanLayout(box);
+
+        // 번호 목록 시작 번호: 숫자 1~4자리만 (클라이언트 Sanitizer 와 같게)
+        for (Element ol : doc.select("ol[start]")) if (!ol.attr("start").matches("\\d{1,4}")) ol.removeAttr("start");
 
         // 인용 스타일: box(박스)·quote(따옴표)만, 세로선(line)은 기본값이라 속성 없음
         for (Element q : doc.select("blockquote[data-style]")) {
@@ -208,6 +276,14 @@ public class HtmlSanitizer {
                 if (!a.equals("left") && !a.equals("center") && !a.equals("right")) div.attr("data-align", "center");
                 continue;
             }
+            // 구조 모드: 플러그인이 아닌 div 는 그대로 두고 class·style 만 남긴다
+            if (policy.tags().contains("div") && !PLUGIN_TYPES.contains(div.attr("data-type")) && !insidePlugin(div)) {
+                String cls = div.attr("class"), st = div.attr("style");
+                div.clearAttributes();
+                if (!cls.isEmpty()) div.attr("class", cls);
+                if (!st.isEmpty()) div.attr("style", st);
+                continue;
+            }
             if (!"gallery".equals(div.attr("data-type"))) { div.tagName("p"); div.clearAttributes(); continue; }
             // data-cols 는 예전 cover 갤러리 호환용 — 있을 때만 1~6 으로 맞춰 남긴다
             int cols = parseIntOr(div.attr("data-cols"), 0);
@@ -229,6 +305,10 @@ public class HtmlSanitizer {
         for (Element p : doc.select("p[data-role]")) {
             if (p.parent() == null || !TITLED_BLOCKS.contains(p.parent().attr("data-type"))) p.removeAttr("data-role");
         }
+        // 최상위 공백 텍스트(블록 사이 줄바꿈 등)는 지운다 — 클라이언트 Sanitizer 와 같게
+        for (org.jsoup.nodes.TextNode tn : new java.util.ArrayList<>(doc.body().textNodes())) if (tn.isBlank()) tn.remove();
+        // 줄 맞춤(pretty print) 없이 — 켜 두면 dt·dd·div·caption 처럼 글만 있는 블록 안에 줄바꿈·들여쓰기가 들어가 글자가 바뀐다
+        doc.outputSettings().prettyPrint(false);
         return doc.body().html();
     }
 
