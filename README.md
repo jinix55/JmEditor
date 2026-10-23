@@ -35,17 +35,17 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 | `dist/jm-viewer.min.js` | 조회 화면용 런타임 (갤러리 배치·슬라이드 전환·카카오 지도). ESM 은 `jm-viewer.esm.js` |
 | `dist/jm-editor.config.js` | 설정 견본 (업로드 제한 등). 선택 사항 — 아래 [설정](#설정) 참고 |
 
-복사하지 않고 CDN(jsDelivr)으로 불러와도 됩니다. 주소의 `@v0.0.2` 은 릴리스 태그로, 내용이 고정됩니다.
+복사하지 않고 CDN(jsDelivr)으로 불러와도 됩니다. 주소의 `@v0.0.3` 은 릴리스 태그로, 내용이 고정됩니다.
 
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.2/dist/jm-editor.css">
-<script src="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.2/dist/jm-editor.min.js"></script>   <!-- 편집 화면 -->
-<script src="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.2/dist/jm-viewer.min.js"></script>   <!-- 조회 화면 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.3/dist/jm-editor.css">
+<script src="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.3/dist/jm-editor.min.js"></script>   <!-- 편집 화면 -->
+<script src="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.3/dist/jm-viewer.min.js"></script>   <!-- 조회 화면 -->
 ```
 
 항상 그 범위의 최신 릴리스를 받으려면 `@0.0`(0.0.x 최신)처럼 범위로 쓸 수 있습니다(새 릴리스 반영까지 최대 약 12시간).
 
-ES Module 은 `…@v0.0.2/dist/jm-editor.esm.js` 를 import 합니다. 설정은 CDN 의 `jm-editor.config.js` 대신 페이지에서 `window.JmEditorConfig` 로 지정하세요([설정](#설정)).
+ES Module 은 `…@v0.0.3/dist/jm-editor.esm.js` 를 import 합니다. 설정은 CDN 의 `jm-editor.config.js` 대신 페이지에서 `window.JmEditorConfig` 로 지정하세요([설정](#설정)).
 
 ### 편집 화면
 
@@ -76,7 +76,7 @@ API 없이 폼으로만 보낼 거면 `api` 옵션을 빼고 submit 직전에 `e
 **1. 페이지 전체에 적용** — `window.JmEditorConfig` 를 에디터 생성 전에 지정합니다. 에디터 스크립트를 불러온 뒤여도 생성 전이면 됩니다.
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.2/dist/jm-editor.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.3/dist/jm-editor.min.js"></script>
 <script>
   window.JmEditorConfig = { gallery: { maxFileSizeMB: 20, maxImagesPerPost: 30 } };
   const editor = new JmEditor.JmToolbarEditor(el, { /* ... */ });
