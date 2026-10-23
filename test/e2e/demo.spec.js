@@ -8,9 +8,11 @@ import fs from 'node:fs';
 // 데모는 src 전체를 한 파일에 담아 커서, 테스트를 동시에 많이 돌리면 늦게 뜰 수 있음
 test.describe.configure({ timeout: 60000 });
 
-// 외부 글꼴(Google Fonts) 요청은 막는다 — 네트워크 상태에 따라 데모가 늦게 뜨지 않게 (테스트 대상 아님)
+// 테스트 대상이 아닌 외부 자원은 네트워크에 맡기지 않는다 (상태에 따라 늦게 뜨거나, 유튜브 플레이어가 자체 오류를 냄)
+// - 데모 글꼴(Google Fonts) 요청은 막고, 예시 본문의 유튜브 iframe 은 빈 페이지로 응답
 test.beforeEach(async ({ page }) => {
-  await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort());
+  await page.route(/fonts\.googleapis\.com\/css2/, (route) => route.abort());
+  await page.route(/youtube(-nocookie)?\.com\/embed\//, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>stub</title>' }));
 });
 
 test('데모 페이지에서 에디터와 툴바가 생기고 오류가 없다', async ({ page }) => {
