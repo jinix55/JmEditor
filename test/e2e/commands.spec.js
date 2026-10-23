@@ -9,7 +9,7 @@ import { open, setHTML, html as rawHtml, caret, exec, paste } from './helpers.js
 const html = async (page) => (await rawHtml(page)).replace(/;"/g, '"');
 
 test.describe('기본 모드', () => {
-  test.beforeEach(async ({ page }) => { await open(page, ''); });
+  test.beforeEach(async ({ page }) => { await open(page, '?structure=0'); });
 
   test('문단 → 제목 → 인용 → 문단으로 바꿔도 정렬은 그대로', async ({ page }) => {
     await setHTML(page, '<p style="text-align: center;">가운데</p>');

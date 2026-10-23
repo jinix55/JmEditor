@@ -1,7 +1,7 @@
 /**
  * structure-policy — 퍼블리싱 구조 보존 정책 (구조 태그·class 허용 범위)
- * - 기본은 꺼짐: 지금처럼 class 를 지우고 div→p, 모르는 태그는 벗긴다.
- * - 켜면 tags 의 구조 태그와 허용 태그의 class(토큰 검사 통과분)를 남긴다. 플러그인 블록(div[data-type]) 안은 예외(지금 규칙).
+ * - 기본은 켜짐. 끄면(enabled: false) 예전 규칙: class 를 지우고 div→p, 모르는 태그는 벗긴다.
+ * - 켜져 있으면 tags 의 구조 태그와 허용 태그의 class(토큰 검사 통과분)를 남긴다. 플러그인 블록(div[data-type]) 안은 예외(지금 규칙).
  * - 서버 HtmlSanitizer 와 같은 규칙이어야 한다 (application.yml jm-editor.structure.*).
  *
  * 설정 (생성 옵션 structure > window.JmEditorConfig.structure > 기본값):
@@ -9,9 +9,9 @@
  *   classAllow·classDeny 의 'xxx-*' 는 접두어, 나머지는 정확한 이름.
  */
 
-/** 기본 정책 (꺼짐) */
+/** 기본 정책 (켜짐 — 끄려면 enabled: false, 서버도 같은 값으로) */
 export const STRUCTURE_DEFAULTS = Object.freeze({
-  enabled: false,
+  enabled: true,
   tags: Object.freeze(['section', 'article', 'aside', 'div', 'dl', 'dt', 'dd', 'figure', 'figcaption', 'caption']),
   classPattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
   classAllow: null,

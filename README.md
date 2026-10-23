@@ -14,7 +14,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 - 이미지 슬라이드 — 이미지가 자동으로 넘어가는 블록(서식). 간격(수동/2~8초)·비율·인디케이터(점/숫자/막대/없음, 하단 좌/중/우)·폭·정렬, 썸네일로 선택·순서 변경. 뷰어에는 `slider-runtime.js` 필요
 - 유튜브 — 주소를 넣으면 16:9 영상 블록이 들어갑니다. 폭(100 / 75 / 50%)과 정렬 선택, ⠿ 핸들로 이동
 - 카카오 지도 — 카카오맵 「지도 퍼가기」 코드를 블록 헤더나 본문에 붙여 넣으면 지도가 들어갑니다. 앱 키·도메인 등록이 필요 없고, 높이(300 / 400 / 500) 선택, 장소명은 자동으로 채워집니다. 서식 「오시는 길」([사용법](#카카오-지도))
-- 퍼블리싱 구조 보존(선택) — 켜면 `section`·`div`·`dl` 같은 구조와 class 가 그대로 남고, 그 안의 글을 일반 본문처럼 고칩니다([사용법](#퍼블리싱-구조-보존-classsection-등))
+- 퍼블리싱 구조 보존(기본 켜짐) — `section`·`div`·`dl` 같은 구조와 class 가 그대로 남고, 그 안의 글을 일반 본문처럼 고칩니다([사용법](#퍼블리싱-구조-보존-classsection-등))
 - 표 — 툴바에서 N×M 격자로 크기를 골라 삽입. 셀을 드래그(또는 Shift+클릭)하면 범위 선택. 우클릭 메뉴에서 행 / 열 추가·삭제·이동, 머리글 행·열 전환, 셀 병합·분할, 가로·세로 정렬, 셀·행 배경색, 표 폭·테두리. 셀 경계를 끌면 열 너비·행 높이 조절. 왼쪽 위 ⠿ 핸들을 끌어 위치 이동
 - 이미지 갤러리 블록 — 사진을 여러 장 올리면 원본 비율을 유지한 채 줄 전체를 채우도록 자동 배치합니다(세로 사진이 섞여도 줄 높이가 같고, 마지막 줄은 늘리지 않고 왼쪽 정렬). 사진은 드래그로 순서 변경, 선택 후 교체·삭제. 줄 높이·간격은 CSS 변수로 디자인에서 정합니다. 업로드 제한(jpg·png·gif·webp, 파일당 10MB, 1회 10장, 글당 50장 또는 100MB)과 긴 변 2000px 초과 시 축소(GIF 제외)는 설정 파일로 바꿉니다. 헤더의 ⠿ 핸들로 블록 이동, 제목은 선택 사항, 사진별 캡션은 없음
 - 서식(템플릿) 삽입 — 서버에서 받아온 HTML 조각을 골라 본문에 넣습니다. 서식 관리는 별도 화면에서
@@ -228,26 +228,34 @@ initSliders(document.querySelector('.jm-content'));
 
 ### 퍼블리싱 구조 보존 (class·section 등)
 
-기본으로는 저장 규칙이 `class` 를 지우고 `div` 를 `p` 로 바꾸며 `section`·`dl` 같은 구조 태그를 벗깁니다. 퍼블리싱 화면처럼 구조와 class 가 필요하면 **클라이언트와 서버 양쪽에서** 구조 정책을 켭니다. 한쪽만 켜면 저장할 때 구조가 사라집니다.
+구조 모드는 **기본으로 켜져 있습니다**. 퍼블리싱 구조(`section`·`div`·`dl` 등)와 class 가 그대로 남습니다. 끄면(`enabled: false`) 예전 규칙대로 `class` 를 지우고 `div` 를 `p` 로 바꾸며 구조 태그를 벗깁니다. **클라이언트와 서버는 같은 값이어야** 합니다 — 한쪽만 끄면 저장할 때 구조가 사라집니다.
+
+| 어디서 | 방법 |
+|---|---|
+| 페이지 전체 | `window.JmEditorConfig = { structure: { enabled: false } }` (`jm-editor.config.js` 또는 페이지 스크립트) |
+| 에디터별 (우선) | `new JmToolbarEditor(el, { structure: { enabled: false } })` |
+| 서버 | `application.yml` → `jm-editor.structure.enabled: false` (생략하면 켜짐) |
+
+세부 범위 설정:
 
 ```js
 window.JmEditorConfig = {
   structure: {
-    enabled: true,
+    enabled: true,      // 기본값
     tags: ['section', 'article', 'aside', 'div', 'dl', 'dt', 'dd', 'figure', 'figcaption', 'caption'], // 허용할 구조 태그
     classAllow: ['tit-*', 'box-gray'], // 생략하면 이름 형식만 검사 (운영 사이트는 목록으로 좁히기를 권장)
     classDeny: ['btn-admin*'],
   },
 };
-// 또는 에디터별: new JmToolbarEditor(el, { structure: { enabled: true } })
+// 또는 에디터별: new JmToolbarEditor(el, { structure: { classAllow: [...] } })
 ```
 
 - 구조 태그와 모든 허용 태그의 `class`(이름 형식·목록 검사를 통과한 것만), `th[scope]`, `caption` 이 남습니다. `id`·`on*`·임의 `data-*`·script 는 열리지 않습니다.
 - 에디터가 쓰는 이름(`jm-*`, `is-selected` 등)은 항상 지웁니다. 블록 기능(갤러리·슬라이드·버튼·유튜브·이미지 + 글·지도) 안은 지금 규칙 그대로입니다.
 - 서버는 `application.yml` 의 `jm-editor.structure.*` 로 같은 값을 줍니다([서버 연동 가이드](server/spring-boot/README.md)).
-- 데모에서 바로 볼 수 있습니다: 데모 주소 뒤에 `?structure=1` 을 붙이고 「퍼블 샘플 불러오기」에서 화면을 고르세요.
+- 데모에서 바로 볼 수 있습니다: 「퍼블 샘플 불러오기」에서 화면을 고르세요. 끈 상태와 비교하려면 주소 뒤에 `?structure=0`.
 
-편집할 때의 규칙 (구조 모드에서만 — 기본 모드는 지금 그대로):
+편집할 때의 규칙 (구조 모드가 켜져 있을 때 — 끄면 예전 동작):
 
 | 동작 | 규칙 |
 |---|---|
@@ -329,7 +337,7 @@ npx playwright install chromium webkit
 npm run test:e2e
 ```
 
-`test/e2e/` 에 기본 기능 회귀 테스트와 퍼블 구조 모드 테스트(정리 규칙·편집·키 입력)가 있고, 같은 테스트를 구조 모드를 켠 채로도 돌립니다(`chromium-structure`). `test/fixtures/publisher/` 의 샘플 HTML 을 정리한 기대 결과(`expected/`)는 서버 `HtmlSanitizer` 테스트도 같은 파일로 비교합니다.
+`test/e2e/` 에 기본 기능 회귀 테스트와 퍼블 구조 모드 테스트(정리 규칙·편집·키 입력)가 있고, 같은 테스트를 구조 모드를 끈 채로도 돌립니다(`chromium-off`). `test/fixtures/publisher/` 의 샘플 HTML 을 정리한 기대 결과(`expected/`)는 서버 `HtmlSanitizer` 테스트도 같은 파일로 비교합니다.
 
 ## 라이선스
 
