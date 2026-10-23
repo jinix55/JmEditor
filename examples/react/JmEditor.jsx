@@ -1,7 +1,7 @@
 /**
  * React / Next.js 예시 — 편집 컴포넌트(JmEditor)와 조회 컴포넌트(JmContent)
  * - 편집: 바닐라와 같은 JmToolbarEditor(툴바·서식·갤러리·버튼·표·HTML 보기 등 전체 기능)를 그대로 감싼다.
- * - 조회: 저장된 HTML 을 .jm-content 에 출력하고 뷰어 런타임(갤러리 배치·슬라이드)을 초기화한다.
+ * - 조회: 저장된 HTML 을 .jm-content 에 출력하고 뷰어 런타임(갤러리 배치·슬라이드·카카오 지도)을 초기화한다.
  * - Next.js App Router 에서는 'use client' 필요 (window/document 사용).
  * - 설치: npm i github:jinix55/JmEditor
  */
@@ -78,7 +78,7 @@ export const JmEditor = forwardRef(function JmEditor(
  */
 export function JmContent({ html }) {
   const ref = useRef(null);
-  // 본문이 바뀔 때마다 뷰어 런타임 다시 초기화 (갤러리 배치·슬라이드 전환)
+  // 본문이 바뀔 때마다 뷰어 런타임 다시 초기화 (갤러리 배치·슬라이드 전환·카카오 지도)
   useEffect(() => initViewer(ref.current), [html]);
   return <div ref={ref} className="jm-content" dangerouslySetInnerHTML={{ __html: html }} />;
 }

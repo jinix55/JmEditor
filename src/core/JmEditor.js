@@ -16,6 +16,8 @@ import { EmbedCommands, EMBED_LAYER_CLASS } from '../plugins/embed/EmbedCommands
 import { ButtonsCommands, BUTTONS_LAYER_CLASS } from '../plugins/buttons/ButtonsCommands.js';
 import { SliderCommands, SLIDER_LAYER_CLASS } from '../plugins/slider/SliderCommands.js';
 import { LayoutCommands, LAYOUT_LAYER_CLASS } from '../plugins/layout/LayoutCommands.js';
+import { MapCommands, MAP_LAYER_CLASS } from '../plugins/map/MapCommands.js';
+import { isRoughmapCode } from '../plugins/map/map-runtime.js';
 import { ImageCommands } from '../plugins/image/ImageCommands.js';
 import { History } from './History.js';
 import { BlockDrag } from './BlockDrag.js';
@@ -62,6 +64,7 @@ export class JmEditor {
     this.buttons = new ButtonsCommands(this);
     this.slider = new SliderCommands(this);
     this.layout = new LayoutCommands(this); // 이미지+글 배치 블록
+    this.map = new MapCommands(this);       // 카카오 지도(퍼가기) 블록
     this.image = new ImageCommands(this);   // 본문 이미지 글 감싸기·크기 조절
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
 
@@ -85,6 +88,7 @@ export class JmEditor {
    *                      |youtube (value: 유튜브 주소 또는 동영상 ID)
    *                      |buttons (value: {align} — 버튼 그룹 블록 삽입)
    *                      |slider (value: {interval, ratio} — 이미지 슬라이드 블록 삽입)
+   *                      |map (value: 카카오맵 퍼가기 코드 — 없으면 빈 지도 블록. 코드가 틀리면 false)
    *                      |layout (value: 'side'|'one'|'diagonal'|'pair' 또는 {preset, variant} — 이미지+글 배치 블록 삽입)
    * @param {*} [value] link 의 url, image 의 {src, alt}, table 의 {rows, cols, header}
    */
@@ -116,6 +120,7 @@ export class JmEditor {
       youtube: () => this.embed.insertYouTube(value),
       buttons: () => c.insertBlockHTML(ButtonsCommands.template(value?.align)),
       slider: () => c.insertBlockHTML(SliderCommands.template(value?.interval, value?.ratio)),
+      map: () => (value ? this.map.insertFromCode(value) : (c.insertBlockHTML(MapCommands.template()), true)),
       color: () => c.setStyle('color', value ?? null),
       bgColor: () => c.setStyle('background-color', value ?? null),
       fontSize: () => c.setStyle('font-size', value ?? null),
@@ -150,6 +155,7 @@ export class JmEditor {
     html = ButtonsCommands.unwrapHTML(html);
     html = SliderCommands.unwrapHTML(html);
     html = LayoutCommands.unwrapHTML(html);
+    html = MapCommands.unwrapHTML(html);
     html = ImageCommands.unwrapHTML(html);
     html = JmEditor.#restoreLinks(html);
     return BlockDrag.cleanHTML(html);
@@ -166,6 +172,7 @@ export class JmEditor {
     this.buttons.wrapAll();
     this.slider.wrapAll();
     this.layout.wrapAll();
+    this.map.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
@@ -186,6 +193,12 @@ export class JmEditor {
     return { ...this.commands.getState(), ...this.table.getState() };
   }
 
+  /** 자동 보정 반영: 되돌리기 단계 없이 마지막 기록을 덮어쓰고 onChange 호출 (지도 장소명 자동 채우기 등) */
+  amend() {
+    this.history.amend();
+    this.#emitChange();
+  }
+
   /** 변경 확정: 히스토리 기록 + onChange 호출. Commands 가 명령 끝에 호출한다. */
   commit() {
     this.table.wrapAll(); // 붙여넣기 등으로 들어온 표도 레이어로
@@ -194,6 +207,7 @@ export class JmEditor {
     this.buttons.wrapAll();
     this.slider.wrapAll();
     this.layout.wrapAll();
+    this.map.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.history.push();
@@ -346,6 +360,8 @@ export class JmEditor {
 
   /** 붙여넣기: 이미지 파일이면 업로드, HTML 이면 sanitize, 아니면 텍스트 */
   async #handlePaste(e) {
+    // 블록 헤더의 입력란(버튼 주소·지도 코드 등)에는 브라우저 기본 붙여넣기
+    if (e.target.closest?.('input, textarea, select')) return;
     e.preventDefault();
     const cd = e.clipboardData;
     const imageItem = Array.from(cd.items || []).find((i) => i.type.startsWith('image/'));
@@ -362,6 +378,8 @@ export class JmEditor {
       if (plain) this.commands.insertHTML(escape(plain.replace(/\s*\r?\n\s*/g, ' ')));
       return;
     }
+    // 카카오맵 「지도 퍼가기」 코드를 본문에 붙여 넣으면 지도 블록으로
+    if (isRoughmapCode(text)) { this.map.insertFromCode(text); return; }
     if (html) {
       this.commands.insertHTML(Sanitizer.clean(html));
     } else if (text) {
@@ -467,7 +485,7 @@ export class JmEditor {
     Array.from(r.childNodes).forEach((n) => {
       // 블록 사이 줄바꿈 같은 공백 텍스트는 단락으로 만들지 않고 제거
       if (n.nodeType === Node.TEXT_NODE && !n.textContent.replace(/[\s\u200B]/g, '')) { n.remove(); return; }
-      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout'].includes(n.dataset?.type));
+      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type));
       if (!isBlock) {
         const p = document.createElement('p');
         r.insertBefore(p, n);
@@ -487,6 +505,7 @@ export class JmEditor {
     this.buttons.wrapAll();
     this.slider.wrapAll();
     this.layout.wrapAll();
+    this.map.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.sel.placeCursor(this.root.lastChild || this.root, true);

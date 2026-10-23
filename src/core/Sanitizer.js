@@ -195,6 +195,9 @@ export class Sanitizer {
     // 이미지+글 배치 블록: div[data-type=layout] 안에는 배치 순서대로 이미지 칸·글 칸만
     if (tag === 'div' && node.getAttribute('data-type') === 'layout') return Sanitizer.#cleanLayout(node);
 
+    // 카카오 지도 블록: 속성만 (안의 내용은 런타임이 그린 것이라 버림)
+    if (tag === 'div' && node.getAttribute('data-type') === 'map') return Sanitizer.#cleanMap(node);
+
     tag = TAG_ALIAS[tag] || tag;
 
     // 허용되지 않은 태그 → 자식만 모아서 반환(언래핑)
@@ -277,6 +280,29 @@ export class Sanitizer {
     const w = m ? +m[1] : 0;
     if (w >= 10 && w <= 100) img.setAttribute('style', `width: ${w}%`);
     else img.removeAttribute('style');
+  }
+
+  /**
+   * 카카오 지도(퍼가기) 블록: timestamp(숫자)·key(영문·숫자)·높이(300|400|500)·장소명(100자)만 남긴다.
+   * 값이 없으면 빈 블록(에디터에서 코드 입력 대기) — 조회 화면에서는 CSS 로 숨김
+   * @param {Element} node
+   * @returns {HTMLElement}
+   */
+  static #cleanMap(node) {
+    const b = document.createElement('div');
+    b.setAttribute('data-type', 'map');
+    b.setAttribute('data-provider', 'kakao-roughmap');
+    const ts = node.getAttribute('data-timestamp') || '';
+    const key = node.getAttribute('data-key') || '';
+    if (/^\d{10,16}$/.test(ts) && /^[A-Za-z0-9]{2,32}$/.test(key)) {
+      b.setAttribute('data-timestamp', ts);
+      b.setAttribute('data-key', key);
+    }
+    const h = node.getAttribute('data-height');
+    b.setAttribute('data-height', ['300', '400', '500'].includes(h) ? h : '400');
+    const title = (node.getAttribute('data-title') || '').replace(/\s+/g, ' ').trim().slice(0, 100);
+    if (title) b.setAttribute('data-title', title);
+    return b;
   }
 
   /**

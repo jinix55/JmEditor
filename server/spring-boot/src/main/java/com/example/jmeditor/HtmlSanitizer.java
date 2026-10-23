@@ -48,7 +48,8 @@ public class HtmlSanitizer {
             .addAttributes("th", "style", "colspan", "rowspan")
             .addAttributes("span", "style")
             .addAttributes("div", "data-type", "data-cols", "data-auto", "data-layout", "data-align", "data-width", "data-interval", "data-ratio", "data-indicator", "data-indicator-pos",
-                           "data-preset", "data-variant", "data-split", "data-cell")   // 이미지+글 배치 블록
+                           "data-preset", "data-variant", "data-split", "data-cell",    // 이미지+글 배치 블록
+                           "data-provider", "data-timestamp", "data-key", "data-height", "data-title") // 카카오 지도 블록
             .addAttributes("iframe", "src", "title", "allow", "allowfullscreen")
             .addProtocols("iframe", "src", "https")   // 유튜브 블록
             .addAttributes("p", "data-role")                                 // 갤러리·슬라이드 제목
@@ -80,6 +81,10 @@ public class HtmlSanitizer {
 
     /** img src 에 허용하는 data: 주소: 이미지 base64 만 (img 안의 svg 는 스크립트가 실행되지 않아 허용, data:text/html 등은 제거) */
     private static final Pattern DATA_IMAGE = Pattern.compile("^data:image/(png|jpeg|jpg|gif|webp|svg\\+xml);base64,", Pattern.CASE_INSENSITIVE);
+
+    /** 카카오 지도 블록 값 형식 */
+    private static final Pattern MAP_TIMESTAMP = Pattern.compile("^\\d{10,16}$");
+    private static final Pattern MAP_KEY = Pattern.compile("^[A-Za-z0-9]{2,32}$");
 
     /** 글 감싸기 이미지 폭: 10~100 % 정수 */
     private static final Pattern IMG_WIDTH = Pattern.compile("^width:\\s*(\\d{1,3})%$");
@@ -192,6 +197,7 @@ public class HtmlSanitizer {
                 if (!a.equals("left") && !a.equals("center") && !a.equals("right")) div.attr("data-align", "center");
                 continue;
             }
+            if ("map".equals(div.attr("data-type"))) { cleanMap(div); continue; }
             if ("youtube".equals(div.attr("data-type"))) {
                 if (div.selectFirst("> iframe") == null) { div.remove(); continue; }
                 for (Element child : div.children()) if (!child.tagName().equals("iframe")) child.remove();
@@ -224,6 +230,27 @@ public class HtmlSanitizer {
             if (p.parent() == null || !TITLED_BLOCKS.contains(p.parent().attr("data-type"))) p.removeAttr("data-role");
         }
         return doc.body().html();
+    }
+
+    /**
+     * 카카오 지도(퍼가기) 블록 정리: 안의 내용은 버리고 속성만 남긴다 (지도는 조회 화면의 뷰어 런타임이 그림).
+     * timestamp 는 숫자 10~16자리, key 는 영문·숫자 2~32자 — 둘 중 하나라도 틀리면 둘 다 지운다(빈 블록, 조회 화면에서 숨김).
+     * 높이는 300·400·500 (기본 400), 장소명은 공백 정리 후 100자까지. (클라이언트 Sanitizer 와 같은 규칙)
+     */
+    private static void cleanMap(Element div) {
+        String ts = div.attr("data-timestamp"), key = div.attr("data-key");
+        String h = div.attr("data-height");
+        String title = div.attr("data-title").replaceAll("(?U)\\s+", " ").strip(); // (?U): 유니코드 공백까지 (클라이언트 \s 와 같게)
+        div.empty();
+        div.clearAttributes();
+        div.attr("data-type", "map");
+        div.attr("data-provider", "kakao-roughmap");
+        if (MAP_TIMESTAMP.matcher(ts).matches() && MAP_KEY.matcher(key).matches()) {
+            div.attr("data-timestamp", ts);
+            div.attr("data-key", key);
+        }
+        div.attr("data-height", java.util.Set.of("300", "400", "500").contains(h) ? h : "400");
+        if (!title.isEmpty()) div.attr("data-title", title.length() > 100 ? title.substring(0, 100) : title);
     }
 
     /**

@@ -70,9 +70,9 @@ spring:
 | 파일 | 내용 |
 |---|---|
 | `schema-postgresql.sql` | `editor_content`(본문), `editor_format`(서식) 테이블 — PostgreSQL |
-| `sample-formats-postgresql.sql` | 서식 샘플 데이터 13건 (클라이언트 기본 서식 `SAMPLE_FORMATS` 와 같은 내용) — PostgreSQL |
+| `sample-formats-postgresql.sql` | 서식 샘플 데이터 15건 (클라이언트 기본 서식 `SAMPLE_FORMATS` 와 같은 내용) — PostgreSQL |
 | `schema-mariadb.sql` | 같은 테이블 — MariaDB 10.3+ / MySQL 8+ (utf8mb4, 본문·서식 HTML 은 `MEDIUMTEXT`) |
-| `sample-formats-mariadb.sql` | 같은 서식 샘플 13건 — MariaDB / MySQL |
+| `sample-formats-mariadb.sql` | 같은 서식 샘플 15건 — MariaDB / MySQL |
 
 ```bash
 # PostgreSQL
@@ -144,6 +144,7 @@ MariaDB 의 `TEXT` 는 64KB 까지라 본문(최대 200만 자)이 잘릴 수 �
 | slider | 제목 `p[data-role=title]`, `img` | data-interval 0~60000 (기본 3000), data-ratio 16:9/4:3/1:1/21:9, data-indicator dots/numbers/bars/none, data-indicator-pos bottom-center/bottom-left/bottom-right, data-width 100/75/50, data-align left/center/right (기본 center) |
 | buttons | `a` 만 (`data-role="button"` 강제) | data-align left/center/right (기본 center). 버튼 `data-style` primary/outline/soft/gray (기본 primary), `data-size` sm/lg, `data-color` green/red/orange/purple/gray/black (blue 는 기본값이라 제거), `data-icon` 16종(arrow·external·download·phone·mail·calendar·pin·search·play·check·info·heart·star·plus·chat·file), `data-icon-pos` right(아이콘이 있을 때만). 직접 색은 `style` 의 `--jm-btn: #rgb/#rrggbb` 만 남기고(테마 색보다 우선) 밝기로 `data-tone="light"` 를 다시 계산. 버튼이 없으면 블록 제거 |
 | youtube | `iframe` 하나 | data-width 100/75/50, data-align left/center/right (기본 center). 바로 아래 `iframe` 이 없으면 블록 제거 |
+| map | 없음 (안의 내용은 모두 버림) | data-provider `kakao-roughmap` 고정, data-timestamp 숫자 10~16자리 + data-key 영문·숫자 2~32자 (둘 중 하나라도 틀리면 둘 다 제거 — 빈 블록), data-height 300/400/500 (기본 400), data-title 공백 정리 후 100자까지 |
 | layout | `div[data-cell=image]`(img 1장만), `div[data-cell=text]`(문단·제목·목록·인용·인라인만 — 표·이미지·iframe·블록 제거) | data-preset side/one/diagonal/pair (기본 side), data-variant 는 preset 별 허용 값(기본 첫 배치), data-split 20~80 의 5 배수만. 칸은 variant 의 저장 순서대로 다시 세우고 모자라면 빈 칸을 채우며 넘치면 버림 |
 
 - 제목은 내용이 비어 있으면 제거하고, 블록 바로 아래의 텍스트 노드도 제거합니다.

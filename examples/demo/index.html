@@ -75,6 +75,26 @@ div[data-type="youtube"] iframe{display:block;width:100%;aspect-ratio:16/9;borde
 .jm-embed-layer div[data-type="youtube"]{margin-top:8px;margin-bottom:8px}
 .jm-embed-layer div[data-type="youtube"][data-align="left"]{margin-left:8px}.jm-embed-layer div[data-type="youtube"][data-align="right"]{margin-right:8px}
 .jm-embed-cover{position:absolute;inset:0;cursor:default}
+/* 카카오 지도 블록 (퍼가기) */
+div[data-type="map"]{margin:0 0 8px}
+div[data-type="map"] .root_daum_roughmap{width:100%!important}
+.jm-content div[data-type="map"]:not([data-key]){display:none}
+.jm-map-canvas{position:relative}
+.jm-map-fallback{padding:14px 16px;border:1px solid var(--line);border-radius:6px;background:var(--code);color:var(--fg);font-size:14px;line-height:1.6}
+.jm-map-fallback a{color:var(--accent);font-weight:600}
+.jm-map-layer{margin:0 0 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);clear:both}
+.jm-map-header{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--accent-soft);border-radius:6px 6px 0 0}
+.jm-map-title{font-size:12px;font-weight:600}
+.jm-map-place{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted)}
+.jm-map-spacer{flex:1}
+.jm-map-code{flex:0 1 260px;min-width:140px;height:26px;padding:0 8px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg);font-size:12px}
+.jm-map-code.is-invalid{border-color:#d92d20;background:#fef3f2}
+.jm-map-help{height:26px;padding:0 8px;font-size:12px}
+.jm-map-height{height:26px;font-size:12px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--fg)}
+.jm-map-remove{color:#b42318}
+.jm-map-layer div[data-type="map"]{margin:8px}
+.jm-map-layer div[data-type="map"].is-empty::before{content:"카카오맵(map.kakao.com)에서 장소를 검색해 「공유 → 지도 퍼가기」로 복사한 코드를 위 칸에 붙여 넣으세요";display:block;padding:28px 16px;border:1px dashed var(--line);border-radius:6px;color:var(--muted);font-size:13px;text-align:center}
+.jm-map-cover{position:absolute;inset:0;z-index:5;cursor:default}
 /* ───────── 버튼 (저장 HTML 에도 필요 — 뷰어 공통) ─────────
    모양(data-style) × 색(data-color 테마 / style="--jm-btn: #hex" 직접 색). 테두리·오버·연한 배경은 고른 색에서 color-mix 로 계산.
    테마 색은 사이트에서 바꿀 수 있다: :root { --jm-btn-blue: #2563eb; … }
@@ -787,6 +807,9 @@ class Sanitizer {
     // 이미지+글 배치 블록: div[data-type=layout] 안에는 배치 순서대로 이미지 칸·글 칸만
     if (tag === 'div' && node.getAttribute('data-type') === 'layout') return Sanitizer.#cleanLayout(node);
 
+    // 카카오 지도 블록: 속성만 (안의 내용은 런타임이 그린 것이라 버림)
+    if (tag === 'div' && node.getAttribute('data-type') === 'map') return Sanitizer.#cleanMap(node);
+
     tag = TAG_ALIAS[tag] || tag;
 
     // 허용되지 않은 태그 → 자식만 모아서 반환(언래핑)
@@ -869,6 +892,29 @@ class Sanitizer {
     const w = m ? +m[1] : 0;
     if (w >= 10 && w <= 100) img.setAttribute('style', `width: ${w}%`);
     else img.removeAttribute('style');
+  }
+
+  /**
+   * 카카오 지도(퍼가기) 블록: timestamp(숫자)·key(영문·숫자)·높이(300|400|500)·장소명(100자)만 남긴다.
+   * 값이 없으면 빈 블록(에디터에서 코드 입력 대기) — 조회 화면에서는 CSS 로 숨김
+   * @param {Element} node
+   * @returns {HTMLElement}
+   */
+  static #cleanMap(node) {
+    const b = document.createElement('div');
+    b.setAttribute('data-type', 'map');
+    b.setAttribute('data-provider', 'kakao-roughmap');
+    const ts = node.getAttribute('data-timestamp') || '';
+    const key = node.getAttribute('data-key') || '';
+    if (/^\d{10,16}$/.test(ts) && /^[A-Za-z0-9]{2,32}$/.test(key)) {
+      b.setAttribute('data-timestamp', ts);
+      b.setAttribute('data-key', key);
+    }
+    const h = node.getAttribute('data-height');
+    b.setAttribute('data-height', ['300', '400', '500'].includes(h) ? h : '400');
+    const title = (node.getAttribute('data-title') || '').replace(/\s+/g, ' ').trim().slice(0, 100);
+    if (title) b.setAttribute('data-title', title);
+    return b;
   }
 
   /**
@@ -1034,6 +1080,14 @@ class History {
     if (this.undoStack.length > this.limit) this.undoStack.shift();
     this.redoStack = [];
     this.last = cur;
+  }
+
+  /**
+   * 사용자 동작이 아닌 자동 보정(지도 장소명 채우기 등)을 마지막 상태에 덮어쓴다.
+   * 되돌리기 단계를 만들지 않고 redo 도 지우지 않는다.
+   */
+  amend() {
+    this.last = this.getState();
   }
 
   /** 타이핑용 지연 기록 (input 이벤트마다 호출) */
@@ -5188,6 +5242,385 @@ class LayoutCommands {
 }
 
 /**
+ * map-runtime — 카카오맵 「지도 퍼가기」(약도) 블록을 실제 지도로 그린다 (에디터·미리보기·조회 공용)
+ * - 저장 HTML: <div data-type="map" data-provider="kakao-roughmap" data-timestamp="…" data-key="…" data-height="400" data-title="장소명"></div>
+ *   스크립트는 저장하지 않고, 이 런타임이 카카오 약도 스크립트를 불러와 그린다. 앱 키가 필요 없다.
+ * - 카카오 로더(roughmapLoader.js)는 document.write 로 본 스크립트를 넣으므로, 불러오는 동안만 write 를 가로채 script 요소로 붙인다.
+ * - 카카오 쪽은 같은 timestamp 의 지도를 하나만 관리하므로(instances[timestamp]) 같은 지도는 차례로 그린다.
+ * - 불러오지 못하면 장소명과 「카카오맵에서 보기」 링크 카드를 대신 보여 준다.
+ */
+
+/** 카카오맵이 지금 퍼가기 코드에 넣어 주는 로더 주소 (예전 코드의 ssl.daumcdn.net 로더와 같은 동작) */
+const LOADER_URL = 'https://t1.kakaocdn.net/kakaomapweb/roughmap/loader/prod/roughmapLoader.js';
+/** 로더가 불러오는 본 스크립트(roughmapLander.js)의 호스트 — 이 호스트만 허용 */
+const LANDER_HOST = 't1.kakaocdn.net';
+const LOAD_TIMEOUT = 10000;  // 스크립트 로드 제한 시간 (ms)
+const RENDER_TIMEOUT = 8000; // 지도 그림 완료 대기 제한 시간 (ms)
+/** 그린 결과를 담는 요소 (저장 HTML 에서는 제거) */
+const MAP_CANVAS_CLASS = 'jm-map-canvas';
+/** 높이 선택지 (px) */
+const MAP_HEIGHTS = Object.freeze(['300', '400', '500']);
+/** 값 형식: timestamp 는 숫자, key 는 영문·숫자 */
+const MAP_TIMESTAMP = /^\d{10,16}$/;
+const MAP_KEY = /^[A-Za-z0-9]{2,32}$/;
+
+let loading = null;            // 로더 Promise (한 번만)
+const chains = new Map();      // timestamp → 마지막 그리기 Promise (같은 지도 차례로)
+
+/**
+ * 「지도 퍼가기」 코드(HTML)나 timestamp·key 가 든 글에서 값을 뽑는다
+ * @param {string} code
+ * @returns {{timestamp: string, key: string}|null}
+ */
+function parseRoughmap(code) {
+  const s = String(code || '');
+  const ts = s.match(/["']?timestamp["']?\s*:\s*["']?(\d{10,16})/)?.[1] || s.match(/daumRoughmapContainer(\d{10,16})/)?.[1];
+  const key = s.match(/["']?key["']?\s*:\s*["']([A-Za-z0-9]{2,32})["']/)?.[1];
+  return ts && key ? { timestamp: ts, key } : null;
+}
+
+/**
+ * 붙여 넣은 글이 퍼가기 코드 그 자체인지 (본문 전체를 복사했는데 그 안에 코드가 섞인 경우는 제외)
+ * @param {string} text
+ * @returns {boolean}
+ */
+function isRoughmapCode(text) {
+  const t = String(text || '').trim();
+  return t.length < 3000 && /^(<!--|<div[^>]*daumRoughmapContainer|<script|new\s+daum\.roughmap)/i.test(t) && !!parseRoughmap(t);
+}
+
+/** 카카오 약도 스크립트 로드 (이미 있으면 바로) */
+function loadRoughmap() {
+  if (window.daum?.roughmap?.Lander) return Promise.resolve();
+  if (loading) return loading;
+  loading = new Promise((resolve, reject) => {
+    const origWrite = document.write;
+    const hadOwn = Object.prototype.hasOwnProperty.call(document, 'write'); // 다른 코드가 이미 감싸 둔 경우
+    // 되돌리기: 우리 hook 이 그대로 있을 때만 (그 사이 다른 코드가 다시 감쌌다면 건드리지 않음)
+    const restore = () => {
+      if (document.write !== hook) return;
+      if (hadOwn) document.write = origWrite; else delete document.write; // 지우면 원래 메서드(prototype)로 돌아감
+    };
+    const timer = setTimeout(() => { restore(); reject(new Error('지도 스크립트 시간 초과')); }, LOAD_TIMEOUT);
+    const done = (err) => { clearTimeout(timer); restore(); if (err) reject(err); else resolve(); };
+    // 로더가 쓰는 <script src="…roughmapLander.js"> 를 실제 script 요소로 (카카오 주소일 때만 — 다른 write 는 원래대로)
+    // (로더는 페이지 프로토콜을 따라 http 주소를 만들기도 하므로 항상 https 로)
+    function hook(...args) {
+      const src = String(args[0]).match(/src="(?:https?:)?(\/\/[^"]+\.js)"/)?.[1];
+      let url = null;
+      try { url = src ? new URL(`https:${src}`) : null; } catch { url = null; }
+      if (!url || url.hostname !== LANDER_HOST || !url.pathname.includes('/roughmapLander')) return origWrite.apply(document, args);
+      const rm = window.daum?.roughmap;
+      if (rm) { rm.url_protocal = 'https:'; rm.URL_KEY_DATA_LOAD_PRE = 'https://t1.kakaocdn.net/roughmap/'; }
+      const s = document.createElement('script');
+      s.charset = 'UTF-8';
+      s.src = url.href;
+      s.onload = () => (window.daum?.roughmap?.Lander ? done() : done(new Error('지도 스크립트 오류')));
+      s.onerror = () => done(new Error('지도 스크립트를 불러오지 못했습니다'));
+      document.head.appendChild(s);
+    }
+    document.write = hook;
+    const l = document.createElement('script');
+    l.charset = 'UTF-8';
+    l.src = LOADER_URL;
+    l.onload = () => { restore(); if (window.daum?.roughmap?.Lander) done(); };
+    l.onerror = () => done(new Error('지도 스크립트를 불러오지 못했습니다'));
+    document.head.appendChild(l);
+  });
+  loading.catch(() => { loading = null; }); // 실패하면 다음에 다시 시도
+  return loading;
+}
+
+/**
+ * 블록 하나를 그린다. 값이 없거나 형식이 틀리면 아무것도 그리지 않는다.
+ * @param {HTMLElement} block div[data-type=map]
+ * @param {{onTitle?: (title: string) => void}} [opts] onTitle: 지도 데이터에서 장소명을 얻었을 때 (에디터가 data-title 채움)
+ * @returns {Promise<boolean>} 지도를 그렸으면 true, 대신 카드를 보였거나 그릴 것이 없으면 false
+ */
+function renderMap(block, opts = {}) {
+  stripMapUI(block);
+  const { timestamp: ts, key } = block.dataset;
+  if (!MAP_TIMESTAMP.test(ts || '') || !MAP_KEY.test(key || '')) return Promise.resolve(false);
+  const canvas = document.createElement('div');
+  canvas.className = MAP_CANVAS_CLASS;
+  block.appendChild(canvas);
+  const prev = chains.get(ts) || Promise.resolve();
+  const job = prev.then(() => draw(block, canvas, ts, key, opts)).catch(() => { showFallback(block, canvas); return false; });
+  const tail = job.then(() => {}, () => {});
+  chains.set(ts, tail);
+  tail.then(() => { if (chains.get(ts) === tail) chains.delete(ts); }); // 마지막 그리기가 끝나면 정리
+  return job;
+}
+
+/** 실제 그리기: 컨테이너에 카카오가 찾는 id 를 잠시 붙여 Lander 를 만들고, 지도가 생길 때까지 기다린다 */
+async function draw(block, canvas, ts, key, opts) {
+  await loadRoughmap();
+  if (!canvas.isConnected) return false; // 그 사이 블록이 바뀜
+  const height = MAP_HEIGHTS.includes(block.dataset.height) ? block.dataset.height : '400';
+  const width = Math.round(canvas.clientWidth || block.clientWidth || 640);
+  const root = document.createElement('div');
+  root.className = 'root_daum_roughmap root_daum_roughmap_landing';
+  root.id = `daumRoughmapContainer${ts}`;
+  // 같은 id 가 문서에 이미 있으면 그쪽을 찾으므로 잠시 떼어 둔다
+  const clash = Array.from(document.querySelectorAll(`[id="${root.id}"]`));
+  clash.forEach((el) => el.removeAttribute('id'));
+  canvas.appendChild(root);
+  fixProtocolRelative(canvas);
+  const lander = new window.daum.roughmap.Lander({ timestamp: ts, key, mapWidth: String(width), mapHeight: height });
+  lander.render();
+  root.removeAttribute('id'); // Lander 는 생성 때 요소를 잡아 두므로 id 는 더 필요 없음
+  clash.forEach((el) => el.setAttribute('id', root.id));
+  // 블록이 지워지거나 다시 그려지면(canvas 분리) 기다리지 않고 끝낸다 — 같은 지도의 다음 그리기가 막히지 않게
+  await waitFor(() => !canvas.isConnected || root.querySelector('.wrap_map'), RENDER_TIMEOUT);
+  if (!canvas.isConnected) return false;
+  if (!root.querySelector('.wrap_map')) { showFallback(block, canvas); return false; }
+  const name = lander.roughmapData?.name || window.daum.roughmap.instances?.[ts]?.roughmapData?.name;
+  if (name) opts.onTitle?.(String(name));
+  return true;
+}
+
+/**
+ * 카카오 약도는 로고·마커 이미지를 「//t1.kakaocdn.net/…」 처럼 프로토콜 없이 넣는다.
+ * http(s) 가 아닌 페이지(file:// 로 연 데모 등)에서는 깨지므로 https 로 바꾼다. 나중에 추가되는 이미지도 감시
+ * @param {HTMLElement} canvas
+ */
+function fixProtocolRelative(canvas) {
+  if (/^https?:$/.test(location.protocol)) return;
+  const fix = (img) => { const src = img.getAttribute('src'); if (src?.startsWith('//')) img.setAttribute('src', `https:${src}`); };
+  const obs = new MutationObserver((ms) => ms.forEach((m) => {
+    if (m.type === 'attributes') fix(m.target);
+    m.addedNodes.forEach((n) => { if (n.nodeType !== 1) return; if (n.tagName === 'IMG') fix(n); n.querySelectorAll?.('img').forEach(fix); });
+  }));
+  obs.observe(canvas, { subtree: true, childList: true, attributes: true, attributeFilter: ['src'] });
+  canvas._fixObs = obs;
+}
+
+/** 조건이 참이 될 때까지 기다림 (제한 시간) */
+function waitFor(test, timeout) {
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const tick = () => {
+      if (test()) resolve(true);
+      else if (Date.now() - t0 > timeout) resolve(false);
+      else setTimeout(tick, 100);
+    };
+    tick();
+  });
+}
+
+/** 지도를 못 그렸을 때: 장소명 + 카카오맵 링크 카드 */
+function showFallback(block, canvas) {
+  if (!canvas.isConnected) return;
+  const title = (block.dataset.title || '').trim();
+  canvas.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = 'jm-map-fallback';
+  const label = document.createElement('span');
+  label.textContent = `📍 ${title || '카카오 지도'} — 지도를 불러오지 못했습니다.`;
+  const a = document.createElement('a');
+  a.href = title ? `https://map.kakao.com/link/search/${encodeURIComponent(title)}` : 'https://map.kakao.com/';
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.textContent = '카카오맵에서 보기';
+  card.append(label, ' ', a);
+  canvas.appendChild(card);
+}
+
+/** 그린 결과 제거 (저장 전·다시 그리기 전) */
+function stripMapUI(block) {
+  block.querySelectorAll(`:scope > .${MAP_CANVAS_CLASS}`).forEach((c) => { c._fixObs?.disconnect(); c.remove(); });
+}
+
+/**
+ * 영역 안의 지도 블록을 모두 그린다 (조회 화면·미리보기)
+ * @param {HTMLElement|Document} [root=document]
+ * @returns {() => void} 해제 함수 (그린 지도 제거)
+ */
+function initMaps(root = document) {
+  const blocks = Array.from(root.querySelectorAll('div[data-type="map"]'));
+  blocks.forEach((b) => renderMap(b));
+  return () => blocks.forEach(stripMapUI);
+}
+
+/**
+ * MapCommands — 카카오 지도 블록 (카카오맵 「지도 퍼가기」 코드로 만듦, 앱 키 불필요)
+ * - 저장 HTML: <div data-type="map" data-provider="kakao-roughmap" data-timestamp="…" data-key="…" data-height="400" data-title="장소명"></div>
+ *   지도는 map-runtime.js 가 그린다. 조회 화면에는 뷰어(JmViewer.initViewer)가 필요하다.
+ * - 에디터에서는 레이어(jm-map-layer)로 감싸 헤더(퍼가기 코드 입력 / 높이 / 삭제)를 붙인다.
+ *   지도 위에 투명 커버를 덮어 편집 중 클릭이 지도에 먹히지 않게 한다(지도 조작은 미리보기·조회에서).
+ * - 본문에 퍼가기 코드를 그대로 붙여 넣어도 지도 블록으로 바뀐다(JmEditor 붙여넣기에서 parseRoughmap 사용).
+ */
+
+const MAP_LAYER_CLASS = 'jm-map-layer';
+
+class MapCommands {
+  /** @param {import('../../core/JmEditor.js').JmEditor} editor */
+  constructor(editor) {
+    this.editor = editor;
+    this.sel = editor.sel;
+    this.root = editor.root;
+  }
+
+  /**
+   * 저장 형식 HTML. 값이 없으면 빈 블록(헤더에서 코드 입력)
+   * @param {{timestamp: string, key: string}|null} [code]
+   */
+  static template(code = null) {
+    const v = code ? ` data-timestamp="${code.timestamp}" data-key="${code.key}"` : '';
+    return `<div data-type="map" data-provider="kakao-roughmap"${v} data-height="400"></div>`;
+  }
+
+  /**
+   * 퍼가기 코드로 지도 블록 삽입. 코드가 아니면 false
+   * @param {string} code
+   */
+  insertFromCode(code) {
+    const parsed = parseRoughmap(code);
+    if (!parsed) return false;
+    this.editor.commands.insertBlockHTML(MapCommands.template(parsed));
+    return true;
+  }
+
+  // ───────────── 레이어 ─────────────
+
+  wrapAll() {
+    this.root.querySelectorAll('div[data-type="map"]').forEach((b) => {
+      if (b.parentNode?.classList?.contains(MAP_LAYER_CLASS)) return;
+      this.#wrap(b);
+    });
+  }
+
+  #wrap(block) {
+    const layer = document.createElement('div');
+    layer.className = MAP_LAYER_CLASS;
+    layer.contentEditable = 'false';
+    block.parentNode.insertBefore(layer, block);
+    layer.append(this.#buildHeader(block), block);
+    this.editor.blockDrag?.makeDraggable(block._handle, layer);
+    this.#render(block);
+    return layer;
+  }
+
+  #buildHeader(block) {
+    const h = document.createElement('div');
+    h.className = 'jm-map-header';
+    const handle = document.createElement('span');
+    handle.className = 'jm-block-handle'; handle.title = '끌어서 이동'; handle.textContent = '⠿';
+    block._handle = handle;
+    const title = document.createElement('span');
+    title.className = 'jm-map-title'; title.textContent = '카카오 지도';
+    const place = document.createElement('span');
+    place.className = 'jm-map-place';
+    block._placeEl = place;
+
+    // 퍼가기 코드 입력: 붙여 넣으면 바로 적용
+    const code = document.createElement('input');
+    code.type = 'text';
+    code.className = 'jm-map-code';
+    code.placeholder = '카카오맵 「지도 퍼가기」 코드를 붙여 넣으세요';
+    code.title = 'map.kakao.com 에서 장소 검색 → 공유 → 지도 퍼가기 → 코드 복사';
+    code.addEventListener('mousedown', (e) => e.stopPropagation());
+    const apply = () => {
+      const parsed = parseRoughmap(code.value);
+      code.classList.toggle('is-invalid', !!code.value.trim() && !parsed);
+      if (!parsed) return;
+      block.dataset.timestamp = parsed.timestamp;
+      block.dataset.key = parsed.key;
+      delete block.dataset.title; // 새 지도의 장소명은 다시 받아 온다
+      code.value = '';
+      this.#render(block);
+      this.editor.commit();
+    };
+    code.addEventListener('paste', () => setTimeout(apply)); // 붙여 넣은 값이 들어간 뒤
+    code.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } });
+
+    // 편집 영역 안의 링크는 열리지 않게 막혀 있으므로 버튼으로 새 창을 연다
+    const help = document.createElement('button');
+    help.type = 'button';
+    help.className = 'jm-btn jm-map-help';
+    help.textContent = '카카오맵 열기';
+    help.title = '장소 검색 → 공유 → 지도 퍼가기 → 코드 복사';
+    help.addEventListener('mousedown', (e) => e.preventDefault());
+    help.addEventListener('click', () => window.open('https://map.kakao.com/', '_blank', 'noopener'));
+
+    const height = document.createElement('select');
+    height.className = 'jm-map-height';
+    height.title = '지도 높이';
+    MAP_HEIGHTS.forEach((v) => { const o = document.createElement('option'); o.value = v; o.textContent = `높이 ${v}`; height.appendChild(o); });
+    height.value = MAP_HEIGHTS.includes(block.dataset.height) ? block.dataset.height : '400';
+    height.addEventListener('mousedown', (e) => e.stopPropagation());
+    height.addEventListener('change', () => { block.dataset.height = height.value; this.#render(block); this.editor.commit(); });
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'jm-btn jm-map-remove';
+    remove.textContent = '✕';
+    remove.title = '지도 삭제';
+    remove.addEventListener('mousedown', (e) => e.preventDefault());
+    remove.addEventListener('click', () => this.#delete(block));
+
+    const spacer = document.createElement('span');
+    spacer.className = 'jm-map-spacer';
+    h.append(handle, title, place, spacer, code, help, height, remove);
+    return h;
+  }
+
+  /**
+   * 지도 그리기 + 편집 중 클릭을 막는 커버.
+   * 장소명이 비어 있을 때만 지도 데이터의 장소명으로 채운다(Sanitizer 와 같은 정리). 자동 보정이라 되돌리기 단계는 만들지 않는다.
+   */
+  #render(block) {
+    block.classList.toggle('is-empty', !block.dataset.key);
+    if (block._placeEl) block._placeEl.textContent = block.dataset.title || '';
+    const job = renderMap(block, {
+      onTitle: (name) => {
+        const title = name.replace(/\s+/g, ' ').trim().slice(0, 100);
+        if (!title || block.dataset.title || !block.isConnected) return;
+        block.dataset.title = title;
+        if (block._placeEl) block._placeEl.textContent = title;
+        this.editor.amend();
+      },
+    });
+    MapCommands.#cover(block); // 불러오는 동안에도 지도 클릭을 막음
+    job.then(() => MapCommands.#cover(block)); // 대신 보이는 카드로 바뀌었을 때도
+  }
+
+  /** 그린 영역 위에 투명 커버 (없을 때만) */
+  static #cover(block) {
+    const canvas = block.querySelector(`:scope > .${MAP_CANVAS_CLASS}`);
+    if (!canvas || canvas.querySelector(':scope > .jm-map-cover')) return;
+    const cover = document.createElement('div');
+    cover.className = 'jm-map-cover';
+    cover.title = '지도 조작은 미리보기에서';
+    canvas.appendChild(cover);
+  }
+
+  #delete(block) {
+    const layer = block.parentNode;
+    const p = document.createElement('p');
+    p.appendChild(document.createElement('br'));
+    layer.replaceWith(p);
+    this.sel.placeCursor(p, false);
+    this.editor.commit();
+  }
+
+  /** 저장용 HTML 에서 레이어·그린 지도 제거 */
+  static unwrapHTML(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll(`.${MAP_LAYER_CLASS}`).forEach((layer) => {
+      const block = layer.querySelector('div[data-type="map"]');
+      if (!block) { layer.remove(); return; }
+      stripMapUI(block);
+      block.classList.remove('is-empty');
+      if (!block.getAttribute('class')) block.removeAttribute('class');
+      layer.replaceWith(block);
+    });
+    return tpl.innerHTML;
+  }
+}
+
+/**
  * JmEditor (코어)
  * - 프레임워크 독립. contenteditable 요소 하나를 받아 편집 기능을 붙인다.
  * - 툴바/업로드 UI 는 포함하지 않는다 → Thymeleaf(바닐라)나 React 래퍼가 이 클래스를 감싼다.
@@ -5196,7 +5629,6 @@ class LayoutCommands {
  *   const editor = new JmEditor(el, { onChange: html => ..., uploadImage: file => Promise<url> });
  *   editor.exec('bold');  editor.getHTML();  editor.setHTML(html);  editor.destroy();
  */
-
 
 const HREF_ATTR = 'data-jm-href'; // 편집 중 링크 주소 보관 속성 (href 는 제거해 어떤 환경에서도 열리지 않게)
 
@@ -5237,6 +5669,7 @@ class JmEditor {
     this.buttons = new ButtonsCommands(this);
     this.slider = new SliderCommands(this);
     this.layout = new LayoutCommands(this); // 이미지+글 배치 블록
+    this.map = new MapCommands(this);       // 카카오 지도(퍼가기) 블록
     this.image = new ImageCommands(this);   // 본문 이미지 글 감싸기·크기 조절
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
 
@@ -5260,6 +5693,7 @@ class JmEditor {
    *                      |youtube (value: 유튜브 주소 또는 동영상 ID)
    *                      |buttons (value: {align} — 버튼 그룹 블록 삽입)
    *                      |slider (value: {interval, ratio} — 이미지 슬라이드 블록 삽입)
+   *                      |map (value: 카카오맵 퍼가기 코드 — 없으면 빈 지도 블록. 코드가 틀리면 false)
    *                      |layout (value: 'side'|'one'|'diagonal'|'pair' 또는 {preset, variant} — 이미지+글 배치 블록 삽입)
    * @param {*} [value] link 의 url, image 의 {src, alt}, table 의 {rows, cols, header}
    */
@@ -5277,6 +5711,7 @@ class JmEditor {
       h3: () => c.setBlock('h3'),
       paragraph: () => c.setBlock('p'),
       heading: () => c.setBlock(['h1', 'h2', 'h3'].includes(value) ? value : 'p'), // 툴바 제목 셀렉트
+
       // 값 없이 부르면 인용 토글, 'line'·'box'·'quote' 면 그 스타일로, null 이면 인용 해제
       quote: () => (value === undefined ? c.setBlock('blockquote') : c.setQuote(value)),
       ul: () => c.toggleList('ul', value),
@@ -5290,6 +5725,7 @@ class JmEditor {
       youtube: () => this.embed.insertYouTube(value),
       buttons: () => c.insertBlockHTML(ButtonsCommands.template(value?.align)),
       slider: () => c.insertBlockHTML(SliderCommands.template(value?.interval, value?.ratio)),
+      map: () => (value ? this.map.insertFromCode(value) : (c.insertBlockHTML(MapCommands.template()), true)),
       color: () => c.setStyle('color', value ?? null),
       bgColor: () => c.setStyle('background-color', value ?? null),
       fontSize: () => c.setStyle('font-size', value ?? null),
@@ -5324,6 +5760,7 @@ class JmEditor {
     html = ButtonsCommands.unwrapHTML(html);
     html = SliderCommands.unwrapHTML(html);
     html = LayoutCommands.unwrapHTML(html);
+    html = MapCommands.unwrapHTML(html);
     html = ImageCommands.unwrapHTML(html);
     html = JmEditor.#restoreLinks(html);
     return BlockDrag.cleanHTML(html);
@@ -5340,6 +5777,7 @@ class JmEditor {
     this.buttons.wrapAll();
     this.slider.wrapAll();
     this.layout.wrapAll();
+    this.map.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
@@ -5360,6 +5798,12 @@ class JmEditor {
     return { ...this.commands.getState(), ...this.table.getState() };
   }
 
+  /** 자동 보정 반영: 되돌리기 단계 없이 마지막 기록을 덮어쓰고 onChange 호출 (지도 장소명 자동 채우기 등) */
+  amend() {
+    this.history.amend();
+    this.#emitChange();
+  }
+
   /** 변경 확정: 히스토리 기록 + onChange 호출. Commands 가 명령 끝에 호출한다. */
   commit() {
     this.table.wrapAll(); // 붙여넣기 등으로 들어온 표도 레이어로
@@ -5368,6 +5812,7 @@ class JmEditor {
     this.buttons.wrapAll();
     this.slider.wrapAll();
     this.layout.wrapAll();
+    this.map.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.history.push();
@@ -5520,6 +5965,8 @@ class JmEditor {
 
   /** 붙여넣기: 이미지 파일이면 업로드, HTML 이면 sanitize, 아니면 텍스트 */
   async #handlePaste(e) {
+    // 블록 헤더의 입력란(버튼 주소·지도 코드 등)에는 브라우저 기본 붙여넣기
+    if (e.target.closest?.('input, textarea, select')) return;
     e.preventDefault();
     const cd = e.clipboardData;
     const imageItem = Array.from(cd.items || []).find((i) => i.type.startsWith('image/'));
@@ -5536,6 +5983,8 @@ class JmEditor {
       if (plain) this.commands.insertHTML(escape(plain.replace(/\s*\r?\n\s*/g, ' ')));
       return;
     }
+    // 카카오맵 「지도 퍼가기」 코드를 본문에 붙여 넣으면 지도 블록으로
+    if (isRoughmapCode(text)) { this.map.insertFromCode(text); return; }
     if (html) {
       this.commands.insertHTML(Sanitizer.clean(html));
     } else if (text) {
@@ -5641,7 +6090,7 @@ class JmEditor {
     Array.from(r.childNodes).forEach((n) => {
       // 블록 사이 줄바꿈 같은 공백 텍스트는 단락으로 만들지 않고 제거
       if (n.nodeType === Node.TEXT_NODE && !n.textContent.replace(/[\s\u200B]/g, '')) { n.remove(); return; }
-      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout'].includes(n.dataset?.type));
+      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type));
       if (!isBlock) {
         const p = document.createElement('p');
         r.insertBefore(p, n);
@@ -5661,6 +6110,7 @@ class JmEditor {
     this.buttons.wrapAll();
     this.slider.wrapAll();
     this.layout.wrapAll();
+    this.map.wrapAll();
     this.#neutralizeLinks();
     this.#ensureBlock();
     this.sel.placeCursor(this.root.lastChild || this.root, true);
@@ -5680,8 +6130,6 @@ class JmEditor {
     });
   }
 }
-
-
 
 /**
  * TableGridPicker
@@ -6371,6 +6819,20 @@ const SAMPLE_FORMATS = [
     description: '이미지 2장과 각각의 글. 헤더에서 이미지 위/아래',
     html: `<div data-type="layout" data-preset="pair" data-variant="top"><div data-cell="image"></div><div data-cell="text"><p>왼쪽 이미지 설명</p></div><div data-cell="image"></div><div data-cell="text"><p>오른쪽 이미지 설명</p></div></div>`,
   },
+  {
+    id: 'map',
+    category: '지도',
+    name: '카카오 지도',
+    description: '카카오맵 「지도 퍼가기」 코드를 붙여 넣어 지도 표시 (앱 키 불필요). 본문에 코드를 바로 붙여 넣어도 됨',
+    html: `<div data-type="map" data-provider="kakao-roughmap" data-height="400"></div>`,
+  },
+  {
+    id: 'directions',
+    category: '지도',
+    name: '오시는 길',
+    description: '지도(주소 포함) + 교통·주차 안내 + 카카오맵 버튼. 헤더에 새 퍼가기 코드를 붙여 넣으면 장소 변경',
+    html: `<h2>오시는 길</h2><div data-type="map" data-provider="kakao-roughmap" data-timestamp="1792762389634" data-key="3rt3v4p5vvx" data-height="400" data-title="경기 성남시 분당구 운중로 227"></div><p><strong>🚌 대중교통</strong>　교통편 안내를 입력하세요.</p><p><strong>🚗 주차</strong>　주차 안내를 입력하세요.</p><div data-type="buttons" data-align="left"><a href="https://map.kakao.com/link/search/%EA%B2%BD%EA%B8%B0%20%EC%84%B1%EB%82%A8%EC%8B%9C%20%EB%B6%84%EB%8B%B9%EA%B5%AC%20%EC%9A%B4%EC%A4%91%EB%A1%9C%20227" data-role="button" data-style="primary" data-icon="pin">카카오맵에서 보기</a></div>`,
+  },
 ];
 
 /* ───────── 데모 툴바 (vanilla/ToolbarEditor.js 와 동일 구조, 링크 입력만 인라인 바로 대체) ───────── */
@@ -6505,7 +6967,7 @@ function setMode(m){
   area.hidden=m!=='editor';sourceEl.hidden=m!=='html';previewEl.hidden=m!=='preview';
   if(m==='html'){sourceEl.value=prettify(editor.getHTML());sourceEl.focus();}
   if(m!=='preview'){stopPreview?.();stopPreview=null;} // 미리보기 런타임(슬라이드 타이머 등) 정리
-  if(m==='preview'){stopPreview?.();previewEl.innerHTML=Sanitizer.clean(editor.getHTML());const g=observeGalleries(previewEl),sl=initSliders(previewEl);stopPreview=()=>{g();sl();};}
+  if(m==='preview'){stopPreview?.();previewEl.innerHTML=Sanitizer.clean(editor.getHTML());const g=observeGalleries(previewEl),sl=initSliders(previewEl),mp=initMaps(previewEl);stopPreview=()=>{g();sl();mp();};}
   else area.focus();
   BUTTONS.forEach(d=>{if(!d)return;const [c,,act,,o={}]=d;if(o.group==='mode')btns[c].classList.toggle('is-active',!!act());else btns[c].disabled=m!=='editor';});
   toolbar.hidden=m!=='editor';

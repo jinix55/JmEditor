@@ -13,6 +13,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 - 이미지 + 글 배치 블록(서식) — 이미지 | 글(2칸), 이미지 1장 + 글(4분할: 이미지 옆 작은 칸 + 반대쪽 줄 전체), 대각선 이미지 2장 + 글, 이미지 2장 나란히 + 각각 글. 헤더 아이콘으로 이미지 위치를 바꾸면 글은 같은 역할 칸으로 따라가고, 가운데 경계를 끌어 좌우 폭(20~80%) 조절. 이미지 칸은 클릭·파일 놓기로 넣고 교체·삭제. 휴대폰 폭에서는 세로로 쌓임
 - 이미지 슬라이드 — 이미지가 자동으로 넘어가는 블록(서식). 간격(수동/2~8초)·비율·인디케이터(점/숫자/막대/없음, 하단 좌/중/우)·폭·정렬, 썸네일로 선택·순서 변경. 뷰어에는 `slider-runtime.js` 필요
 - 유튜브 — 주소를 넣으면 16:9 영상 블록이 들어갑니다. 폭(100 / 75 / 50%)과 정렬 선택, ⠿ 핸들로 이동
+- 카카오 지도 — 카카오맵 「지도 퍼가기」 코드를 블록 헤더나 본문에 붙여 넣으면 지도가 들어갑니다. 앱 키·도메인 등록이 필요 없고, 높이(300 / 400 / 500) 선택, 장소명은 자동으로 채워집니다. 서식 「카카오 지도」·「오시는 길」([사용법](#카카오-지도))
 - 표 — 툴바에서 N×M 격자로 크기를 골라 삽입. 셀을 드래그(또는 Shift+클릭)하면 범위 선택. 우클릭 메뉴에서 행 / 열 추가·삭제·이동, 머리글 행·열 전환, 셀 병합·분할, 가로·세로 정렬, 셀·행 배경색, 표 폭·테두리. 셀 경계를 끌면 열 너비·행 높이 조절. 왼쪽 위 ⠿ 핸들을 끌어 위치 이동
 - 이미지 갤러리 블록 — 사진을 여러 장 올리면 원본 비율을 유지한 채 줄 전체를 채우도록 자동 배치합니다(세로 사진이 섞여도 줄 높이가 같고, 마지막 줄은 늘리지 않고 왼쪽 정렬). 사진은 드래그로 순서 변경, 선택 후 교체·삭제. 줄 높이·간격은 CSS 변수로 디자인에서 정합니다. 업로드 제한(jpg·png·gif·webp, 파일당 10MB, 1회 10장, 글당 50장 또는 100MB)과 긴 변 2000px 초과 시 축소(GIF 제외)는 설정 파일로 바꿉니다. 헤더의 ⠿ 핸들로 블록 이동, 제목은 선택 사항, 사진별 캡션은 없음
 - 서식(템플릿) 삽입 — 서버에서 받아온 HTML 조각을 골라 본문에 넣습니다. 서식 관리는 별도 화면에서
@@ -30,7 +31,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 |---|---|
 | `dist/jm-editor.css` | 편집 화면·조회 화면 공통 스타일 |
 | `dist/jm-editor.min.js` | 에디터 전체 (전역 `JmEditor.*`). ES Module 이 필요하면 `jm-editor.esm.js` |
-| `dist/jm-viewer.min.js` | 조회 화면용 런타임 (갤러리 배치·슬라이드 전환). ESM 은 `jm-viewer.esm.js` |
+| `dist/jm-viewer.min.js` | 조회 화면용 런타임 (갤러리 배치·슬라이드 전환·카카오 지도). ESM 은 `jm-viewer.esm.js` |
 | `dist/jm-editor.config.js` | 설정 견본 (업로드 제한 등). 선택 사항 — 아래 [설정](#설정) 참고 |
 
 복사하지 않고 CDN(jsDelivr)으로 불러와도 됩니다. 주소의 `@v0.0.2` 은 릴리스 태그로, 내용이 고정됩니다.
@@ -135,7 +136,7 @@ ES Module 로 쓰려면:
 <script>JmViewer.initViewer(document.querySelector('.jm-content'));</script>
 ```
 
-표·버튼·유튜브·글 감싸기·이미지 + 글 배치는 CSS 만으로 보이고, 갤러리 비율 배치와 슬라이드 전환이 런타임을 씁니다.
+표·버튼·유튜브·글 감싸기·이미지 + 글 배치는 CSS 만으로 보이고, 갤러리 비율 배치·슬라이드 전환·카카오 지도가 런타임을 씁니다.
 
 ### React / Next.js
 
@@ -186,7 +187,7 @@ api: {
 
 ## 저장되는 HTML
 
-허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`(모양 `data-style`, 테마 색 `data-color`, 직접 색 `style="--jm-btn: #rrggbb"`+`data-tone`, 아이콘 `data-icon`·`data-icon-pos` — 테마 실제 색은 `:root { --jm-btn-green: … }` 처럼 사이트에서 바꿀 수 있음), 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]` 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100)만 더 남습니다. 인용은 `blockquote` 기본(세로선)에 `data-style="box"`(박스)·`data-style="quote"`(글 처음·끝에 따옴표)가 있습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 만 남고 값 형식도 검사합니다.
+허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`(모양 `data-style`, 테마 색 `data-color`, 직접 색 `style="--jm-btn: #rrggbb"`+`data-tone`, 아이콘 `data-icon`·`data-icon-pos` — 테마 실제 색은 `:root { --jm-btn-green: … }` 처럼 사이트에서 바꿀 수 있음), 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]`, 카카오 지도용 `div[data-type="map"]`(속성 `data-timestamp`·`data-key`·`data-height`·`data-title` 만, 안의 내용은 버림) 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100)만 더 남습니다. 인용은 `blockquote` 기본(세로선)에 `data-style="box"`(박스)·`data-style="quote"`(글 처음·끝에 따옴표)가 있습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 만 남고 값 형식도 검사합니다.
 
 표는 이렇게 저장됩니다. 열 너비는 `colgroup`, 행 높이는 `tr`, 병합은 `colspan` / `rowspan`, 테두리 숨김은 `data-border="0"` 입니다.
 
@@ -224,6 +225,22 @@ import { initSliders } from '/js/jm-editor/plugins/slider/slider-runtime.js';
 initSliders(document.querySelector('.jm-content'));
 ```
 
+### 카카오 지도
+
+카카오맵 웹의 「지도 퍼가기」(약도)를 씁니다. 앱 키나 도메인 등록이 필요 없습니다.
+
+1. [map.kakao.com](https://map.kakao.com/) 에서 장소를 검색하고, 장소 정보 창의 **공유 → HTML 태그 복사 → 소스 생성하기** 로 코드를 복사합니다.
+2. 에디터 서식 「카카오 지도」를 넣고 헤더 입력란에 코드를 붙여 넣습니다. 본문에 코드를 그대로 붙여 넣어도 지도 블록이 됩니다.
+3. 장소명은 지도 데이터에서 자동으로 채워집니다. 높이는 헤더에서 300 / 400 / 500 중에 고릅니다.
+
+저장되는 것은 스크립트가 아니라 값뿐입니다.
+
+```html
+<div data-type="map" data-provider="kakao-roughmap" data-timestamp="1792762389634" data-key="3rt3v4p5vvx" data-height="400" data-title="경기 성남시 분당구 운중로 227"></div>
+```
+
+조회 화면에서는 `JmViewer.initViewer` 가 카카오 약도 스크립트(`t1.kakaocdn.net`)를 불러와 지도를 그립니다. 불러오지 못하면 장소명과 「카카오맵에서 보기」 링크 카드를 대신 보여 줍니다. 편집 화면의 지도 위에는 커버를 덮어 두어, 지도 이동·확대는 미리보기와 조회 화면에서 됩니다. 페이지에 CSP 를 쓴다면 `script-src` 에 `t1.kakaocdn.net` 과 카카오 지도 도메인(`*.kakao.com`, `*.daumcdn.net`)을 허용하세요. 「지도 퍼가기」는 카카오맵 웹 기능이라(개발자 지도 API 가 아님) 카카오 쪽 방식이 바뀌면 영향을 받을 수 있습니다.
+
 글 감싸기 이미지는 이렇게 저장됩니다. 이미지 문단 뒤에 오는 문단들이 이미지를 둘러 흐릅니다.
 
 ```html
@@ -255,7 +272,7 @@ initSliders(document.querySelector('.jm-content'));
 ```
 src/
   core/      JmEditor.js(진입점), Commands.js, SelectionUtil.js, History.js, Sanitizer.js
-  plugins/   table/, gallery/, embed/(유튜브), buttons/, slider/(SliderCommands, slider-runtime), layout/(이미지 + 글 배치) — 블록형 기능. 편집 중에만 쓰는 레이어를 씌우고 저장 시 벗김
+  plugins/   table/, gallery/, embed/(유튜브), buttons/, slider/(SliderCommands, slider-runtime), layout/(이미지 + 글 배치), map/(MapCommands, map-runtime — 카카오 지도) — 블록형 기능. 편집 중에만 쓰는 레이어를 씌우고 저장 시 벗김
              image/(본문 이미지 글 감싸기·크기 조절 도구)
   ui/        JmToolbarEditor.js(툴바), ColorPicker, TableGridPicker, FormatPicker, ContextMenu
   api/       JmEditorApi.js

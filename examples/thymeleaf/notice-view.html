@@ -2,7 +2,7 @@
   Thymeleaf 조회 화면 예시 (등록·수정 화면은 notice-form.html)
   - 서버에서 sanitize 를 거쳐 저장된 HTML 을 .jm-content 에 그대로 출력한다 (th:utext).
   - 표·버튼·유튜브·글 감싸기·이미지 + 글 배치는 CSS 만으로 보이고,
-    갤러리 비율 배치와 슬라이드 전환은 뷰어 런타임(jm-viewer.min.js)이 필요하다.
+    갤러리 비율 배치·슬라이드 전환·카카오 지도는 뷰어 런타임(jm-viewer.min.js)이 필요하다.
 -->
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
@@ -20,7 +20,7 @@
 
 <script th:src="@{/js/jm-viewer.min.js}"></script>
 <script>
-  // 갤러리 비율 배치 + 슬라이드 자동 전환 초기화
+  // 갤러리 비율 배치 + 슬라이드 자동 전환 + 카카오 지도 초기화
   JmViewer.initViewer(document.querySelector('.jm-content'));
 </script>
 </body>
