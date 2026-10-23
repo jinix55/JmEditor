@@ -226,6 +226,37 @@ import { initSliders } from '/js/jm-editor/plugins/slider/slider-runtime.js';
 initSliders(document.querySelector('.jm-content'));
 ```
 
+### 색 테마
+
+에디터 화면의 색은 CSS 변수로 바꿉니다. 메뉴·색 선택·서식 목록 같은 팝업은 페이지(body)에 붙으므로 **`:root` 에서** 덮어쓰세요. 기본값은 지금 색 그대로입니다.
+
+| 변수 | 쓰는 곳 | 기본 |
+|---|---|---|
+| `--jm-bg` · `--jm-text` | 에디터·팝업·블록 바탕, 기본 글자 | `#fff` · `#222` |
+| `--jm-text-soft` · `--jm-strong` · `--jm-muted` · `--jm-subtle` | 보조 글자(진한 → 흐린) | `#475467` · `#344054` · `#667085` · `#98a2b3` |
+| `--jm-border` · `--jm-border-soft` | 테두리, 연한 구분선 | `#d0d5dd` · `#e4e7ec` |
+| `--jm-head` · `--jm-hover` | 툴바 상단·블록 헤더 바탕, 마우스 올림 | `#f8fafc` · `#f2f4f7` |
+| `--jm-accent` · `--jm-accent-line` · `--jm-active` | 선택·링크·고른 항목, 눌린 버튼 테두리·바탕 | `#1d4ed8` · `#a9c4ff` · `#e6efff` |
+| `--jm-accent-faint` · `--jm-selected` | 끌어다 놓기 바탕, 표 셀 범위 선택 | `#f0f5ff` · `#dbe7ff` |
+| `--jm-quote-bg` · `--jm-quote-hover` · `--jm-quote-text` | 박스 인용 | `#eef0f4` · `#e2e6ec` · `#1d2939` |
+| `--jm-danger` · `--jm-danger-line` · `--jm-danger-soft` | 삭제 버튼, 잘못된 입력 | `#b42318` · `#d92d20` · `#fef3f2` |
+
+버튼 서식의 테마 색은 따로 `--jm-btn-blue`·`--jm-btn-green`·`--jm-btn-red`·`--jm-btn-orange`·`--jm-btn-purple`·`--jm-btn-gray`·`--jm-btn-black` 7가지입니다(같이 `:root` 에서). 이미지 위에 뜨는 흰 컨트롤(슬라이드 점·화살표, 크기 손잡이)과 그림자는 바꾸지 않습니다.
+
+다크 모드 예시:
+
+```css
+@media (prefers-color-scheme: dark) {
+  :root {
+    --jm-bg: #1d2124; --jm-text: #e6e8e3; --jm-text-soft: #c3c9c4; --jm-strong: #e6e8e3; --jm-muted: #9aa19b; --jm-subtle: #6f7672;
+    --jm-border: #3a413d; --jm-border-soft: #2d3330; --jm-head: #23282b; --jm-hover: #2a3033;
+    --jm-accent: #7cc39b; --jm-accent-line: #4f8a68; --jm-active: #213128; --jm-accent-faint: #1f2a24; --jm-selected: #27402f;
+    --jm-quote-bg: #262c2f; --jm-quote-hover: #2e3538; --jm-quote-text: #e6e8e3;
+    --jm-danger: #f97066; --jm-danger-line: #f04438; --jm-danger-soft: #3a1f1d;
+  }
+}
+```
+
 ### 퍼블리싱 구조 보존 (class·section 등)
 
 구조 모드는 **기본으로 켜져 있습니다**. 퍼블리싱 구조(`section`·`div`·`dl` 등)와 class 가 그대로 남습니다. 끄면(`enabled: false`) 예전 규칙대로 `class` 를 지우고 `div` 를 `p` 로 바꾸며 구조 태그를 벗깁니다. **클라이언트와 서버는 같은 값이어야** 합니다 — 한쪽만 끄면 저장할 때 구조가 사라집니다.
