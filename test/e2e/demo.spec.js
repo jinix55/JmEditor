@@ -5,6 +5,9 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 
+// 데모는 src 전체를 한 파일에 담아 커서, 테스트를 동시에 많이 돌리면 늦게 뜰 수 있음
+test.describe.configure({ timeout: 60000 });
+
 test('데모 페이지에서 에디터와 툴바가 생기고 오류가 없다', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));

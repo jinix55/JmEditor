@@ -15,7 +15,7 @@ import { initMaps } from '../plugins/map/map-runtime.js';
 import { ContextMenu } from './ContextMenu.js';
 
 /** 서식 버튼 아이콘 (자체 제작 SVG) */
-const FORMAT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>';
+const FORMAT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4.5L6 21Z"/></svg>'; // 서식 — 북마크 모양
 
 /** 유튜브 버튼 아이콘 (자체 제작 SVG) */
 const YOUTUBE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3z" fill="currentColor"/></svg>';
@@ -67,6 +67,8 @@ const OL_TYPES = [['decimal', '1. 숫자'], ['decimal-leading-zero', '01. 숫자
 /** 코드 보기 / 미리보기 아이콘 (자체 제작 SVG) */
 const CODE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 6-6 6 6 6"/><path d="m16 6 6 6-6 6"/><path d="m14 4-4 16"/></svg>';
 const PREVIEW_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+/** 편집(Editor) 모드 아이콘 — 연필 (자체 제작 SVG) */
+const EDIT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 
 /**
  * 툴바 버튼 정의: [명령, 라벨, 활성화 판정 함수, 표 안에서만 표시, 옵션{icon, right, group, row}]
@@ -74,7 +76,7 @@ const PREVIEW_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none
  */
 const BUTTONS = [
   // 맨 왼쪽: 모드 전환 세그먼트 (Editor / HTML / 미리보기) — 하단 내용 영역이 모드에 따라 바뀜
-  ['modeEditor', 'Editor', (s) => s.mode === 'editor', false, { group: 'mode', segFirst: true, row: 'top' }],
+  ['modeEditor', 'Editor', (s) => s.mode === 'editor', false, { icon: EDIT_ICON, group: 'mode', segFirst: true, row: 'top' }],
   ['modeHtml', 'HTML', (s) => s.mode === 'html', false, { icon: CODE_ICON, group: 'mode', row: 'top' }],
   ['modePreview', '미리보기', (s) => s.mode === 'preview', false, { icon: PREVIEW_ICON, group: 'mode', segLast: true, row: 'top' }],
   ['format', '서식', () => false, false, { icon: FORMAT_ICON, right: true, row: 'top' }],
