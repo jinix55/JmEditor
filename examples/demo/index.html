@@ -5992,6 +5992,7 @@ async function draw(block, canvas, ts, key, opts) {
   await waitFor(() => !canvas.isConnected || root.querySelector('.wrap_map'), RENDER_TIMEOUT);
   if (!canvas.isConnected) return false;
   if (!root.querySelector('.wrap_map')) { showFallback(block, canvas); return false; }
+  removeInfo(root, canvas);
   const name = lander.roughmapData?.name || window.daum.roughmap.instances?.[ts]?.roughmapData?.name;
   if (name) opts.onTitle?.(String(name));
   return true;
@@ -6011,6 +6012,21 @@ function fixProtocolRelative(canvas) {
   }));
   obs.observe(canvas, { subtree: true, childList: true, attributes: true, attributeFilter: ['src'] });
   canvas._fixObs = obs;
+}
+
+/**
+ * 약도 아래 주소·전화 칸(.cont)을 지운다 — 지도만 남김 (카카오 표기·길찾기 줄은 지도 쪽이라 남는다).
+ * 카카오가 나중에 다시 그려도 지우도록 그린 영역을 감시한다 (그린 영역을 지우면 감시도 끝)
+ * @param {HTMLElement} root 카카오 약도 컨테이너
+ * @param {HTMLElement} canvas
+ */
+function removeInfo(root, canvas) {
+  const strip = () => root.querySelectorAll('.cont').forEach((el) => el.remove());
+  strip();
+  const obs = new MutationObserver(strip);
+  obs.observe(root, { childList: true, subtree: true });
+  const prev = canvas._fixObs;
+  canvas._fixObs = { disconnect: () => { obs.disconnect(); prev?.disconnect(); } }; // stripMapUI 가 함께 끊음
 }
 
 /** 조건이 참이 될 때까지 기다림 (제한 시간) */
