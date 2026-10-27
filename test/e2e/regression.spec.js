@@ -224,3 +224,38 @@ test.describe('되돌리기·모드', () => {
     await expect(page.locator('.jm-preview-pane')).not.toHaveAttribute('contenteditable', 'true');
   });
 });
+
+test.describe('placeholder', () => {
+  /** 루트 ::before 에 placeholder 글이 보이는지 */
+  const shown = (page) => page.evaluate(() => getComputedStyle(window.core.root, '::before').content !== 'none');
+
+  test('비었을 때만 보이고, 글 뒤에 줄바꿈(br)만 남아도 다시 나타나지 않는다', async ({ page }) => {
+    await setHTML(page, '');
+    expect(await shown(page)).toBe(true);
+    await page.locator('.jm-editor').click();
+    await page.keyboard.type('가나다');
+    expect(await shown(page)).toBe(false);
+    await page.keyboard.press('Shift+Enter');
+    await page.keyboard.type('x');
+    expect(await shown(page)).toBe(false);
+    await setHTML(page, '<p>글<br></p>');
+    expect(await shown(page)).toBe(false);
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.press('Backspace');
+    expect(await shown(page)).toBe(true); // 다 지우면 다시 보임
+    await page.evaluate(() => window.core.exec('undo'));
+    expect(await shown(page)).toBe(false);
+  });
+
+  test('한글 조합 중 첫 글자부터 사라진다', async ({ page }) => {
+    await setHTML(page, '');
+    await page.locator('.jm-editor').click();
+    await page.evaluate(() => {
+      const r = window.core.root;
+      r.dispatchEvent(new CompositionEvent('compositionstart'));
+      r.querySelector('p').textContent = 'ㄱ';
+      r.dispatchEvent(new InputEvent('input', { isComposing: true }));
+    });
+    expect(await shown(page)).toBe(false);
+  });
+});

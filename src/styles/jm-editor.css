@@ -123,9 +123,9 @@
   line-height: 1.6;
   overflow-wrap: break-word;
 }
-/* 비어 있을 때 placeholder */
-.jm-editor:empty::before,
-.jm-editor[data-placeholder]:has(> p:only-child > br:only-child)::before {
+/* 비어 있을 때 placeholder (is-empty 는 에디터가 내용 변경마다 판단해 붙임 — 글자가 있으면 떼어 냄) */
+.jm-editor[data-placeholder]:empty::before,
+.jm-editor[data-placeholder].is-empty::before {
   content: attr(data-placeholder);
   color: var(--jm-subtle);
   pointer-events: none;

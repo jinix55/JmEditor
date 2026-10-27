@@ -132,9 +132,9 @@
   line-height: 1.6;
   overflow-wrap: break-word;
 }
-/* 비어 있을 때 placeholder */
-.jm-editor:empty::before,
-.jm-editor[data-placeholder]:has(> p:only-child > br:only-child)::before {
+/* 비어 있을 때 placeholder (is-empty 는 에디터가 내용 변경마다 판단해 붙임 — 글자가 있으면 떼어 냄) */
+.jm-editor[data-placeholder]:empty::before,
+.jm-editor[data-placeholder].is-empty::before {
   content: attr(data-placeholder);
   color: var(--jm-subtle);
   pointer-events: none;
@@ -6315,6 +6315,7 @@ class JmEditor {
     this.#ensureBlock();
     this.#bind();
     this.#bindGapInserter();
+    this.#updateEmpty();
   }
 
   // ───────────── 공개 API ─────────────
@@ -6477,6 +6478,7 @@ class JmEditor {
   #bind() {
     const r = this.root;
     const onInput = () => {
+      this.#updateEmpty(); // 조합 중 첫 글자에도 placeholder 가 바로 사라지게
       if (this.composing) return; // IME 조합 중에는 기록하지 않음
       this.#cleanStraySpans();
       this.#ensureBlock();
@@ -6869,7 +6871,23 @@ class JmEditor {
   }
 
   #emitChange() {
+    this.#updateEmpty();
     this.options.onChange?.(this.getHTML());
+  }
+
+  /**
+   * 비어 있음 표시(루트 is-empty) — placeholder 용.
+   * CSS 로는 글자(텍스트 노드)를 셀 수 없어 「가나다<br>x」 같은 문단도 비었다고 보므로 JS 로 판단한다.
+   * 비어 있음: 블록이 문단 하나뿐이고 그 안에 글자가 없으며 줄바꿈(br)이 하나 이하
+   */
+  #updateEmpty() {
+    const r = this.root;
+    const only = r.childElementCount === 1 ? r.firstElementChild : null;
+    const blank = (el) => !el.textContent.replace(/\u200B/g, '');
+    const empty = r.childElementCount === 0
+      ? blank(r)
+      : only?.tagName === 'P' && blank(only) && only.childElementCount <= 1 && !only.querySelector(':not(br)') && r.childNodes.length === 1;
+    r.classList.toggle('is-empty', empty);
   }
 
   #toDataURL(file) {
