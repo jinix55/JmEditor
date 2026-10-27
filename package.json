@@ -1,6 +1,6 @@
 {
   "name": "jm-editor",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "의존성 없이 contenteditable로 직접 구현한 WYSIWYG 웹에디터",
   "license": "MIT",
   "author": "jinix55",
