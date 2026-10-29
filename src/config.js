@@ -22,11 +22,13 @@ export const DEFAULT_CONFIG = Object.freeze({
   }),
   // 퍼블리싱 구조(class·section·dl 등) 보존 — 기본 켜짐(끄려면 enabled: false). 서버 HtmlSanitizer 도 같은 값으로 켜야 한다 (core/structure-policy.js)
   structure: STRUCTURE_DEFAULTS,
+  // 본문 이미지 — 모바일 이미지(picture > source)의 media 값
+  image: Object.freeze({ mobileMedia: '(max-width: 767px)' }),
 });
 
 /**
  * 설정 파일(window.JmEditorConfig)의 한 영역을 읽는다
- * @param {'gallery'|'structure'} section
+ * @param {'gallery'|'structure'|'image'} section
  * @returns {object} 없으면 빈 객체
  */
 export function fileConfig(section) {
@@ -36,7 +38,7 @@ export function fileConfig(section) {
 
 /**
  * 기본값 < 설정 파일 < 생성 옵션 순으로 합친 영역 설정
- * @param {'gallery'|'structure'} section
+ * @param {'gallery'|'structure'|'image'} section
  * @param {object} [override] 에디터 생성 옵션으로 넘긴 값
  * @returns {object}
  */

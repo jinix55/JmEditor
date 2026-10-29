@@ -21,13 +21,17 @@ import { isRoughmapCode } from '../plugins/map/map-runtime.js';
 import { ImageCommands } from '../plugins/image/ImageCommands.js';
 import { History } from './History.js';
 import { BlockDrag } from './BlockDrag.js';
-import { Sanitizer } from './Sanitizer.js';
-import { makeStructurePolicy } from './structure-policy.js';
+import { Sanitizer, HIDDEN_ID_ATTR } from './Sanitizer.js';
+import { makeStructurePolicy, INLINE_STRUCTURE_TAGS } from './structure-policy.js';
 import { resolveConfig } from '../config.js';
 
 const ZWSP = '​';
 
 const HREF_ATTR = 'data-jm-href'; // 편집 중 링크 주소 보관 속성 (href 는 제거해 어떤 환경에서도 열리지 않게)
+const ID_ATTR = HIDDEN_ID_ATTR; // 편집 중 id 보관 속성 (본문 id 가 페이지의 id·window 전역과 겹쳐 페이지 스크립트를 흔들지 않게)
+
+/** id 숨김에서 건너뛸 플러그인 레이어 (헤더·핸들 등 에디터 UI 포함, 표 레이어는 본문이라 제외) */
+const PLUGIN_LAYER_SELECTOR = [GALLERY_LAYER_CLASS, EMBED_LAYER_CLASS, BUTTONS_LAYER_CLASS, SLIDER_LAYER_CLASS, LAYOUT_LAYER_CLASS, MAP_LAYER_CLASS].map((c) => `.${c}`).join(', ');
 
 export class JmEditor {
   /** 편집 DOM 의 링크 주소 읽기 (href 또는 보관 속성) */
@@ -72,7 +76,7 @@ export class JmEditor {
     this.slider = new SliderCommands(this);
     this.layout = new LayoutCommands(this); // 이미지+글 배치 블록
     this.map = new MapCommands(this);       // 카카오 지도(퍼가기) 블록
-    this.image = new ImageCommands(this);   // 본문 이미지 글 감싸기·크기 조절
+    this.image = new ImageCommands(this, resolveConfig('image', options.image));   // 본문 이미지 글 감싸기·크기 조절
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
 
     this.#ensureBlock();
@@ -154,7 +158,7 @@ export class JmEditor {
     return map[name]?.();
   }
 
-  /** 저장용 HTML 반환 (ZWSP·표 레이어 제거) */
+  /** 저장용 HTML 반환 (ZWSP·표 레이어 제거, picture 안 img 뒤 글은 picture 밖으로) */
   getHTML() {
     let html = this.root.innerHTML.replace(new RegExp(ZWSP, 'g'), '');
     html = TableCommands.unwrapHTML(html);
@@ -166,6 +170,7 @@ export class JmEditor {
     html = MapCommands.unwrapHTML(html);
     html = ImageCommands.unwrapHTML(html);
     html = JmEditor.#restoreLinks(html);
+    html = JmEditor.#restoreIds(html);
     return BlockDrag.cleanHTML(html);
   }
 
@@ -182,6 +187,7 @@ export class JmEditor {
     this.layout.wrapAll();
     this.map.wrapAll();
     this.#neutralizeLinks();
+    this.#neutralizeIds();
     this.#ensureBlock();
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
     this.#emitChange();
@@ -216,7 +222,9 @@ export class JmEditor {
     this.slider.wrapAll();
     this.layout.wrapAll();
     this.map.wrapAll();
+    this.image.fixPictures(); // picture 안 img 뒤 글은 picture 밖으로
     this.#neutralizeLinks();
+    this.#neutralizeIds();
     this.#ensureBlock();
     this.history.push();
     this.#emitChange();
@@ -243,6 +251,7 @@ export class JmEditor {
     const onInput = () => {
       this.#updateEmpty(); // 조합 중 첫 글자에도 placeholder 가 바로 사라지게
       if (this.composing) return; // IME 조합 중에는 기록하지 않음
+      this.image.fixPictures(); // 크롬이 picture 안(img 뒤)에 넣은 글을 밖으로 (저장 때 사라지지 않게)
       this.#cleanStraySpans();
       this.#ensureBlock();
       this.history.pushDebounced();
@@ -583,6 +592,32 @@ export class JmEditor {
     this.root.querySelectorAll('a[href]').forEach((a) => JmEditor.setHref(a, a.getAttribute('href')));
   }
 
+  /**
+   * 편집 DOM 의 id 를 보관 속성(data-jm-id)으로 옮긴다 — 편집 중 본문에는 id 가 없게 (getHTML 에서 되돌림).
+   * 플러그인 블록·레이어 안(지도 런타임 등이 만든 요소)은 건너뛴다. 표 레이어는 본문이라 포함.
+   */
+  #neutralizeIds() {
+    Sanitizer.hideIds(this.root, PLUGIN_LAYER_SELECTOR);
+  }
+
+  /**
+   * 저장용 HTML 에서 보관 속성(data-jm-id)을 id 로 되돌린다. 같은 값은 문서 순서상 첫 번째만 남긴다
+   * (편집 중 Enter·복사로 블록이 복제되면 보관 속성도 함께 복제되므로)
+   * @param {string} html
+   * @returns {string}
+   */
+  static #restoreIds(html) {
+    if (!html.includes(ID_ATTR)) return html;
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    Sanitizer.dedupeIds(tpl.content, ID_ATTR);
+    tpl.content.querySelectorAll(`[${ID_ATTR}]`).forEach((el) => {
+      el.setAttribute('id', el.getAttribute(ID_ATTR));
+      el.removeAttribute(ID_ATTR);
+    });
+    return tpl.innerHTML;
+  }
+
   /** 저장용 HTML 에서 보관 속성을 href 로 되돌린다. 허용되지 않는 주소(javascript: 등)는 href 없이 둔다 */
   static #restoreLinks(html) {
     const tpl = document.createElement('template');
@@ -595,24 +630,54 @@ export class JmEditor {
     return tpl.innerHTML;
   }
 
-  /** 루트가 비었거나 루트 직속에 텍스트/인라인만 있으면 p 로 감싼다 */
+  /**
+   * 루트가 비었거나 루트 직속에 텍스트/인라인만 있으면 p 로 감싼다 (노드마다 문단, 공백 글은 지움 — 예전 동작).
+   * 구조 모드에서 이어진 비블록 구간에 small·sub·sup(INLINE_STRUCTURE_TAGS)가 있으면 그 구간을 한 문단으로 묶는다
+   * (「<sup>1</sup> 각주」가 두 문단으로 갈라지지 않게). 묶을 때 구간 앞뒤 공백 글만 지우고 안의 공백은 둔다.
+   */
   #ensureBlock() {
     const r = this.root;
     if (r.childNodes.length === 0 || (r.childNodes.length === 1 && r.firstChild.tagName === 'BR')) {
       r.innerHTML = '<p><br></p>';
       return;
     }
+    // 루트 직속 노드를 블록 사이의 비블록 구간으로 나눈다
+    const runs = [];
+    let cur = null;
     Array.from(r.childNodes).forEach((n) => {
-      // 블록 사이 줄바꿈 같은 공백 텍스트는 단락으로 만들지 않고 제거
-      if (n.nodeType === Node.TEXT_NODE && !n.textContent.replace(/[\s\u200B]/g, '')) { n.remove(); return; }
-      // 구조 모드에서는 허용된 구조 태그(section·div·dl 등)도 루트 블록으로 인정 (p 로 감싸면 구조가 깨짐)
-      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || this.sel.isStructureTag(n) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type));
-      if (!isBlock) {
-        const p = document.createElement('p');
-        r.insertBefore(p, n);
-        p.appendChild(n);
-      }
+      if (n.nodeType === Node.ELEMENT_NODE && this.#isRootBlock(n)) { cur = null; return; }
+      if (!cur) runs.push(cur = []);
+      cur.push(n);
     });
+    /** 블록 사이 줄바꿈 같은 공백(ZWSP 포함)뿐인 글 */
+    const blank = (n) => n.nodeType === Node.TEXT_NODE && !n.textContent.replace(/[\s\u200B]/g, '');
+    const inlineSel = INLINE_STRUCTURE_TAGS.join(',');
+    const hasInlineStructure = (n) => n.nodeType === Node.ELEMENT_NODE && (n.matches(inlineSel) || !!n.querySelector(inlineSel));
+    const wrap = (nodes) => {
+      const p = document.createElement('p');
+      r.insertBefore(p, nodes[0]);
+      nodes.forEach((x) => p.appendChild(x));
+    };
+    runs.forEach((run) => {
+      if (this.structure && run.some(hasInlineStructure)) {
+        let a = 0;
+        let b = run.length;
+        while (a < b && blank(run[a])) run[a++].remove();
+        while (b > a && blank(run[b - 1])) run[--b].remove();
+        wrap(run.slice(a, b));
+        return;
+      }
+      run.forEach((n) => { if (blank(n)) n.remove(); else wrap([n]); });
+    });
+  }
+
+  /**
+   * 루트 직속에 그대로 둘 블록인지 (문단·제목·목록·인용·표, 구조 모드의 블록 구조 태그, 플러그인 레이어·블록)
+   * @param {Element} n
+   */
+  #isRootBlock(n) {
+    // 구조 모드에서는 허용된 구조 태그(section·div·dl 등)도 루트 블록으로 인정 (p 로 감싸면 구조가 깨짐)
+    return /^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || this.sel.isStructureTag(n) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type);
   }
 
   /** 히스토리 복원 */
@@ -628,6 +693,7 @@ export class JmEditor {
     this.layout.wrapAll();
     this.map.wrapAll();
     this.#neutralizeLinks();
+    this.#neutralizeIds();
     this.#ensureBlock();
     this.sel.placeCursor(this.root.lastChild || this.root, true);
     this.#emitChange();

@@ -26,7 +26,7 @@ public class HtmlSanitizer {
 
     /** 기본 허용 태그 (구조 정책 전) — 플러그인 안에서 구조 전용 태그를 가려낼 때 */
     private static final java.util.Set<String> BASE_TAGS = java.util.Set.of("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
-            "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe");
+            "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe", "picture", "source");
 
     /** 요소가 플러그인 블록(div[data-type=gallery 등]) 안이거나 그 자체인지 */
     private static boolean insidePlugin(Element el) {
@@ -55,6 +55,8 @@ public class HtmlSanitizer {
             // 구조 태그 + 모든 태그의 class(토큰 검사는 후처리) + th[scope]. 먼저 통과시켜야 후처리에서 고를 수 있다
             for (String t : this.policy.tags()) safelist.addTags(t).addAttributes(t, "style");
             safelist.addAttributes(":all", "class").addAttributes("th", "scope");
+            // id·aria 4종(값 검사·중복 제거는 후처리), 아이콘 i(별칭 단계에서 아이콘만 i 로 남김 — class·aria-hidden 만)
+            safelist.addAttributes(":all", "id").addAttributes(":all", StructurePolicy.ARIA_ATTRS.toArray(new String[0])).addTags("i");
         }
     }
 
@@ -77,10 +79,12 @@ public class HtmlSanitizer {
     private static Safelist baseSafelist() {
         return new Safelist()
             .addTags("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
-                     "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe")
+                     "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe",
+                     "picture", "source")   // 모바일 이미지: 구성·srcset·media·type 검사는 후처리(cleanPicture)
             .addAttributes("a", "href", "target", "rel", "data-role", "data-style", "data-size",
                            "data-color", "data-tone", "data-icon", "data-icon-pos", "style")   // 버튼: 색·아이콘 (값 검사는 cleanButton)
-            .addAttributes("img", "src", "alt", "width", "height", "data-float", "style")   // 글 감싸기: 방향 + 폭(%)
+            .addAttributes("img", "src", "alt", "width", "height", "data-float", "style", "loading")   // 글 감싸기: 방향 + 폭(%), loading 은 lazy·eager 만(후처리)
+            .addAttributes("source", "srcset", "media", "type")
             .addAttributes("p", "style")
             .addAttributes("h1", "style").addAttributes("h2", "style").addAttributes("h3", "style")
             .addAttributes("li", "style").addAttributes("blockquote", "style", "data-style")   // 인용 스타일: box·quote (세로선은 기본값)
@@ -100,8 +104,6 @@ public class HtmlSanitizer {
             .addAttributes("p", "data-role")                                 // 갤러리·슬라이드 제목
             .addProtocols("a", "href", "http", "https", "mailto", "tel")
             .addProtocols("img", "src", "http", "https", "data")
-            .addEnforcedAttribute("a", "rel", "noopener noreferrer")
-            .addEnforcedAttribute("a", "target", "_blank")
             .preserveRelativeLinks(true);
     }
 
@@ -127,6 +129,19 @@ public class HtmlSanitizer {
 
     /** img src 에 허용하는 data: 주소: 이미지 base64 만 (img 안의 svg 는 스크립트가 실행되지 않아 허용, data:text/html 등은 제거) */
     private static final Pattern DATA_IMAGE = Pattern.compile("^data:image/(png|jpeg|jpg|gif|webp|svg\\+xml);base64,", Pattern.CASE_INSENSITIVE);
+
+    /** 모바일 이미지(picture) 한도·형식 — 클라이언트 Sanitizer.js 와 같아야 한다 */
+    private static final int PICTURE_SOURCE_MAX = 4, SRCSET_MAX = 4, MEDIA_MAX = 200;
+    /** srcset 후보 하나: 주소(공백·쉼표 없음) + 선택 서술자(폭 640w 또는 배율 2x) */
+    private static final Pattern SRCSET_CANDIDATE = Pattern.compile("^([^ ,]+)(?: (\\d+w|\\d+(?:\\.\\d+)?x))?$");
+    /** data: 주소 후보(통째로 1개): 주소 + 선택 서술자 */
+    private static final Pattern SRCSET_DATA_CANDIDATE = Pattern.compile("^([^ ]+)(?: (\\d+w|\\d+(?:\\.\\d+)?x))?$");
+    /** img src 와 같은 허용 주소 (http(s)·/ 경로·이미지 base64 data:) */
+    private static final Pattern SAFE_URL = Pattern.compile("^(https?:|/|data:image/(png|jpeg|jpg|gif|webp|svg\\+xml);base64,)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MEDIA_CHARS = Pattern.compile("^[a-zA-Z0-9 \\t\\n\\f\\r():,.\\-]+$");
+    private static final Pattern MEDIA_URL = Pattern.compile("url\\s*\\(", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SOURCE_TYPE = Pattern.compile("^image/(png|jpeg|gif|webp|avif|svg\\+xml)$");
+    private static final Pattern CONTROL_CHARS = Pattern.compile("[\\u0000-\\u001f\\u007f]");
 
     /** 카카오 지도 블록 값 형식 */
     private static final Pattern MAP_TIMESTAMP = Pattern.compile("^\\d{10,16}$");
@@ -159,7 +174,9 @@ public class HtmlSanitizer {
         // 태그 별칭: 클라이언트와 같게 b·i·strike → strong·em·s (Safelist 에 없어 글자만 남던 것을 맞춤)
         Document pre = Jsoup.parseBodyFragment(html);
         pre.outputSettings().prettyPrint(false); // 원문 공백 그대로
-        TAG_ALIAS.forEach((from, to) -> pre.select(from).tagName(to));
+        TAG_ALIAS.forEach((from, to) -> {
+            for (Element el : pre.select(from)) if (!(from.equals("i") && isIcon(el))) el.tagName(to);
+        });
         String cleaned = Jsoup.clean(pre.body().html(), PROTOCOL_CHECK_BASE_URI, safelist, new Document.OutputSettings().prettyPrint(false));
         Document doc = Jsoup.parseBodyFragment(cleaned);
 
@@ -175,7 +192,28 @@ public class HtmlSanitizer {
                 for (Element el : doc.select(t)) if (insidePlugin(el)) el.unwrap();
             }
             for (Element th : doc.select("th[scope]")) if (!TH_SCOPES.contains(th.attr("scope")) || insidePlugin(th)) th.removeAttr("scope");
+            // id·aria: 정책 검사 통과분만. 플러그인 블록 안(자신 포함)에는 두지 않고, 아이콘 i 에는 aria-hidden 만 둔다 (클라이언트와 같게)
+            for (Element el : doc.getAllElements()) {
+                if (el == doc.body() || el.attributes().size() == 0) continue;
+                boolean plugin = insidePlugin(el);
+                boolean icon = el.tagName().equals("i"); // 별칭 단계에서 아이콘이 아닌 i 는 em 으로 바뀌었으므로 남은 i 는 아이콘
+                if (el.hasAttr("id")) {
+                    String id = plugin || icon ? "" : policy.cleanId(el.attr("id"));
+                    if (id.isEmpty()) el.removeAttr("id"); else el.attr("id", id);
+                }
+                for (String name : StructurePolicy.ARIA_ATTRS) {
+                    if (!el.hasAttr(name)) continue;
+                    boolean drop = plugin || (icon && !name.equals("aria-hidden"));
+                    String v = drop ? "" : policy.cleanAria(name, el.attr(name));
+                    if (v.isEmpty()) el.removeAttr(name); else el.attr(name, v);
+                }
+            }
         }
+
+        // 모바일 이미지(picture): 구성·source 검사 (img 처리보다 먼저 — 아래 img 루프가 남은 img 를 정리)
+        // picture 직계가 아닌 source 는 모두 제거 (Safelist 는 source 를 어디서나 통과시키므로; 클라이언트는 언래핑되어 사라짐)
+        for (Element src : new java.util.ArrayList<>(doc.select("source"))) if (src.parent() == null || !src.parent().tagName().equals("picture")) src.remove();
+        for (Element pic : new java.util.ArrayList<>(doc.select("picture"))) cleanPicture(pic);
 
         // style 은 허용 속성·값 형식만 남김 (버튼 링크의 직접 색 --jm-btn 은 아래 cleanButton 에서 따로 처리)
         for (Element el : doc.select("[style]")) {
@@ -189,15 +227,16 @@ public class HtmlSanitizer {
                     .collect(Collectors.joining("; "));
             if (style.isEmpty()) el.removeAttr("style"); else el.attr("style", style);
         }
-        // 스타일이 없는 span 은 의미 없으므로 언래핑
-        // (구조 모드에서 class 가 남은 span 은 둔다 — 아이콘 등)
-        for (Element span : doc.select("span:not([style]):not([class])")) span.unwrap();
+        // 속성이 하나도 남지 않은 span 은 의미 없으므로 언래핑
+        // (구조 모드에서 class·id·aria 가 남은 span 은 둔다 — 아이콘·앵커 등)
+        for (Element span : doc.select("span")) if (span.attributes().size() == 0) span.unwrap();
 
         // 글 감싸기 이미지: data-float 는 left/right, style 은 width 10~100% 만
         // data: 주소는 이미지(png·jpeg·gif·webp·svg) base64 만 — data:text/html 등 다른 형식은 src 제거
         for (Element img : doc.select("img")) {
             String src = img.attr("src");
             if (src.regionMatches(true, 0, "data:", 0, 5) && !DATA_IMAGE.matcher(src).lookingAt()) img.removeAttr("src");
+            if (!img.attr("loading").equals("lazy") && !img.attr("loading").equals("eager")) img.removeAttr("loading");
             String f = img.attr("data-float");
             if (!f.equals("left") && !f.equals("right")) img.removeAttr("data-float");
             var m = IMG_WIDTH.matcher(Arrays.stream(img.attr("style").split(";")).map(String::trim)
@@ -219,6 +258,7 @@ public class HtmlSanitizer {
 
         // 버튼 링크: data-role=button 일 때만 data-style 허용
         for (Element a : doc.select("a")) {
+            applyLinkTarget(a);
             if (!"button".equals(a.attr("data-role"))) BUTTON_ATTRS.forEach(a::removeAttr);
             else cleanButton(a);
         }
@@ -279,12 +319,19 @@ public class HtmlSanitizer {
             // 구조 모드: 플러그인이 아닌 div 는 그대로 두고 class·style 만 남긴다
             if (policy.tags().contains("div") && !PLUGIN_TYPES.contains(div.attr("data-type")) && !insidePlugin(div)) {
                 String cls = div.attr("class"), st = div.attr("style");
+                org.jsoup.nodes.Attributes keep = idAria(div);
                 div.clearAttributes();
                 if (!cls.isEmpty()) div.attr("class", cls);
                 if (!st.isEmpty()) div.attr("style", st);
+                div.attributes().addAll(keep);
                 continue;
             }
-            if (!"gallery".equals(div.attr("data-type"))) { div.tagName("p"); div.clearAttributes(); continue; }
+            if (!"gallery".equals(div.attr("data-type"))) {
+                // p 로 바꿀 때 id·aria 는 남긴다 (위에서 검사 끝, 플러그인 안이면 이미 없음 — 클라이언트 div→p 와 같게)
+                org.jsoup.nodes.Attributes keep = idAria(div);
+                div.tagName("p"); div.clearAttributes(); div.attributes().addAll(keep);
+                continue;
+            }
             // data-cols 는 예전 cover 갤러리 호환용 — 있을 때만 1~6 으로 맞춰 남긴다
             int cols = parseIntOr(div.attr("data-cols"), 0);
             if (cols == 0) div.removeAttr("data-cols");
@@ -305,11 +352,131 @@ public class HtmlSanitizer {
         for (Element p : doc.select("p[data-role]")) {
             if (p.parent() == null || !TITLED_BLOCKS.contains(p.parent().attr("data-type"))) p.removeAttr("data-role");
         }
+        // 같은 id 는 문서 순서상 첫 번째만 (대소문자가 다르면 다른 id — 클라이언트 Sanitizer.dedupeIds 와 같게)
+        java.util.Set<String> seenIds = new java.util.HashSet<>();
+        for (Element el : doc.select("[id]")) if (!seenIds.add(el.attr("id"))) el.removeAttr("id");
         // 최상위 공백 텍스트(블록 사이 줄바꿈 등)는 지운다 — 클라이언트 Sanitizer 와 같게
         for (org.jsoup.nodes.TextNode tn : new java.util.ArrayList<>(doc.body().textNodes())) if (tn.isBlank()) tn.remove();
         // 줄 맞춤(pretty print) 없이 — 켜 두면 dt·dd·div·caption 처럼 글만 있는 블록 안에 줄바꿈·들여쓰기가 들어가 글자가 바뀐다
         doc.outputSettings().prettyPrint(false);
         return doc.body().html();
+    }
+
+    /**
+     * 링크 종류에 맞게 target·rel 을 맞춘다 (클라이언트 Sanitizer.applyLinkTarget 과 같게):
+     * 주소가 #·tel:·mailto: (대소문자 무시)로 시작하면 두 속성을 없애고, 그 밖에는 새 창 + noopener 로 둔다.
+     * href 가 없는 a 도 새 창 쪽으로 둔다(클라이언트도 href 없으면 같은 규칙). 앞뒤 공백은 JS trim 과 같게 자른다(NBSP 포함).
+     */
+    private static void applyLinkTarget(Element a) {
+        String href = StructurePolicy.jsTrim(a.attr("href")).toLowerCase(java.util.Locale.ROOT); // JS trim 과 같게 (앞 NBSP 도 자름)
+        if (href.startsWith("#") || href.startsWith("tel:") || href.startsWith("mailto:")) {
+            a.removeAttr("target");
+            a.removeAttr("rel");
+        } else {
+            a.attr("rel", "noopener noreferrer");
+            a.attr("target", "_blank");
+        }
+    }
+
+    /** 요소의 id·aria(4종) 속성만 복사 (이미 검사를 마친 값 — clearAttributes 전에 보관용) */
+    private static org.jsoup.nodes.Attributes idAria(Element el) {
+        org.jsoup.nodes.Attributes a = new org.jsoup.nodes.Attributes();
+        if (el.hasAttr("id")) a.put("id", el.attr("id"));
+        for (String n : StructurePolicy.ARIA_ATTRS) if (el.hasAttr(n)) a.put(n, el.attr(n));
+        return a;
+    }
+
+    /**
+     * 구조 모드 아이콘 i 인지 (클라이언트 Sanitizer.#iconI 와 같은 판정): 플러그인 블록 밖, class 허용 토큰이 남고,
+     * 안의 글(script·style 내용 포함 — 브라우저 textContent 와 같게)이 공백뿐
+     */
+    private boolean isIcon(Element i) {
+        if (!policy.enabled() || insidePlugin(i) || policy.cleanClass(i.attr("class")).isEmpty()) return false;
+        StringBuilder sb = new StringBuilder();
+        org.jsoup.select.NodeTraversor.traverse((node, depth) -> {
+            if (node instanceof org.jsoup.nodes.TextNode t) sb.append(t.getWholeText());
+            else if (node instanceof org.jsoup.nodes.DataNode d) sb.append(d.getWholeData());
+        }, i);
+        return StructurePolicy.isJsBlank(sb.toString());
+    }
+
+    /**
+     * picture 정리 (클라이언트 Sanitizer.#cleanPicture 와 같은 규칙): 자식은 source(최대 4개, 규칙 통과분) 다음 img 1개.
+     * img 가 없으면 통째로 버리고, img 뒤의 자식은 버린다. 남는 source 가 없으면 picture 를 벗기고 img 만 남긴다.
+     * 갤러리·슬라이드 블록의 직계 picture 는 img 한 장으로 줄인다(블록은 img 만 다룸).
+     * class 는 앞 단계(구조 정책)에서 이미 걸러졌으므로 그대로 둔다.
+     */
+    private static void cleanPicture(Element pic) {
+        Element img = null;
+        java.util.List<Element> sources = new java.util.ArrayList<>();
+        for (Element c : pic.children()) {
+            if (c.tagName().equals("img")) { img = c; break; }
+            if (c.tagName().equals("source") && sources.size() < PICTURE_SOURCE_MAX) {
+                Element s = cleanSource(c);
+                if (s != null) sources.add(s);
+            }
+        }
+        if (img == null) { pic.remove(); return; }
+        Element parent = pic.parent();
+        boolean inBlock = parent != null && parent.tagName().equals("div")
+                && ("gallery".equals(parent.attr("data-type")) || "slider".equals(parent.attr("data-type")));
+        if (sources.isEmpty() || inBlock) {
+            pic.before(img); // img 를 picture 밖으로 옮김
+            pic.remove();
+            return;
+        }
+        String cls = pic.attr("class");
+        org.jsoup.nodes.Attributes keep = idAria(pic);
+        pic.empty();
+        pic.clearAttributes();
+        if (!cls.isEmpty()) pic.attr("class", cls);
+        pic.attributes().addAll(keep);
+        sources.forEach(pic::appendChild);
+        pic.appendChild(img);
+    }
+
+    /** source 정리: srcset(필수)·media 가 규칙에 어긋나면 null(버림), type 이 어긋나면 속성만 지운다. 새 source 요소를 돌려준다. */
+    private static Element cleanSource(Element node) {
+        String srcset = cleanSrcset(node.attr("srcset"));
+        if (srcset == null) return null;
+        String media = node.attr("media");
+        if (!media.isEmpty() && !isSafeMedia(media)) return null;
+        String type = node.attr("type");
+        Element s = new Element("source");
+        if (!media.isEmpty()) s.attr("media", media);
+        s.attr("srcset", srcset);
+        if (SOURCE_TYPE.matcher(type).matches()) s.attr("type", type);
+        return s;
+    }
+
+    /**
+     * srcset 값 검사·정규화 (클라이언트 Sanitizer.cleanSrcset 과 같음): 후보 1~4개(", " 로 구분), 후보 = 주소 + 선택 서술자(640w·2x).
+     * 주소는 img src 와 같은 허용 형식, data: 주소는 후보가 1개일 때만. 제어 문자·어긋난 후보가 하나라도 있으면 null.
+     */
+    static String cleanSrcset(String value) {
+        String raw = value == null ? "" : value;
+        if (CONTROL_CHARS.matcher(raw).find()) return null;
+        String v = raw.replaceAll("^ +| +$", "");
+        if (v.isEmpty()) return null;
+        if (v.regionMatches(true, 0, "data:", 0, 5)) {
+            var m = SRCSET_DATA_CANDIDATE.matcher(v);
+            if (!m.matches() || !SAFE_URL.matcher(m.group(1)).find() || m.group(1).chars().filter(ch -> ch == ',').count() != 1) return null;
+            return m.group(2) != null ? m.group(1) + " " + m.group(2) : m.group(1);
+        }
+        String[] cands = v.split(", +", -1);
+        if (cands.length > SRCSET_MAX) return null;
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String c0 : cands) {
+            var m = SRCSET_CANDIDATE.matcher(c0.replaceAll("^ +| +$", ""));
+            if (!m.matches() || !SAFE_URL.matcher(m.group(1)).find() || m.group(1).regionMatches(true, 0, "data:", 0, 5)) return null;
+            out.add(m.group(2) != null ? m.group(1) + " " + m.group(2) : m.group(1));
+        }
+        return String.join(", ", out);
+    }
+
+    /** source[media] 검사 (클라이언트 Sanitizer.isSafeMedia 와 같음): 200자 이하, 영문·숫자·공백·( ) : , . - 만, url( 금지 */
+    static boolean isSafeMedia(String v) {
+        return !v.isEmpty() && v.length() <= MEDIA_MAX && MEDIA_CHARS.matcher(v).matches() && !MEDIA_URL.matcher(v).find();
     }
 
     /**
@@ -359,7 +526,7 @@ public class HtmlSanitizer {
             Element cell = k == 'i' ? images.poll() : texts.poll();
             if (cell == null) cell = new Element("div");
             Element img = k == 'i' ? cell.selectFirst("img") : null;
-            if (k == 'i') cell.empty(); else cell.select("table, img, iframe, div[data-type]").remove();
+            if (k == 'i') cell.empty(); else cell.select("table, picture, img, iframe, div[data-type]").remove();
             cell.clearAttributes();
             cell.attr("data-cell", k == 'i' ? "image" : "text");
             if (img != null) cell.appendChild(img);

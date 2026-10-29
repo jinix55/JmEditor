@@ -95,8 +95,8 @@ test.describe('구조 태그·속성', () => {
     expect(r.out).toBe('<p>a</p>');
   });
 
-  test('구조 태그에도 위험 속성(on*, id, data-*)은 남지 않고 style 은 허용 속성만', async ({ page }) => {
-    const r = await cleanCanon(page, '<section id="s" onclick="x()" data-x="1" style="color: red; position: fixed" class="c"><p>a</p></section>');
+  test('구조 태그에도 위험 속성(on*, 예약 id, data-*)은 남지 않고 style 은 허용 속성만', async ({ page }) => {
+    const r = await cleanCanon(page, '<section id="jm-s" onclick="x()" data-x="1" style="color: red; position: fixed" class="c"><p>a</p></section>');
     expect(r.out).toBe('<section class="c" style="color: red"><p>a</p></section>');
   });
 

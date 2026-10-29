@@ -5,6 +5,7 @@
  */
 import { normalizeLayout, normalizeSplit, cellsOf, isImageRole } from '../plugins/layout/layout-presets.js';
 import { SHAPE_VALUES, COLOR_VALUES, ICON_VALUES, normalizeHex, toneOf } from '../plugins/buttons/button-theme.js';
+import { ARIA_ATTRS } from './structure-policy.js';
 
 /** 허용 태그와 각 태그에서 허용하는 속성 */
 const ALLOWED = {
@@ -13,7 +14,7 @@ const ALLOWED = {
   ul: ['style'], ol: ['style', 'start'], li: ['style'],
   blockquote: ['style', 'data-style'], // 인용 스타일: box·quote (세로선은 기본값이라 속성 없음)
   a: ['href', 'target', 'rel', 'data-role', 'data-style', 'data-size', 'data-color', 'data-tone', 'data-icon', 'data-icon-pos'], // data-role=button → 버튼 모양 링크 (값 검사는 #cleanButton)
-  img: ['src', 'alt', 'width', 'height', 'data-float', 'style'], // 글 감싸기: 방향 + 폭(%) — 값 검사는 #cleanImage
+  img: ['src', 'alt', 'width', 'height', 'data-float', 'style', 'loading'], // 글 감싸기: 방향 + 폭(%) — 값 검사는 #cleanImage, loading 은 lazy·eager 만
   table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style'],
   tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
   span: ['style'],
@@ -38,11 +39,25 @@ const TAG_ALIAS = { b: 'strong', i: 'em', strike: 's', div: 'p' };
 
 /** src 에 허용하는 주소: http(s)·/ 경로·이미지 data:(base64). img 안의 svg 는 스크립트가 실행되지 않아 허용 (서버 HtmlSanitizer 와 같은 규칙) */
 const SAFE_URL = /^(https?:|\/|data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,)/i;
+/** 이미지 loading 속성 허용 값 */
+const IMG_LOADING = ['lazy', 'eager'];
+/** source[type] 허용 값 (이미지 형식만) */
+const SOURCE_TYPE = /^image\/(png|jpeg|gif|webp|avif|svg\+xml)$/;
+/** srcset 후보 하나: 주소(공백·쉼표 없음) + 선택 서술자(폭 `640w` 또는 배율 `2x`) */
+const SRCSET_CANDIDATE = /^([^ ,]+)(?: (\d+w|\d+(?:\.\d+)?x))?$/;
+/** picture 하나에 둘 수 있는 source 최대 개수, srcset 후보 최대 개수, media 최대 길이 */
+const PICTURE_SOURCE_MAX = 4;
+const SRCSET_MAX = 4;
+const MEDIA_MAX = 200;
 /** href(링크)에 허용하는 주소: http(s)·mailto·tel·# 와 / 로 시작하는 내부 경로 (// 와 /\ 같은 외부 주소 우회는 제외) */
 const SAFE_HREF = /^(https?:\/\/|mailto:|tel:|#|\/(?![/\\]))/i;
 
 /** 플러그인 블록 종류 — 구조 정책을 적용하지 않는다(블록마다 정해진 형식 그대로) */
 const PLUGIN_TYPES = ['gallery', 'slider', 'buttons', 'youtube', 'layout', 'map'];
+/** 플러그인 블록 선택자 (div[data-type=…]) — 안의 요소는 블록 형식·런타임 몫이라 id 숨김에서 건드리지 않는다 */
+const PLUGIN_BLOCK_SELECTOR = PLUGIN_TYPES.map((t) => `div[data-type="${t}"]`).join(', ');
+/** 편집·미리보기 화면에서 본문 id 를 보관하는 속성 (getHTML 이 id 로 되돌림) */
+export const HIDDEN_ID_ATTR = 'data-jm-id';
 /** 구조 모드에서 새로 허용한 태그가 가질 수 있는 속성 (class 는 따로) */
 const STRUCTURE_ATTRS = ['style'];
 /** th[scope] 허용 값 (구조 모드) */
@@ -79,7 +94,71 @@ export class Sanitizer {
     });
     const wrap = document.createElement('div');
     wrap.appendChild(frag);
+    Sanitizer.dedupeIds(wrap);
     return wrap.innerHTML;
+  }
+
+  /**
+   * 같은 id 가 두 번 이상 나오면 문서 순서상 첫 번째만 남기고 나머지 요소의 id 를 지운다 (대소문자가 다르면 다른 id)
+   * @param {ParentNode} root
+   * @param {string} [attr='id'] 검사할 속성 (편집 중에는 data-jm-id)
+   */
+  static dedupeIds(root, attr = 'id') {
+    const seen = new Set();
+    root.querySelectorAll(`[${attr}]`).forEach((el) => {
+      const v = el.getAttribute(attr);
+      if (seen.has(v)) el.removeAttribute(attr); else seen.add(v);
+    });
+  }
+
+  /**
+   * 화면에 그린 본문(편집 root·미리보기)의 id 를 보관 속성(data-jm-id)으로 옮긴다 — 본문 id 가 관리자 페이지의
+   * id·window 전역·CSS #id 와 부딪히지 않게. 플러그인 블록(과 skip 선택자) 안은 런타임이 만든 id(지도 등)가 있어 건드리지 않는다.
+   * @param {ParentNode} root
+   * @param {string} [skip] 더 건너뛸 선택자 (편집기의 플러그인 레이어 등)
+   */
+  static hideIds(root, skip = '') {
+    const sel = skip ? `${PLUGIN_BLOCK_SELECTOR}, ${skip}` : PLUGIN_BLOCK_SELECTOR;
+    root.querySelectorAll('[id]').forEach((el) => {
+      if (el.closest(sel)) return;
+      el.setAttribute(HIDDEN_ID_ATTR, el.id);
+      el.removeAttribute('id');
+    });
+  }
+
+  /**
+   * 구조 모드: id·aria(4종) 를 정책 검사 후 옮긴다 (정책이 없으면 아무것도 하지 않음)
+   * @param {Element} el 새로 만든 요소
+   * @param {Element} node 원본 요소
+   */
+  static #copyIdAria(el, node) {
+    const pol = Sanitizer.#policy;
+    if (!pol) return;
+    const id = pol.cleanId(node.getAttribute('id'));
+    if (id) el.setAttribute('id', id);
+    ARIA_ATTRS.forEach((name) => {
+      const v = node.hasAttribute(name) ? pol.cleanAria(name, node.getAttribute(name)) : '';
+      if (v) el.setAttribute(name, v);
+    });
+  }
+
+  /**
+   * 구조 모드 아이콘 i: class(허용 토큰)가 남고 글이 없으면(공백만) i 를 그대로 둔다 — class 와 aria-hidden="true" 만 남기고
+   * 나머지 속성(id·다른 aria 포함)은 버림 (서버 HtmlSanitizer 와 같은 규칙)
+   * @param {Element} node 원본 i
+   * @returns {HTMLElement|null} 아이콘이면 정리한 i, 아니면 null(em 으로 바꾸는 기본 규칙)
+   */
+  static #iconI(node) {
+    const pol = Sanitizer.#policy;
+    if (!pol || node.textContent.trim() !== '') return null;
+    const cls = pol.cleanClass(node.getAttribute('class'));
+    if (!cls) return null;
+    const el = document.createElement('i');
+    el.setAttribute('class', cls);
+    const hidden = node.hasAttribute('aria-hidden') ? pol.cleanAria('aria-hidden', node.getAttribute('aria-hidden')) : '';
+    if (hidden) el.setAttribute('aria-hidden', hidden);
+    Array.from(node.childNodes).forEach((c) => { const r = Sanitizer.#cleanNode(c); if (r) el.appendChild(r); });
+    return el;
   }
 
   /**
@@ -90,6 +169,26 @@ export class Sanitizer {
   static isSafeHref(url) {
     const v = String(url ?? '').trim();
     return !!v && !/[\u0000-\u001f\u007f]/.test(v) && SAFE_HREF.test(v);
+  }
+
+  /**
+   * 새 창으로 열지 않는 링크인지: 같은 페이지 앵커(#…)·전화(tel:)·메일(mailto:) 은 새 창이 필요 없다 (대소문자 무시)
+   * @param {string} href
+   * @returns {boolean}
+   */
+  static isInPageHref(href) {
+    return /^(#|tel:|mailto:)/i.test(String(href ?? '').trim());
+  }
+
+  /**
+   * 링크 종류에 맞게 target·rel 을 맞춘다: #·tel:·mailto: 는 두 속성을 없애고, 나머지는 새 창 + noopener
+   * (편집 중에는 주소가 data-jm-href 에 있어 href 를 인자로 받는다)
+   * @param {HTMLAnchorElement} a
+   * @param {string} href 링크 주소
+   */
+  static applyLinkTarget(a, href) {
+    if (Sanitizer.isInPageHref(href)) { a.removeAttribute('target'); a.removeAttribute('rel'); }
+    else { a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer'); }
   }
 
   /**
@@ -152,8 +251,10 @@ export class Sanitizer {
         const t = Sanitizer.#cleanNode(title);
         if (t && t.nodeType === Node.ELEMENT_NODE) { t.setAttribute('data-role', 'title'); g.appendChild(t); }
       }
-      node.querySelectorAll('img').forEach((img) => {
-        const r = Sanitizer.#cleanNode(img);
+      // picture 는 안의 img 한 장으로 줄인다 (picture 안 img 를 따로 또 모으지 않음)
+      node.querySelectorAll('img, picture').forEach((el) => {
+        if (el.tagName === 'IMG' && el.closest('picture')) return;
+        const r = Sanitizer.#blockImage(el);
         if (r) g.appendChild(r);
       });
       return g;
@@ -180,7 +281,7 @@ export class Sanitizer {
         const t = Sanitizer.#cleanNode(title);
         if (t && t.nodeType === Node.ELEMENT_NODE) { t.setAttribute('data-role', 'title'); b.appendChild(t); }
       }
-      node.querySelectorAll(':scope > img').forEach((img) => { const r = Sanitizer.#cleanNode(img); if (r) b.appendChild(r); });
+      node.querySelectorAll(':scope > img, :scope > picture').forEach((el) => { const r = Sanitizer.#blockImage(el); if (r) b.appendChild(r); });
       return b;
     }
 
@@ -223,6 +324,11 @@ export class Sanitizer {
     // 카카오 지도 블록: 속성만 (안의 내용은 런타임이 그린 것이라 버림)
     if (tag === 'div' && node.getAttribute('data-type') === 'map') return Sanitizer.#cleanMap(node);
 
+    // 모바일 이미지(picture): 구성·source 검사는 #cleanPicture (기본·구조 모드 모두)
+    if (tag === 'picture') return Sanitizer.#cleanPicture(node);
+
+    // 구조 모드 아이콘(<i class="ico …"></i>)은 em 으로 바꾸지 않는다
+    if (tag === 'i') { const icon = Sanitizer.#iconI(node); if (icon) return icon; }
     // 구조 모드에서 허용한 태그(div 등)는 별칭으로 바꾸지 않는다
     if (!pol?.tags.has(tag)) tag = TAG_ALIAS[tag] || tag;
     const allowed = ALLOWED[tag] || (pol?.tags.has(tag) ? STRUCTURE_ATTRS : null);
@@ -238,11 +344,12 @@ export class Sanitizer {
     }
 
     const el = document.createElement(tag);
-    // 구조 모드: class 는 허용 토큰만, th[scope] 는 허용 값만
+    // 구조 모드: class 는 허용 토큰만, th[scope] 는 허용 값만, id·aria 는 정책 검사 통과분만
     if (pol) {
       const cls = pol.cleanClass(node.getAttribute('class'));
       if (cls) el.setAttribute('class', cls);
       if (tag === 'th' && TH_SCOPES.includes(node.getAttribute('scope'))) el.setAttribute('scope', node.getAttribute('scope'));
+      Sanitizer.#copyIdAria(el, node);
     }
     // 허용 속성만 복사, URL 프로토콜 검사, style 은 색상 속성만
     allowed.forEach((attr) => {
@@ -251,6 +358,7 @@ export class Sanitizer {
       if (attr === 'href' && !Sanitizer.isSafeHref(v)) return;
       if (attr === 'src' && !SAFE_URL.test(v.trim())) return;
       if (attr === 'start' && !/^\d{1,4}$/.test(v)) return;
+      if (attr === 'loading' && !IMG_LOADING.includes(v)) return;
       if (attr === 'style') {
         const clean = Sanitizer.cleanStyle(v);
         if (clean) el.setAttribute('style', clean);
@@ -258,8 +366,8 @@ export class Sanitizer {
       }
       el.setAttribute(attr, v);
     });
-    // 스타일이 전부 제거된 span 은 의미가 없으므로 언래핑 (구조 모드에서 class 가 있으면 남김 — 아이콘 등)
-    if (tag === 'span' && !el.getAttribute('style') && !el.getAttribute('class')) {
+    // 속성이 하나도 남지 않은 span 은 의미가 없으므로 언래핑 (구조 모드에서 class·id·aria 가 있으면 남김 — 아이콘·앵커 등)
+    if (tag === 'span' && !el.attributes.length) {
       const frag = document.createDocumentFragment();
       Array.from(node.childNodes).forEach((c) => {
         const r = Sanitizer.#cleanNode(c);
@@ -267,9 +375,9 @@ export class Sanitizer {
       });
       return frag;
     }
-    // 링크는 새창 + noopener 강제. 버튼 링크 속성은 허용 값만
+    // 링크는 새창 + noopener 강제(#·tel:·mailto: 제외). 버튼 링크 속성은 허용 값만
     if (tag === 'a') {
-      el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer');
+      Sanitizer.applyLinkTarget(el, el.getAttribute('href') || '');
       if (el.getAttribute('data-role') !== 'button') ['data-role', 'data-style', 'data-size', 'data-color', 'data-tone', 'data-icon', 'data-icon-pos'].forEach((x) => el.removeAttribute(x));
       else Sanitizer.#cleanButton(el, node.getAttribute('style'));
     }
@@ -304,6 +412,101 @@ export class Sanitizer {
       el.setAttribute('style', `--jm-btn: ${hex}`);
       if (toneOf(hex) === 'light') el.setAttribute('data-tone', 'light');
     }
+  }
+
+  /**
+   * 갤러리·슬라이드 칸용: img 면 그대로 정제, picture 면 안의 첫 img 만 정제해 돌려준다 (source 는 버림)
+   * @param {Element} el img 또는 picture
+   * @returns {Node|null}
+   */
+  static #blockImage(el) {
+    const img = el.tagName === 'PICTURE' ? Array.from(el.children).find((c) => c.tagName === 'IMG') : el;
+    return img ? Sanitizer.#cleanNode(img) : null;
+  }
+
+  /**
+   * picture 정리: 자식은 source(최대 4개, 규칙 통과분) 다음 img 1개. img 가 없으면 통째로 버리고(null),
+   * img 뒤의 자식은 버린다. 남는 source 가 없으면 picture 를 벗기고 img 만 돌려준다. 구조 모드면 picture 의 class 허용 토큰만 남긴다.
+   * @param {Element} node picture
+   * @returns {Element|null} picture, img(source 없을 때), 또는 null
+   */
+  static #cleanPicture(node) {
+    const kids = Array.from(node.children);
+    const imgAt = kids.findIndex((c) => c.tagName === 'IMG');
+    if (imgAt < 0) return null;
+    const img = Sanitizer.#cleanNode(kids[imgAt]);
+    const sources = [];
+    for (const c of kids.slice(0, imgAt)) {
+      if (sources.length >= PICTURE_SOURCE_MAX) break;
+      const s = c.tagName === 'SOURCE' ? Sanitizer.#cleanSource(c) : null;
+      if (s) sources.push(s);
+    }
+    if (!sources.length) return img;
+    const pic = document.createElement('picture');
+    const cls = Sanitizer.#policy?.cleanClass(node.getAttribute('class'));
+    if (cls) pic.setAttribute('class', cls);
+    Sanitizer.#copyIdAria(pic, node);
+    sources.forEach((s) => pic.appendChild(s));
+    pic.appendChild(img);
+    return pic;
+  }
+
+  /**
+   * source 정리: srcset(필수)·media 가 규칙에 어긋나면 source 를 버리고(null), type 이 어긋나면 속성만 지운다. 그 밖의 속성은 모두 버린다.
+   * 빈 media 는 속성이 없는 것과 같아 지운다.
+   * @param {Element} node source
+   * @returns {HTMLElement|null}
+   */
+  static #cleanSource(node) {
+    const srcset = Sanitizer.cleanSrcset(node.getAttribute('srcset'));
+    if (srcset == null) return null;
+    const media = node.getAttribute('media');
+    if (media && !Sanitizer.isSafeMedia(media)) return null;
+    const s = document.createElement('source');
+    if (media) s.setAttribute('media', media);
+    s.setAttribute('srcset', srcset);
+    const type = node.getAttribute('type');
+    if (type && SOURCE_TYPE.test(type)) s.setAttribute('type', type);
+    return s;
+  }
+
+  /**
+   * srcset 값 검사·정규화: 후보 1~4개(`, ` 로 구분), 후보 = 주소 + 선택 서술자(`640w`·`2x`).
+   * 주소는 img src 와 같은 SAFE_URL 이어야 하고, data: 주소는 후보가 1개일 때만 허용한다(쉼표 구분이 모호해짐).
+   * 제어 문자·앞뒤 공백·대문자 프로토콜까지 고려하며, 하나라도 어긋나면 null.
+   * @param {string|null} value
+   * @returns {string|null} 후보를 `, ` 로 이은 정규화 문자열, 아니면 null
+   */
+  static cleanSrcset(value) {
+    const raw = String(value ?? '');
+    if (/[\u0000-\u001f\u007f]/.test(raw)) return null;
+    const v = raw.replace(/^ +| +$/g, '');
+    if (!v) return null;
+    // data: 주소는 통째로 후보 1개 (그 안의 쉼표는 base64 구분자 하나뿐이어야 함)
+    if (/^data:/i.test(v)) {
+      const m = v.match(/^([^ ]+)(?: (\d+w|\d+(?:\.\d+)?x))?$/);
+      if (!m || !SAFE_URL.test(m[1]) || m[1].split(',').length !== 2) return null;
+      return m[2] ? `${m[1]} ${m[2]}` : m[1];
+    }
+    const cands = v.split(/, +/).map((c) => c.replace(/^ +| +$/g, ''));
+    if (cands.length > SRCSET_MAX) return null;
+    const out = [];
+    for (const c of cands) {
+      const m = c.match(SRCSET_CANDIDATE);
+      if (!m || !SAFE_URL.test(m[1]) || /^data:/i.test(m[1])) return null;
+      out.push(m[2] ? `${m[1]} ${m[2]}` : m[1]);
+    }
+    return out.join(', ');
+  }
+
+  /**
+   * source[media] 검사: 200자 이하, 영문·숫자·공백·`( ) : , . -` 만, `url(` 금지
+   * @param {string} value
+   * @returns {boolean}
+   */
+  static isSafeMedia(value) {
+    const v = String(value ?? '');
+    return v.length > 0 && v.length <= MEDIA_MAX && /^[a-z0-9 \t\n\f\r():,.\-]+$/i.test(v) && !/url\s*\(/i.test(v);
   }
 
   /** 글 감싸기 이미지: data-float 는 left/right, style 은 width 10~100% 만 */
@@ -366,7 +569,7 @@ export class Sanitizer {
         if (r) cell.appendChild(r);
       } else if (src) {
         Array.from(src.childNodes).forEach((c) => { const r = Sanitizer.#cleanNode(c); if (r) cell.appendChild(r); });
-        cell.querySelectorAll('table, img, iframe, div').forEach((el) => el.remove());
+        cell.querySelectorAll('table, picture, img, iframe, div').forEach((el) => el.remove());
       }
       box.appendChild(cell);
     });

@@ -32,7 +32,8 @@ export class ButtonsCommands {
   }
 
   static buttonHTML(text, href, style) {
-    return `<a href="${href}" data-role="button" data-style="${style}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    const target = Sanitizer.isInPageHref(href) ? '' : ' target="_blank" rel="noopener noreferrer"'; // #·tel:·mailto: 는 새 창 아님
+    return `<a href="${href}" data-role="button" data-style="${style}"${target}>${text}</a>`;
   }
 
   // ───────────── 레이어 ─────────────
@@ -95,7 +96,7 @@ export class ButtonsCommands {
       const a = this.#selected(block);
       const href = Sanitizer.normalizeHref(url.value);
       url.classList.toggle('is-invalid', !!url.value.trim() && !href);
-      if (a) this.editor.constructor.setHref(a, href || '#');
+      if (a) { this.editor.constructor.setHref(a, href || '#'); Sanitizer.applyLinkTarget(a, href || '#'); }
     });
     url.addEventListener('change', () => this.editor.commit());
     url.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); url.blur(); } });
@@ -294,8 +295,9 @@ export class ButtonsCommands {
     const a = document.createElement('a');
     a.textContent = text;
     a.setAttribute('data-role', 'button'); a.setAttribute('data-style', 'primary');
-    a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer');
-    this.editor.constructor.setHref(a, Sanitizer.normalizeHref(href) || '#'); // 허용되지 않는 주소는 #
+    const safe = Sanitizer.normalizeHref(href) || '#'; // 허용되지 않는 주소는 #
+    this.editor.constructor.setHref(a, safe);
+    Sanitizer.applyLinkTarget(a, safe);
     block.appendChild(a);
     this.#bindButtons(block);
     this.#select(block, a);

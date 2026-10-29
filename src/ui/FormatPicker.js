@@ -123,6 +123,7 @@ export class FormatPicker {
       preview.className = 'jm-formatpicker-preview jm-editor';
       preview.contentEditable = 'false';
       preview.innerHTML = Sanitizer.clean(f.html || '', this.policy()); // 서식 HTML 은 외부(서버·연동 코드)에서 오므로 미리보기도 거름
+      Sanitizer.hideIds(preview); // 서식 본문 id 가 관리자 페이지 DOM 에 id 로 붙지 않게
 
       item.append(name, desc, preview);
       this.el.appendChild(item);

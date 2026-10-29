@@ -27,7 +27,7 @@ export function typeLabel(types) {
 }
 
 /**
- * 사용자 안내: 에디터 옵션 notify 가 있으면 그쪽으로, 없으면 alert (갤러리·배치 블록 공용)
+ * 사용자 안내: 에디터 옵션 notify 가 있으면 그쪽으로, 없으면 alert (갤러리·배치 블록·모바일 이미지 공용)
  * @param {{ notify?: (message: string) => void }} options 에디터 옵션
  * @param {string|string[]} messages
  */

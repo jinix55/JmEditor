@@ -98,13 +98,15 @@ MariaDB 의 `TEXT` 는 64KB 까지라 본문(최대 200만 자)이 잘릴 수 �
 jm-editor:
   structure:
     enabled: true        # 생략하면 켜짐, 끄려면 false
-    tags: [section, article, aside, div, dl, dt, dd, figure, figcaption, caption]
+    tags: [section, article, aside, div, dl, dt, dd, figure, figcaption, caption, header, footer, nav, h4, h5, h6, small, sub, sup]
     class-pattern: "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
     class-allow: [tit-*, box-gray]   # 생략하면 형식만 검사
     class-deny: [btn-admin*]
+    id-pattern: "^[A-Za-z][A-Za-z0-9_-]{0,63}$"   # id 이름 형식
+    id-deny: [header, gnb, site-*]   # 사이트 스크립트 전역·레이아웃 id. 예약 전역(JmEditorConfig 등)·jm-* 는 설정과 무관하게 항상 제거
 ```
 
-켜면 구조 태그와 class(허용 토큰만)·`th[scope]` 를 남기고, 블록 기능(`div[data-type]`) 안의 class 는 지웁니다. 정책과 무관하게 `jm-*`·`is-selected` 등 에디터 예약 이름은 지우고, `section` 등을 설정해도 `StructurePolicy.TAG_LIMIT` 밖의 태그(script·form 등)는 열리지 않습니다.
+켜면 구조 태그와 class(허용 토큰만)·`th[scope]`·`id`(형식·`idDeny`·예약 전역·중복 검사)·`aria-labelledby`/`describedby`/`label`/`hidden`·글자 없는 아이콘 `<i class>`(class·`aria-hidden="true"` 만)를 남기고, 블록 기능(`div[data-type]`) 안의 class 는 지웁니다. 정책과 무관하게 `jm-*`·`is-selected` 등 에디터 예약 이름은 지우고, `section` 등을 설정해도 `StructurePolicy.TAG_LIMIT` 밖의 태그(script·form 등)는 열리지 않습니다.
 같은 규칙을 클라이언트와 같은 픽스처(`test/fixtures/publisher/` 와 `expected/`)로 확인합니다.
 
 공통 변경: 링크 `tel:` 허용, `b`·`i`·`strike` 를 `strong`·`em`·`s` 로 바꿈(클라이언트와 같게), 저장 HTML 은 줄 맞춤(pretty print) 없이 출력합니다.
@@ -119,7 +121,9 @@ jm-editor:
 | ol | style, start |
 | br, strong, em, u, s, tbody, thead | — |
 | a | href, target, rel, data-role, data-style, data-size, data-color, data-tone, data-icon, data-icon-pos, style(버튼의 `--jm-btn: #hex` 만) — 버튼 속성은 `data-role="button"` 일 때만 남음 |
-| img | src, alt, width, height, data-float(left·right), style(`width: N%` 10~100 만 — 글 감싸기) |
+| img | src, alt, width, height, data-float(left·right), loading(lazy·eager), style(`width: N%` 10~100 만 — 글 감싸기) |
+| picture | (구조 모드에서 class·id·aria) — `source` 0~4개 + `img` 1개만 |
+| source | srcset(후보 1~4개, `data:` 는 1개만), media(200자 이하·`url(` 금지), type(이미지 형식만) |
 | table | style, data-border |
 | colgroup | — |
 | col, tr | style |
@@ -139,7 +143,7 @@ jm-editor:
 | img[src] | http, https, 상대 경로, `data:image/(png·jpeg·gif·webp·svg+xml);base64,` |
 | iframe[src] | 유튜브 embed 주소만 (아래 참고) |
 
-`javascript:` 등 그 밖의 프로토콜은 속성째 제거합니다. 모든 링크에는 `target="_blank"`, `rel="noopener noreferrer"` 가 강제로 붙습니다.
+`javascript:` 등 그 밖의 프로토콜은 속성째 제거합니다. 링크는 `#`·`tel:`·`mailto:` 이면 `target`·`rel` 없이, 그 밖에는 `target="_blank"`, `rel="noopener noreferrer"` 가 강제로 붙습니다.
 
 ### style
 

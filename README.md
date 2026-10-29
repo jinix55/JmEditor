@@ -101,6 +101,9 @@ window.JmEditorConfig = {
     maxTotalSizeMB: 100,    // 글당 용량 (축소 후)
     maxDimension: 2000,     // 긴 변 상한, 넘으면 축소 (GIF 제외)
   },
+  image: {
+    mobileMedia: '(max-width: 767px)', // 이미지 도구 막대「모바일 추가」가 source 에 쓰는 media (200자 이하)
+  },
 };
 ```
 
@@ -188,7 +191,7 @@ api: {
 
 ## 저장되는 HTML
 
-허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`(모양 `data-style`, 테마 색 `data-color`, 직접 색 `style="--jm-btn: #rrggbb"`+`data-tone`, 아이콘 `data-icon`·`data-icon-pos` — 테마 실제 색은 `:root { --jm-btn-green: … }` 처럼 사이트에서 바꿀 수 있음), 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]`, 카카오 지도용 `div[data-type="map"]`(속성 `data-timestamp`·`data-key`·`data-height`·`data-title` 만, 안의 내용은 버림) 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100)만 더 남습니다. 인용은 `blockquote` 기본(세로선)에 `data-style="box"`(박스)·`data-style="quote"`(글 처음·끝에 따옴표)가 있습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 만 남고 값 형식도 검사합니다.
+허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`(모양 `data-style`, 테마 색 `data-color`, 직접 색 `style="--jm-btn: #rrggbb"`+`data-tone`, 아이콘 `data-icon`·`data-icon-pos` — 테마 실제 색은 `:root { --jm-btn-green: … }` 처럼 사이트에서 바꿀 수 있음), 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]`, 카카오 지도용 `div[data-type="map"]`(속성 `data-timestamp`·`data-key`·`data-height`·`data-title` 만, 안의 내용은 버림) 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100), `loading`(lazy·eager)만 더 남고, 모바일 이미지용 `picture > source + img` 도 남습니다(아래 「퍼블리싱 구조 보존」 참고). 인용은 `blockquote` 기본(세로선)에 `data-style="box"`(박스)·`data-style="quote"`(글 처음·끝에 따옴표)가 있습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 만 남고 값 형식도 검사합니다.
 
 표는 이렇게 저장됩니다. 열 너비는 `colgroup`, 행 높이는 `tr`, 병합은 `colspan` / `rowspan`, 테두리 숨김은 `data-border="0"` 입니다.
 
@@ -273,15 +276,22 @@ initSliders(document.querySelector('.jm-content'));
 window.JmEditorConfig = {
   structure: {
     enabled: true,      // 기본값
-    tags: ['section', 'article', 'aside', 'div', 'dl', 'dt', 'dd', 'figure', 'figcaption', 'caption'], // 허용할 구조 태그
+    tags: ['section', 'article', 'aside', 'div', 'dl', 'dt', 'dd', 'figure', 'figcaption', 'caption', 'header', 'footer', 'nav', 'h4', 'h5', 'h6', 'small', 'sub', 'sup'], // 허용할 구조 태그
     classAllow: ['tit-*', 'box-gray'], // 생략하면 이름 형식만 검사 (운영 사이트는 목록으로 좁히기를 권장)
     classDeny: ['btn-admin*'],
+    idPattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$', // id 이름 형식
+    idDeny: ['header', 'gnb', 'site-*'],        // 막을 id 이름·접두어 (사이트 스크립트 전역·레이아웃 id)
   },
 };
 // 또는 에디터별: new JmToolbarEditor(el, { structure: { classAllow: [...] } })
 ```
 
-- 구조 태그와 모든 허용 태그의 `class`(이름 형식·목록 검사를 통과한 것만), `th[scope]`, `caption` 이 남습니다. `id`·`on*`·임의 `data-*`·script 는 열리지 않습니다.
+- 구조 태그와 모든 허용 태그의 `class`(이름 형식·목록 검사를 통과한 것만), `th[scope]`, `caption` 이 남습니다. `on*`·임의 `data-*`·script 는 열리지 않습니다.
+- **id** (구조 모드만): 형식 `^[A-Za-z][A-Za-z0-9_-]{0,63}$` 를 지키고 `jm-` 로 시작하지 않으며 예약 전역(`JmEditorConfig`·`JmEditor`·`JmViewer`·`JM`·`kakao`·`daum`·`EyeDropper`, 설정으로 못 바꿈)과 `idDeny` 에 없는 것만 남습니다. 같은 id 가 두 번 나오면 첫 번째만 남습니다. `aria-labelledby`·`aria-describedby`(위 형식의 id 를 공백으로 구분, 최대 8개), `aria-label`(200자 이하), `aria-hidden="true"` 도 남습니다. 끄면 id·aria 는 전부 지워집니다.
+- **사이트 전역·레이아웃 id 는 `idDeny` 에 넣으세요.** 본문 id 는 `window.<id>` 로 접근되므로 사이트 스크립트가 읽는 전역 이름이나 `header`·`gnb` 같은 레이아웃 id 가 본문에 들어오면 사이트가 깨질 수 있습니다. 라이브러리는 사이트의 전역을 알 수 없으므로 `idDeny`(`xxx-*` 접두어 지원)로 막는 것은 사이트 몫입니다.
+- 편집 중과 「미리보기」에서는 id 가 `data-jm-id` 로 숨겨집니다. 그래서 편집 화면·미리보기 안에서는 퍼블 CSS 의 `#id`·`:target`·`#앵커` 이동이 동작하지 않고, 저장·조회 화면에서는 정상입니다. 같은 에디터 안에서 잘라내기 → 붙여넣기로 옮기면 id 는 사라집니다(중복 방지).
+- 빈 아이콘 `<i class="…"></i>`(글자 없음)는 구조 모드에서 그대로 남습니다(`class` 와 `aria-hidden="true"` 만, id·다른 aria 는 지움). 글자가 있는 `<i>` 는 `<em>` 으로 바뀌고, 구조 모드를 끄면 모두 `<em>` 입니다.
+- 이미 DB 에서 id·아이콘 등이 빠진 글은 열어도 돌아오지 않습니다. 「HTML 보기」에서 원본 HTML 을 다시 넣고 저장하세요.
 - 에디터가 쓰는 이름(`jm-*`, `is-selected` 등)은 항상 지웁니다. 블록 기능(갤러리·슬라이드·버튼·유튜브·이미지 + 글·지도) 안은 지금 규칙 그대로입니다.
 - 서버는 `application.yml` 의 `jm-editor.structure.*` 로 같은 값을 줍니다([서버 연동 가이드](server/spring-boot/README.md)).
 - 데모에서 바로 볼 수 있습니다: 「퍼블 샘플 불러오기」에서 화면을 고르세요. 끈 상태와 비교하려면 주소 뒤에 `?structure=0`.
@@ -297,6 +307,26 @@ window.JmEditorConfig = {
 | 여러 구조에 걸친 선택 | 지우기·입력·잘라내기·붙여넣기 모두 글자만 지우고 구조는 남깁니다 |
 | 표·서식 넣기 | 가장 바깥 구조 바로 뒤에. 이미지·붙여넣은 문단은 그 자리(같은 구조 안)에 |
 | 구조 자체 바꾸기 | HTML 보기에서 |
+
+**모바일 이미지 (`picture`·`source`)** — 기본·구조 모드 모두 남습니다. `<picture>` 는 `<source>` 0~4개 다음 `<img>` 1개만 허용하고(img 가 없으면 통째로 버림, source 가 0개면 picture 를 벗겨 img 만 남김), 갤러리·슬라이드 같은 블록 안에서는 img 로 줄입니다. `source` 는 `srcset`(후보 1~4개, `data:` 는 1개만)·`media`(200자 이하, `url(` 금지)·`type`(png·jpeg·gif·webp·avif·svg+xml 만)만 남고, `picture` 는 구조 모드에서 `class`·`id`·aria(위 id·aria 규칙)가 남습니다. `img[loading]` 은 `lazy`·`eager` 만 남습니다(에디터가 새로 붙이지는 않습니다).
+
+이미지를 클릭하면 뜨는 도구 막대 오른쪽에서 모바일 이미지를 다룹니다.
+
+| 버튼 | 동작 |
+|---|---|
+| 모바일 추가 | 파일을 올려 `<picture><source media="(max-width: 767px)" srcset="…"><img></picture>` 로 감쌈. media 는 설정 `image.mobileMedia`(규칙에 어긋나면 기본값 + 콘솔 경고). 업로드 주소의 공백·쉼표는 %인코딩하고, 그래도 쓸 수 없는 주소(상대 경로 등)면 알림(`notify`)만 띄우고 바꾸지 않음 |
+| 모바일 교체 · 삭제 | 첫 번째 source 의 srcset 을 바꾸거나 지움. 삭제로 source 가 다 없어지면 picture 를 벗기고 picture 의 class·id 는 버림. 두 번째 이후 source 는 그대로 보존 |
+| 교체 (PC 이미지) | img 만 바꾸고 모바일 이미지는 유지 |
+| 삭제 (이미지) | picture 통째로 삭제 |
+
+**링크**: href 가 `#`·`tel:`·`mailto:` 로 시작하면 `target`·`rel` 을 붙이지 않고(들어온 target 도 지움), 그 밖(`http(s)://`, `/…`)은 `target="_blank" rel="noopener noreferrer"` 가 붙습니다. 버튼 링크도 같습니다.
+
+**이전 버전과 달라진 점** (퍼블 HTML 보존 2차)
+
+1. `#`·`tel:`·`mailto:` 링크에 새 창 속성이 더 이상 붙지 않습니다.
+2. 구조 모드 기본 태그에 `header`·`footer`·`nav`·`h4`~`h6`·`small`·`sub`·`sup` 가 추가됐습니다(기본 19개). `small`·`sub`·`sup` 은 편집할 때 블록이 아니라 굵게처럼 글자 서식으로 다룹니다(Enter·정렬은 바깥 문단 기준).
+3. `picture`/`source`·`img[loading]` 이 남습니다.
+4. 구조 모드에서 id·`aria-*`(labelledby·describedby·label·hidden)·빈 아이콘 `<i>` 가 남습니다.
 
 알려진 제약: 여러 구조에 걸친 선택 위에서 한글 조합 입력을 시작하면 브라우저가 그 입력을 막지 못합니다(구조가 바뀔 수 있음). 안드로이드 키보드의 범위 입력은 확인하지 못했습니다.
 

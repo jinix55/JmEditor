@@ -147,3 +147,59 @@ test('기본 모드(구조 끔)에서는 중첩된 표도 손잡이가 보인다
   for (let i = 0; i < 2; i++) await expect(handles.nth(i)).toBeVisible();
 });
 
+
+test.describe('인라인 구조 태그(small·sub·sup)는 블록이 아니라 글자처럼', () => {
+  test('sup 끝에서 Enter 는 sup 안 줄바꿈이 아니라 문단 나누기', async ({ page }) => {
+    await setHTML(page, '<p>E=mc<sup>2</sup> 공식</p>');
+    await caret(page, 'sup', -1);
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('X');
+    const out = await html(page);
+    expect(out).not.toContain('<br>');
+    expect(await page.evaluate(() => window.core.root.querySelectorAll('p').length)).toBe(2);
+    expect(out.startsWith('<p>E=mc<sup>2</sup></p>')).toBe(true);
+  });
+
+  test('루트의 sup 와 뒤 글은 한 문단으로 감싼다', async ({ page }) => {
+    await page.evaluate(() => { window.core.root.innerHTML = '<sup>1</sup> 각주'; window.core.commit(); });
+    expect(await html(page)).toBe('<p><sup>1</sup> 각주</p>');
+    await setHTML(page, '<sup>1</sup> 각주<small>작게</small>');
+    expect(await html(page)).toBe('<p><sup>1</sup> 각주<small>작게</small></p>');
+  });
+
+  test('small 안 커서: 블록은 바깥 p, 정렬은 p 에', async ({ page }) => {
+    await setHTML(page, '<p>작은 <small>글씨</small></p>');
+    await caret(page, 'small', 1);
+    expect(await page.evaluate(() => window.core.sel.getBlock()?.tagName)).toBe('P');
+    await exec(page, 'alignCenter');
+    expect(await html(page)).toBe('<p style="text-align: center;">작은 <small>글씨</small></p>');
+  });
+});
+
+test.describe('루트 인라인 묶기는 small·sub·sup 가 있는 구간만 (그 밖은 예전처럼 노드마다 문단)', () => {
+  /** commit 경로(편집 DOM 에 직접 넣고 commit)와 setHTML 경로 결과 */
+  async function both(page, h) {
+    const viaCommit = await page.evaluate((x) => { window.core.root.innerHTML = x; window.core.commit(); return window.ed.getHTML(); }, h);
+    await setHTML(page, h);
+    return { viaCommit, viaSet: await html(page) };
+  }
+
+  for (const q of ['?structure=1', '?structure=0']) {
+    test(`글·strong·이미지는 예전대로 노드마다 문단 ${q}`, async ({ page }) => {
+      await open(page, q);
+      expect(await both(page, 'a<strong>b</strong>c')).toEqual({ viaCommit: '<p>a</p><p><strong>b</strong></p><p>c</p>', viaSet: '<p>a</p><p><strong>b</strong></p><p>c</p>' });
+      expect(await both(page, '<img src="/a.png" alt="a">캡션')).toEqual({ viaCommit: '<p><img src="/a.png" alt="a"></p><p>캡션</p>', viaSet: '<p><img src="/a.png" alt="a"></p><p>캡션</p>' });
+    });
+  }
+
+  test('구조 켬: <sup>1</sup> 각주 는 commit·setHTML 모두 한 문단, 공백 유지', async ({ page }) => {
+    expect(await both(page, '<sup>1</sup> 각주')).toEqual({ viaCommit: '<p><sup>1</sup> 각주</p>', viaSet: '<p><sup>1</sup> 각주</p>' });
+    expect(await both(page, '앞 <sub>2</sub> 뒤<section class="s"><p>x</p></section>꼬리'))
+      .toEqual({ viaCommit: '<p>앞 <sub>2</sub> 뒤</p><section class="s"><p>x</p></section><p>꼬리</p>', viaSet: '<p>앞 <sub>2</sub> 뒤</p><section class="s"><p>x</p></section><p>꼬리</p>' });
+  });
+
+  test('구조 끔: <sup>1</sup> 각주 는 이번 작업 전과 같음 (setHTML 은 sup 를 벗김, commit 은 노드마다 문단)', async ({ page }) => {
+    await open(page, '?structure=0');
+    expect(await both(page, '<sup>1</sup> 각주')).toEqual({ viaCommit: '<p><sup>1</sup></p><p> 각주</p>', viaSet: '<p>1 각주</p>' });
+  });
+});

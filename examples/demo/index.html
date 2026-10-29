@@ -550,6 +550,8 @@ div[data-type="slider"] > img.is-current, div[data-type="slider"]:not(:has(> img
 .jm-imgbar-btn.is-on { background: var(--jm-active); color: var(--jm-accent); font-weight: 600; }
 .jm-imgbar-del { color: var(--jm-danger); }
 .jm-imgbar-sep { width: 1px; height: 16px; margin: 0 3px; background: var(--jm-border); }
+.jm-imgbar-thumb { width: 24px; height: 24px; object-fit: cover; border: 1px solid var(--jm-border); border-radius: 3px; margin: 0 2px; }
+.jm-imgbar-thumb[hidden], .jm-imgbar-btn[hidden] { display: none; }
 .jm-imgbar-size { min-width: 34px; padding: 0 4px; color: var(--jm-muted); font-size: 11px; text-align: center; }
 .jm-imgbar-move { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 24px; color: var(--jm-subtle); font-size: 15px; cursor: grab; user-select: none; }
 .jm-imgbar-move[hidden] { display: none; }
@@ -880,7 +882,7 @@ const ALLOWED = {
   ul: ['style'], ol: ['style', 'start'], li: ['style'],
   blockquote: ['style', 'data-style'], // 인용 스타일: box·quote (세로선은 기본값이라 속성 없음)
   a: ['href', 'target', 'rel', 'data-role', 'data-style', 'data-size', 'data-color', 'data-tone', 'data-icon', 'data-icon-pos'], // data-role=button → 버튼 모양 링크 (값 검사는 #cleanButton)
-  img: ['src', 'alt', 'width', 'height', 'data-float', 'style'], // 글 감싸기: 방향 + 폭(%) — 값 검사는 #cleanImage
+  img: ['src', 'alt', 'width', 'height', 'data-float', 'style', 'loading'], // 글 감싸기: 방향 + 폭(%) — 값 검사는 #cleanImage, loading 은 lazy·eager 만
   table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style'],
   tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
   span: ['style'],
@@ -905,11 +907,25 @@ const TAG_ALIAS = { b: 'strong', i: 'em', strike: 's', div: 'p' };
 
 /** src 에 허용하는 주소: http(s)·/ 경로·이미지 data:(base64). img 안의 svg 는 스크립트가 실행되지 않아 허용 (서버 HtmlSanitizer 와 같은 규칙) */
 const SAFE_URL = /^(https?:|\/|data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,)/i;
+/** 이미지 loading 속성 허용 값 */
+const IMG_LOADING = ['lazy', 'eager'];
+/** source[type] 허용 값 (이미지 형식만) */
+const SOURCE_TYPE = /^image\/(png|jpeg|gif|webp|avif|svg\+xml)$/;
+/** srcset 후보 하나: 주소(공백·쉼표 없음) + 선택 서술자(폭 `640w` 또는 배율 `2x`) */
+const SRCSET_CANDIDATE = /^([^ ,]+)(?: (\d+w|\d+(?:\.\d+)?x))?$/;
+/** picture 하나에 둘 수 있는 source 최대 개수, srcset 후보 최대 개수, media 최대 길이 */
+const PICTURE_SOURCE_MAX = 4;
+const SRCSET_MAX = 4;
+const MEDIA_MAX = 200;
 /** href(링크)에 허용하는 주소: http(s)·mailto·tel·# 와 / 로 시작하는 내부 경로 (// 와 /\ 같은 외부 주소 우회는 제외) */
 const SAFE_HREF = /^(https?:\/\/|mailto:|tel:|#|\/(?![/\\]))/i;
 
 /** 플러그인 블록 종류 — 구조 정책을 적용하지 않는다(블록마다 정해진 형식 그대로) */
 const PLUGIN_TYPES = ['gallery', 'slider', 'buttons', 'youtube', 'layout', 'map'];
+/** 플러그인 블록 선택자 (div[data-type=…]) — 안의 요소는 블록 형식·런타임 몫이라 id 숨김에서 건드리지 않는다 */
+const PLUGIN_BLOCK_SELECTOR = PLUGIN_TYPES.map((t) => `div[data-type="${t}"]`).join(', ');
+/** 편집·미리보기 화면에서 본문 id 를 보관하는 속성 (getHTML 이 id 로 되돌림) */
+const HIDDEN_ID_ATTR = 'data-jm-id';
 /** 구조 모드에서 새로 허용한 태그가 가질 수 있는 속성 (class 는 따로) */
 const STRUCTURE_ATTRS = ['style'];
 /** th[scope] 허용 값 (구조 모드) */
@@ -946,7 +962,71 @@ class Sanitizer {
     });
     const wrap = document.createElement('div');
     wrap.appendChild(frag);
+    Sanitizer.dedupeIds(wrap);
     return wrap.innerHTML;
+  }
+
+  /**
+   * 같은 id 가 두 번 이상 나오면 문서 순서상 첫 번째만 남기고 나머지 요소의 id 를 지운다 (대소문자가 다르면 다른 id)
+   * @param {ParentNode} root
+   * @param {string} [attr='id'] 검사할 속성 (편집 중에는 data-jm-id)
+   */
+  static dedupeIds(root, attr = 'id') {
+    const seen = new Set();
+    root.querySelectorAll(`[${attr}]`).forEach((el) => {
+      const v = el.getAttribute(attr);
+      if (seen.has(v)) el.removeAttribute(attr); else seen.add(v);
+    });
+  }
+
+  /**
+   * 화면에 그린 본문(편집 root·미리보기)의 id 를 보관 속성(data-jm-id)으로 옮긴다 — 본문 id 가 관리자 페이지의
+   * id·window 전역·CSS #id 와 부딪히지 않게. 플러그인 블록(과 skip 선택자) 안은 런타임이 만든 id(지도 등)가 있어 건드리지 않는다.
+   * @param {ParentNode} root
+   * @param {string} [skip] 더 건너뛸 선택자 (편집기의 플러그인 레이어 등)
+   */
+  static hideIds(root, skip = '') {
+    const sel = skip ? `${PLUGIN_BLOCK_SELECTOR}, ${skip}` : PLUGIN_BLOCK_SELECTOR;
+    root.querySelectorAll('[id]').forEach((el) => {
+      if (el.closest(sel)) return;
+      el.setAttribute(HIDDEN_ID_ATTR, el.id);
+      el.removeAttribute('id');
+    });
+  }
+
+  /**
+   * 구조 모드: id·aria(4종) 를 정책 검사 후 옮긴다 (정책이 없으면 아무것도 하지 않음)
+   * @param {Element} el 새로 만든 요소
+   * @param {Element} node 원본 요소
+   */
+  static #copyIdAria(el, node) {
+    const pol = Sanitizer.#policy;
+    if (!pol) return;
+    const id = pol.cleanId(node.getAttribute('id'));
+    if (id) el.setAttribute('id', id);
+    ARIA_ATTRS.forEach((name) => {
+      const v = node.hasAttribute(name) ? pol.cleanAria(name, node.getAttribute(name)) : '';
+      if (v) el.setAttribute(name, v);
+    });
+  }
+
+  /**
+   * 구조 모드 아이콘 i: class(허용 토큰)가 남고 글이 없으면(공백만) i 를 그대로 둔다 — class 와 aria-hidden="true" 만 남기고
+   * 나머지 속성(id·다른 aria 포함)은 버림 (서버 HtmlSanitizer 와 같은 규칙)
+   * @param {Element} node 원본 i
+   * @returns {HTMLElement|null} 아이콘이면 정리한 i, 아니면 null(em 으로 바꾸는 기본 규칙)
+   */
+  static #iconI(node) {
+    const pol = Sanitizer.#policy;
+    if (!pol || node.textContent.trim() !== '') return null;
+    const cls = pol.cleanClass(node.getAttribute('class'));
+    if (!cls) return null;
+    const el = document.createElement('i');
+    el.setAttribute('class', cls);
+    const hidden = node.hasAttribute('aria-hidden') ? pol.cleanAria('aria-hidden', node.getAttribute('aria-hidden')) : '';
+    if (hidden) el.setAttribute('aria-hidden', hidden);
+    Array.from(node.childNodes).forEach((c) => { const r = Sanitizer.#cleanNode(c); if (r) el.appendChild(r); });
+    return el;
   }
 
   /**
@@ -957,6 +1037,26 @@ class Sanitizer {
   static isSafeHref(url) {
     const v = String(url ?? '').trim();
     return !!v && !/[\u0000-\u001f\u007f]/.test(v) && SAFE_HREF.test(v);
+  }
+
+  /**
+   * 새 창으로 열지 않는 링크인지: 같은 페이지 앵커(#…)·전화(tel:)·메일(mailto:) 은 새 창이 필요 없다 (대소문자 무시)
+   * @param {string} href
+   * @returns {boolean}
+   */
+  static isInPageHref(href) {
+    return /^(#|tel:|mailto:)/i.test(String(href ?? '').trim());
+  }
+
+  /**
+   * 링크 종류에 맞게 target·rel 을 맞춘다: #·tel:·mailto: 는 두 속성을 없애고, 나머지는 새 창 + noopener
+   * (편집 중에는 주소가 data-jm-href 에 있어 href 를 인자로 받는다)
+   * @param {HTMLAnchorElement} a
+   * @param {string} href 링크 주소
+   */
+  static applyLinkTarget(a, href) {
+    if (Sanitizer.isInPageHref(href)) { a.removeAttribute('target'); a.removeAttribute('rel'); }
+    else { a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer'); }
   }
 
   /**
@@ -1019,8 +1119,10 @@ class Sanitizer {
         const t = Sanitizer.#cleanNode(title);
         if (t && t.nodeType === Node.ELEMENT_NODE) { t.setAttribute('data-role', 'title'); g.appendChild(t); }
       }
-      node.querySelectorAll('img').forEach((img) => {
-        const r = Sanitizer.#cleanNode(img);
+      // picture 는 안의 img 한 장으로 줄인다 (picture 안 img 를 따로 또 모으지 않음)
+      node.querySelectorAll('img, picture').forEach((el) => {
+        if (el.tagName === 'IMG' && el.closest('picture')) return;
+        const r = Sanitizer.#blockImage(el);
         if (r) g.appendChild(r);
       });
       return g;
@@ -1047,7 +1149,7 @@ class Sanitizer {
         const t = Sanitizer.#cleanNode(title);
         if (t && t.nodeType === Node.ELEMENT_NODE) { t.setAttribute('data-role', 'title'); b.appendChild(t); }
       }
-      node.querySelectorAll(':scope > img').forEach((img) => { const r = Sanitizer.#cleanNode(img); if (r) b.appendChild(r); });
+      node.querySelectorAll(':scope > img, :scope > picture').forEach((el) => { const r = Sanitizer.#blockImage(el); if (r) b.appendChild(r); });
       return b;
     }
 
@@ -1090,6 +1192,11 @@ class Sanitizer {
     // 카카오 지도 블록: 속성만 (안의 내용은 런타임이 그린 것이라 버림)
     if (tag === 'div' && node.getAttribute('data-type') === 'map') return Sanitizer.#cleanMap(node);
 
+    // 모바일 이미지(picture): 구성·source 검사는 #cleanPicture (기본·구조 모드 모두)
+    if (tag === 'picture') return Sanitizer.#cleanPicture(node);
+
+    // 구조 모드 아이콘(<i class="ico …"></i>)은 em 으로 바꾸지 않는다
+    if (tag === 'i') { const icon = Sanitizer.#iconI(node); if (icon) return icon; }
     // 구조 모드에서 허용한 태그(div 등)는 별칭으로 바꾸지 않는다
     if (!pol?.tags.has(tag)) tag = TAG_ALIAS[tag] || tag;
     const allowed = ALLOWED[tag] || (pol?.tags.has(tag) ? STRUCTURE_ATTRS : null);
@@ -1105,11 +1212,12 @@ class Sanitizer {
     }
 
     const el = document.createElement(tag);
-    // 구조 모드: class 는 허용 토큰만, th[scope] 는 허용 값만
+    // 구조 모드: class 는 허용 토큰만, th[scope] 는 허용 값만, id·aria 는 정책 검사 통과분만
     if (pol) {
       const cls = pol.cleanClass(node.getAttribute('class'));
       if (cls) el.setAttribute('class', cls);
       if (tag === 'th' && TH_SCOPES.includes(node.getAttribute('scope'))) el.setAttribute('scope', node.getAttribute('scope'));
+      Sanitizer.#copyIdAria(el, node);
     }
     // 허용 속성만 복사, URL 프로토콜 검사, style 은 색상 속성만
     allowed.forEach((attr) => {
@@ -1118,6 +1226,7 @@ class Sanitizer {
       if (attr === 'href' && !Sanitizer.isSafeHref(v)) return;
       if (attr === 'src' && !SAFE_URL.test(v.trim())) return;
       if (attr === 'start' && !/^\d{1,4}$/.test(v)) return;
+      if (attr === 'loading' && !IMG_LOADING.includes(v)) return;
       if (attr === 'style') {
         const clean = Sanitizer.cleanStyle(v);
         if (clean) el.setAttribute('style', clean);
@@ -1125,8 +1234,8 @@ class Sanitizer {
       }
       el.setAttribute(attr, v);
     });
-    // 스타일이 전부 제거된 span 은 의미가 없으므로 언래핑 (구조 모드에서 class 가 있으면 남김 — 아이콘 등)
-    if (tag === 'span' && !el.getAttribute('style') && !el.getAttribute('class')) {
+    // 속성이 하나도 남지 않은 span 은 의미가 없으므로 언래핑 (구조 모드에서 class·id·aria 가 있으면 남김 — 아이콘·앵커 등)
+    if (tag === 'span' && !el.attributes.length) {
       const frag = document.createDocumentFragment();
       Array.from(node.childNodes).forEach((c) => {
         const r = Sanitizer.#cleanNode(c);
@@ -1134,9 +1243,9 @@ class Sanitizer {
       });
       return frag;
     }
-    // 링크는 새창 + noopener 강제. 버튼 링크 속성은 허용 값만
+    // 링크는 새창 + noopener 강제(#·tel:·mailto: 제외). 버튼 링크 속성은 허용 값만
     if (tag === 'a') {
-      el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer');
+      Sanitizer.applyLinkTarget(el, el.getAttribute('href') || '');
       if (el.getAttribute('data-role') !== 'button') ['data-role', 'data-style', 'data-size', 'data-color', 'data-tone', 'data-icon', 'data-icon-pos'].forEach((x) => el.removeAttribute(x));
       else Sanitizer.#cleanButton(el, node.getAttribute('style'));
     }
@@ -1171,6 +1280,101 @@ class Sanitizer {
       el.setAttribute('style', `--jm-btn: ${hex}`);
       if (toneOf(hex) === 'light') el.setAttribute('data-tone', 'light');
     }
+  }
+
+  /**
+   * 갤러리·슬라이드 칸용: img 면 그대로 정제, picture 면 안의 첫 img 만 정제해 돌려준다 (source 는 버림)
+   * @param {Element} el img 또는 picture
+   * @returns {Node|null}
+   */
+  static #blockImage(el) {
+    const img = el.tagName === 'PICTURE' ? Array.from(el.children).find((c) => c.tagName === 'IMG') : el;
+    return img ? Sanitizer.#cleanNode(img) : null;
+  }
+
+  /**
+   * picture 정리: 자식은 source(최대 4개, 규칙 통과분) 다음 img 1개. img 가 없으면 통째로 버리고(null),
+   * img 뒤의 자식은 버린다. 남는 source 가 없으면 picture 를 벗기고 img 만 돌려준다. 구조 모드면 picture 의 class 허용 토큰만 남긴다.
+   * @param {Element} node picture
+   * @returns {Element|null} picture, img(source 없을 때), 또는 null
+   */
+  static #cleanPicture(node) {
+    const kids = Array.from(node.children);
+    const imgAt = kids.findIndex((c) => c.tagName === 'IMG');
+    if (imgAt < 0) return null;
+    const img = Sanitizer.#cleanNode(kids[imgAt]);
+    const sources = [];
+    for (const c of kids.slice(0, imgAt)) {
+      if (sources.length >= PICTURE_SOURCE_MAX) break;
+      const s = c.tagName === 'SOURCE' ? Sanitizer.#cleanSource(c) : null;
+      if (s) sources.push(s);
+    }
+    if (!sources.length) return img;
+    const pic = document.createElement('picture');
+    const cls = Sanitizer.#policy?.cleanClass(node.getAttribute('class'));
+    if (cls) pic.setAttribute('class', cls);
+    Sanitizer.#copyIdAria(pic, node);
+    sources.forEach((s) => pic.appendChild(s));
+    pic.appendChild(img);
+    return pic;
+  }
+
+  /**
+   * source 정리: srcset(필수)·media 가 규칙에 어긋나면 source 를 버리고(null), type 이 어긋나면 속성만 지운다. 그 밖의 속성은 모두 버린다.
+   * 빈 media 는 속성이 없는 것과 같아 지운다.
+   * @param {Element} node source
+   * @returns {HTMLElement|null}
+   */
+  static #cleanSource(node) {
+    const srcset = Sanitizer.cleanSrcset(node.getAttribute('srcset'));
+    if (srcset == null) return null;
+    const media = node.getAttribute('media');
+    if (media && !Sanitizer.isSafeMedia(media)) return null;
+    const s = document.createElement('source');
+    if (media) s.setAttribute('media', media);
+    s.setAttribute('srcset', srcset);
+    const type = node.getAttribute('type');
+    if (type && SOURCE_TYPE.test(type)) s.setAttribute('type', type);
+    return s;
+  }
+
+  /**
+   * srcset 값 검사·정규화: 후보 1~4개(`, ` 로 구분), 후보 = 주소 + 선택 서술자(`640w`·`2x`).
+   * 주소는 img src 와 같은 SAFE_URL 이어야 하고, data: 주소는 후보가 1개일 때만 허용한다(쉼표 구분이 모호해짐).
+   * 제어 문자·앞뒤 공백·대문자 프로토콜까지 고려하며, 하나라도 어긋나면 null.
+   * @param {string|null} value
+   * @returns {string|null} 후보를 `, ` 로 이은 정규화 문자열, 아니면 null
+   */
+  static cleanSrcset(value) {
+    const raw = String(value ?? '');
+    if (/[\u0000-\u001f\u007f]/.test(raw)) return null;
+    const v = raw.replace(/^ +| +$/g, '');
+    if (!v) return null;
+    // data: 주소는 통째로 후보 1개 (그 안의 쉼표는 base64 구분자 하나뿐이어야 함)
+    if (/^data:/i.test(v)) {
+      const m = v.match(/^([^ ]+)(?: (\d+w|\d+(?:\.\d+)?x))?$/);
+      if (!m || !SAFE_URL.test(m[1]) || m[1].split(',').length !== 2) return null;
+      return m[2] ? `${m[1]} ${m[2]}` : m[1];
+    }
+    const cands = v.split(/, +/).map((c) => c.replace(/^ +| +$/g, ''));
+    if (cands.length > SRCSET_MAX) return null;
+    const out = [];
+    for (const c of cands) {
+      const m = c.match(SRCSET_CANDIDATE);
+      if (!m || !SAFE_URL.test(m[1]) || /^data:/i.test(m[1])) return null;
+      out.push(m[2] ? `${m[1]} ${m[2]}` : m[1]);
+    }
+    return out.join(', ');
+  }
+
+  /**
+   * source[media] 검사: 200자 이하, 영문·숫자·공백·`( ) : , . -` 만, `url(` 금지
+   * @param {string} value
+   * @returns {boolean}
+   */
+  static isSafeMedia(value) {
+    const v = String(value ?? '');
+    return v.length > 0 && v.length <= MEDIA_MAX && /^[a-z0-9 \t\n\f\r():,.\-]+$/i.test(v) && !/url\s*\(/i.test(v);
   }
 
   /** 글 감싸기 이미지: data-float 는 left/right, style 은 width 10~100% 만 */
@@ -1233,7 +1437,7 @@ class Sanitizer {
         if (r) cell.appendChild(r);
       } else if (src) {
         Array.from(src.childNodes).forEach((c) => { const r = Sanitizer.#cleanNode(c); if (r) cell.appendChild(r); });
-        cell.querySelectorAll('table, img, iframe, div').forEach((el) => el.remove());
+        cell.querySelectorAll('table, picture, img, iframe, div').forEach((el) => el.remove());
       }
       box.appendChild(cell);
     });
@@ -1267,11 +1471,14 @@ class SelectionUtil {
   }
 
   /**
-   * 구조 모드에서 허용된 구조 태그인지 (section·div·dl 등)
+   * 구조 모드에서 허용된 블록 구조 태그인지 (section·div·dl 등).
+   * 인라인 구조 태그(small·sub·sup — INLINE_STRUCTURE_TAGS)는 허용돼 있어도 블록·컨테이너가 아니므로 false
    * @param {Node} el
    */
   isStructureTag(el) {
-    return !!this.structure && el?.nodeType === Node.ELEMENT_NODE && this.structure.tags.has(el.tagName.toLowerCase());
+    if (!this.structure || el?.nodeType !== Node.ELEMENT_NODE) return false;
+    const tag = el.tagName.toLowerCase();
+    return this.structure.tags.has(tag) && !INLINE_STRUCTURE_TAGS.includes(tag);
   }
 
   /** 블록 자식이 있는 요소인지 (구조 컨테이너 판정) */
@@ -2160,7 +2367,7 @@ class Commands {
     const existing = this.sel.closest('a');
 
     if (existing) {
-      if (href) { this.editor.constructor.setHref(existing, href); } // 기존 링크: 주소만 수정
+      if (href) { this.editor.constructor.setHref(existing, href); Sanitizer.applyLinkTarget(existing, href); } // 기존 링크: 주소만 수정(새 창 규칙도 다시 맞춤)
       else this.#unwrapEl(existing);                                // 해제
       this.editor.commit();
       return true;
@@ -2173,8 +2380,7 @@ class Commands {
     pieces.forEach((t) => {
       const a = document.createElement('a');
       this.editor.constructor.setHref(a, href);
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
+      Sanitizer.applyLinkTarget(a, href); // #·tel:·mailto: 는 새 창 아님
       t.parentNode.insertBefore(a, t);
       a.appendChild(t);
       this.#mergeSiblings(a); // 같은 주소로 이어진 조각(글자·이미지)은 하나의 링크로
@@ -3377,19 +3583,28 @@ class ContextMenu {
  * 설정 (생성 옵션 structure > window.JmEditorConfig.structure > 기본값):
  *   { enabled: true, tags: [...], classPattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$', classAllow: null | ['tit-*', 'box-gray'], classDeny: ['btn-admin*'] }
  *   classAllow·classDeny 의 'xxx-*' 는 접두어, 나머지는 정확한 이름.
+ *   idPattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$', idDeny: ['gnb', 'site-*']  — 구조 모드에서 id 형식·금지 이름(같은 'xxx-*' 규칙)
  */
 
 /** 기본 정책 (켜짐 — 끄려면 enabled: false, 서버도 같은 값으로) */
 const STRUCTURE_DEFAULTS = Object.freeze({
   enabled: true,
-  tags: Object.freeze(['section', 'article', 'aside', 'div', 'dl', 'dt', 'dd', 'figure', 'figcaption', 'caption']),
+  tags: Object.freeze(['section', 'article', 'aside', 'div', 'dl', 'dt', 'dd', 'figure', 'figcaption', 'caption', 'header', 'footer', 'nav', 'h4', 'h5', 'h6', 'small', 'sub', 'sup']),
   classPattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
   classAllow: null,
   classDeny: Object.freeze([]),
+  idPattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
+  idDeny: Object.freeze([]),
 });
 
 /** 구조 모드에서 새로 허용할 수 있는 태그 (이 밖의 이름은 설정해도 무시 — script·form 등 차단) */
 const STRUCTURE_TAG_LIMIT = Object.freeze(['section', 'article', 'aside', 'div', 'dl', 'dt', 'dd', 'figure', 'figcaption', 'caption', 'header', 'footer', 'nav', 'h4', 'h5', 'h6', 'small', 'sub', 'sup']);
+
+/**
+ * 글자 단위(인라인) 구조 태그 — 정제에서는 구조 태그로 허용하지만, 편집기의 블록·컨테이너 판정에서는 strong 처럼 일반 인라인으로 본다
+ * (블록으로 보면 sup 안 Enter 가 줄바꿈이 되거나 루트의 sup 가 문단 밖에 남는다)
+ */
+const INLINE_STRUCTURE_TAGS = Object.freeze(['small', 'sub', 'sup']);
 
 /**
  * 에디터 예약 class — 설정과 무관하게 항상 지운다 (편집 상태 표시용. 남으면 저장·조회 화면이 어긋남)
@@ -3401,6 +3616,24 @@ const RESERVED_CLASSES = Object.freeze(['is-selected', 'is-empty', 'is-dragging'
 /** class 토큰 한계: 이름 길이·개수 (사용자 정규식이 느려도 입력 크기가 제한되게 — ReDoS 완화) */
 const CLASS_TOKEN_MAX = 64;
 const CLASS_TOKENS_MAX = 32;
+/**
+ * 예약 id — 설정과 무관하게 항상 지운다. 라이브러리·뷰어·지도 스크립트가 window 에서 **읽는** 전역 이름만 (DOM clobbering 방지:
+ * 같은 id 의 요소가 있으면 window.이름 이 그 요소가 된다). 브라우저 속성 이름 전체를 막지 않는다 — history·location·content 같은
+ * 흔한 퍼블 id 는 window 의 진짜 속성이 이기므로 남긴다. (서버 StructurePolicy.RESERVED_IDS 와 같아야 함)
+ * JmEditorConfig(config.js), JmEditor·JmViewer(번들 전역), JM(데모·하네스), kakao·daum(지도 스크립트), EyeDropper(ColorPicker)
+ */
+const RESERVED_IDS = Object.freeze(['JmEditorConfig', 'JmEditor', 'JmViewer', 'JM', 'kakao', 'daum', 'EyeDropper']);
+/** id 길이 한계 (사용자 정규식이 더 길게 허용해도 — ReDoS 완화), aria id 토큰 최대 개수, aria-label 최대 길이 */
+const ID_MAX = 64;
+const ARIA_IDS_MAX = 8;
+const ARIA_LABEL_MAX = 200;
+/** 남길 aria 속성 (이 밖의 aria-*·role 은 버린다) */
+const ARIA_ATTRS = Object.freeze(['aria-labelledby', 'aria-describedby', 'aria-label', 'aria-hidden']);
+/** 제어 문자·공백(유니코드 공백 포함) — id 에 들어가면 안 됨 (Java 정규식 $ 가 끝 줄바꿈 앞에서도 맞는 차이를 막는 몫도 있음) */
+const ID_BAD_CHARS = /[\u0000-\u001f\u007f\s]/;
+/** 제어 문자 (aria-label 금지) */
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+
 /** 사용자 정규식 길이 한계 (넘으면 기본 형식) */
 const PATTERN_MAX = 200;
 
@@ -3412,7 +3645,7 @@ function matchesAny(token, list) {
 /**
  * 설정값을 검사·정리한 정책 객체로 만든다. 꺼져 있으면 null (호출하는 쪽은 null 이면 지금 규칙)
  * @param {object|null|undefined} cfg STRUCTURE_DEFAULTS 와 같은 모양 (일부만 줘도 됨)
- * @returns {{tags: Set<string>, cleanClass: (value: string) => string}|null}
+ * @returns {{tags: Set<string>, cleanClass: (value: string) => string, cleanId: (value: string) => string, cleanAria: (name: string, value: string) => string}|null}
  */
 function makeStructurePolicy(cfg) {
   const c = { ...STRUCTURE_DEFAULTS, ...(cfg || {}) };
@@ -3424,6 +3657,15 @@ function makeStructurePolicy(cfg) {
   try { pattern = new RegExp(src); } catch { pattern = new RegExp(STRUCTURE_DEFAULTS.classPattern); }
   const allow = Array.isArray(c.classAllow) ? c.classAllow.map(String) : null;
   const deny = Array.isArray(c.classDeny) ? c.classDeny.map(String) : [];
+  const idSrc = typeof c.idPattern === 'string' && c.idPattern && c.idPattern.length <= PATTERN_MAX ? c.idPattern : STRUCTURE_DEFAULTS.idPattern;
+  let idPattern;
+  try { idPattern = new RegExp(idSrc); } catch { idPattern = new RegExp(STRUCTURE_DEFAULTS.idPattern); }
+  const idDeny = Array.isArray(c.idDeny) ? c.idDeny.map(String) : [];
+  /**
+   * id 값 하나가 남아도 되는지: 길이·공백·제어 문자, 형식, jm- 접두(대소문자 무시 — 에디터 예약), 예약 전역(정확한 이름 — HTML id·JS 전역 모두 대소문자 구분), idDeny
+   */
+  const okId = (v) => v.length > 0 && v.length <= ID_MAX && !ID_BAD_CHARS.test(v) && idPattern.test(v)
+    && !/^jm-/i.test(v) && !RESERVED_IDS.includes(v) && !matchesAny(v, idDeny);
   /** class 토큰 하나가 남아도 되는지 */
   const okToken = (t) => t.length <= CLASS_TOKEN_MAX && pattern.test(t) && !t.startsWith('jm-') && !RESERVED_CLASSES.includes(t)
     && (!allow || matchesAny(t, allow)) && !matchesAny(t, deny);
@@ -3438,6 +3680,32 @@ function makeStructurePolicy(cfg) {
       const seen = new Set();
       return String(value || '').trim().split(/\s+/).slice(0, CLASS_TOKENS_MAX)
         .filter((t) => t && okToken(t) && !seen.has(t) && seen.add(t)).join(' ');
+    },
+    /**
+     * id 속성값 검사 (값은 손대지 않음 — 앞뒤 공백도 다른 id 라 통째로 거부)
+     * @param {string} value
+     * @returns {string} 통과하면 그대로, 아니면 ''
+     */
+    cleanId(value) {
+      const v = String(value ?? '');
+      return okId(v) ? v : '';
+    },
+    /**
+     * aria 속성값 검사: aria-labelledby·aria-describedby 는 공백으로 나눈 id 토큰 1~8개(각 토큰 idPattern 등 id 규칙),
+     * aria-label 은 제어 문자 없는 200자 이하(빈 값 제외), aria-hidden 은 'true' 만. 그 밖의 이름은 ''.
+     * @param {string} name 속성 이름 (소문자)
+     * @param {string} value
+     * @returns {string} 남길 값(공백 구분 토큰은 한 칸으로 정리), 아니면 ''
+     */
+    cleanAria(name, value) {
+      const v = String(value ?? '');
+      if (name === 'aria-hidden') return v === 'true' ? v : '';
+      if (name === 'aria-label') return v.trim() && v.length <= ARIA_LABEL_MAX && !CONTROL_CHARS.test(v) ? v : '';
+      if (name === 'aria-labelledby' || name === 'aria-describedby') {
+        const toks = v.split(/[ \t\n\f\r]+/).filter(Boolean);
+        return toks.length >= 1 && toks.length <= ARIA_IDS_MAX && toks.every(okId) ? toks.join(' ') : '';
+      }
+      return '';
     },
   });
 }
@@ -3465,11 +3733,13 @@ const DEFAULT_CONFIG = Object.freeze({
   }),
   // 퍼블리싱 구조(class·section·dl 등) 보존 — 기본 켜짐(끄려면 enabled: false). 서버 HtmlSanitizer 도 같은 값으로 켜야 한다 (core/structure-policy.js)
   structure: STRUCTURE_DEFAULTS,
+  // 본문 이미지 — 모바일 이미지(picture > source)의 media 값
+  image: Object.freeze({ mobileMedia: '(max-width: 767px)' }),
 });
 
 /**
  * 설정 파일(window.JmEditorConfig)의 한 영역을 읽는다
- * @param {'gallery'|'structure'} section
+ * @param {'gallery'|'structure'|'image'} section
  * @returns {object} 없으면 빈 객체
  */
 function fileConfig(section) {
@@ -3479,7 +3749,7 @@ function fileConfig(section) {
 
 /**
  * 기본값 < 설정 파일 < 생성 옵션 순으로 합친 영역 설정
- * @param {'gallery'|'structure'} section
+ * @param {'gallery'|'structure'|'image'} section
  * @param {object} [override] 에디터 생성 옵션으로 넘긴 값
  * @returns {object}
  */
@@ -3757,7 +4027,7 @@ function typeLabel(types) {
 }
 
 /**
- * 사용자 안내: 에디터 옵션 notify 가 있으면 그쪽으로, 없으면 alert (갤러리·배치 블록 공용)
+ * 사용자 안내: 에디터 옵션 notify 가 있으면 그쪽으로, 없으면 alert (갤러리·배치 블록·모바일 이미지 공용)
  * @param {{ notify?: (message: string) => void }} options 에디터 옵션
  * @param {string|string[]} messages
  */
@@ -4396,7 +4666,8 @@ class ButtonsCommands {
   }
 
   static buttonHTML(text, href, style) {
-    return `<a href="${href}" data-role="button" data-style="${style}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    const target = Sanitizer.isInPageHref(href) ? '' : ' target="_blank" rel="noopener noreferrer"'; // #·tel:·mailto: 는 새 창 아님
+    return `<a href="${href}" data-role="button" data-style="${style}"${target}>${text}</a>`;
   }
 
   // ───────────── 레이어 ─────────────
@@ -4459,7 +4730,7 @@ class ButtonsCommands {
       const a = this.#selected(block);
       const href = Sanitizer.normalizeHref(url.value);
       url.classList.toggle('is-invalid', !!url.value.trim() && !href);
-      if (a) this.editor.constructor.setHref(a, href || '#');
+      if (a) { this.editor.constructor.setHref(a, href || '#'); Sanitizer.applyLinkTarget(a, href || '#'); }
     });
     url.addEventListener('change', () => this.editor.commit());
     url.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); url.blur(); } });
@@ -4658,8 +4929,9 @@ class ButtonsCommands {
     const a = document.createElement('a');
     a.textContent = text;
     a.setAttribute('data-role', 'button'); a.setAttribute('data-style', 'primary');
-    a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer');
-    this.editor.constructor.setHref(a, Sanitizer.normalizeHref(href) || '#'); // 허용되지 않는 주소는 #
+    const safe = Sanitizer.normalizeHref(href) || '#'; // 허용되지 않는 주소는 #
+    this.editor.constructor.setHref(a, safe);
+    Sanitizer.applyLinkTarget(a, safe);
     block.appendChild(a);
     this.#bindButtons(block);
     this.#select(block, a);
@@ -5188,6 +5460,9 @@ class SliderCommands {
  * - 본문 이미지를 클릭하면 선택되고 위쪽에 도구 막대가 뜬다:
  *   ⠿ 이동(이미지 문단을 다른 문단 앞뒤로) / 감싸기 없음·왼쪽·오른쪽 / 폭 30·40·50·100% / 교체 / 삭제
  * - 선택된 이미지 바깥 아래 모서리의 손잡이를 끌면 폭(%)이 바뀌고 글이 실시간으로 다시 흐른다.
+ * - 모바일 이미지: <picture><source media="(max-width: 767px)" srcset="…"><img …></picture>
+ *   도구 막대의 모바일 추가·교체·삭제. 모바일 media 값은 옵션 image.mobileMedia 로 바꾼다.
+ *   PC 교체는 img 만 바꾸고 source 는 유지, 이미지 삭제는 picture 째로 지운다.
  * - 갤러리·슬라이드·배치 블록 안 이미지는 각 블록이 다루므로 대상이 아니다.
  * - 도구 막대·손잡이는 document.body 에 붙어 저장 HTML 에 섞이지 않는다. 선택 표시 클래스는 unwrapHTML 에서 제거.
  */
@@ -5198,11 +5473,18 @@ const EXCLUDE = '.jm-gallery-layer, .jm-slider-layer, .jm-layout-layer, div[data
 const MIN_PCT = 10;
 const MAX_PCT = 100;
 const QUICK_WIDTHS = [30, 40, 50, 100];
+/** 모바일 source 의 기본 media 값 */
+const DEFAULT_MOBILE_MEDIA = '(max-width: 767px)';
 
 class ImageCommands {
-  /** @param {import('../../core/JmEditor.js').JmEditor} editor */
-  constructor(editor) {
+  /**
+   * @param {import('../../core/JmEditor.js').JmEditor} editor
+   * @param {{mobileMedia?: string}} [config] 이미지 설정 (config.js 의 image 섹션)
+   */
+  constructor(editor, config = {}) {
     this.editor = editor;
+    /** 모바일 source 의 media 값 — 저장 정제(Sanitizer.isSafeMedia)를 통과하지 못하면 기본값 + 경고 (넣자마자 저장에서 지워지지 않게) */
+    this.mobileMedia = ImageCommands.#mediaOption(config.mobileMedia);
     this.root = editor.root;
     /** @type {HTMLImageElement|null} */
     this.img = null;
@@ -5213,11 +5495,19 @@ class ImageCommands {
     this.fileInput.type = 'file';
     this.fileInput.accept = 'image/*';
     this.fileInput.hidden = true;
-    document.body.append(this.bar, this.handle, this.fileInput);
+    /** 모바일 이미지 추가·교체용 파일 입력 (PC 교체용과 따로) */
+    this.mobileInput = this.fileInput.cloneNode();
+    document.body.append(this.bar, this.handle, this.fileInput, this.mobileInput);
     this.fileInput.addEventListener('change', async () => {
       const file = this.fileInput.files[0];
       this.fileInput.value = '';
       if (file && this.img) await this.replace(this.img, file);
+    });
+    this.mobileInput.addEventListener('change', async () => {
+      const file = this.mobileInput.files[0];
+      this.mobileInput.value = '';
+      if (!file || !this.img) return;
+      if (ImageCommands.mobileSource(this.img)) await this.replaceMobile(this.img, file); else await this.addMobile(this.img, file);
     });
 
     // 이미지 클릭 → 선택. mousedown 기본 동작(브라우저 이미지 드래그·캐럿 이동)은 막는다
@@ -5299,9 +5589,7 @@ class ImageCommands {
    */
   async replace(img, file) {
     if (!file.type.startsWith('image/')) return;
-    const src = this.editor.options.uploadImage
-      ? await this.editor.options.uploadImage(file)
-      : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+    const src = await this.#upload(file);
     img.removeAttribute('width');
     img.removeAttribute('height');
     img.alt = file.name;
@@ -5311,12 +5599,110 @@ class ImageCommands {
   }
 
   /**
-   * 이미지 삭제: 이미지만 든 문단이면 빈 문단으로 남긴다
+   * 파일 → 주소: uploadImage 옵션이 있으면 업로드, 없으면 base64(data:)
+   * @param {File} file
+   * @returns {Promise<string>}
+   */
+  async #upload(file) {
+    return this.editor.options.uploadImage
+      ? this.editor.options.uploadImage(file)
+      : new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+  }
+
+  /**
+   * 옵션 image.mobileMedia 검사: 없으면 기본값, Sanitizer.isSafeMedia 를 통과하지 못하면 console.warn 후 기본값
+   * @param {*} value
+   * @returns {string}
+   */
+  static #mediaOption(value) {
+    if (value == null || value === '') return DEFAULT_MOBILE_MEDIA;
+    if (typeof value === 'string' && Sanitizer.isSafeMedia(value)) return value;
+    console.warn(`[JmEditor] image.mobileMedia 값이 올바르지 않아 기본값 ${DEFAULT_MOBILE_MEDIA} 을 씁니다:`, value);
+    return DEFAULT_MOBILE_MEDIA;
+  }
+
+  /**
+   * 업로드 주소 → 모바일 source 의 srcset. 주소의 공백·쉼표는 srcset 구분자라 %인코딩해 다시 검사하고,
+   * 그래도 쓸 수 없으면(상대 경로·javascript: 등) 사용자에게 알리고 null
+   * @param {string} url uploadImage(또는 base64) 결과
+   * @returns {string|null}
+   */
+  #mobileSrcset(url) {
+    const raw = String(url ?? '').trim();
+    const srcset = Sanitizer.cleanSrcset(raw)
+      ?? (/^data:/i.test(raw) ? null : Sanitizer.cleanSrcset(raw.replace(/[\s,]/g, (c) => encodeURIComponent(c))));
+    if (!srcset) notify(this.editor.options, `모바일 이미지 주소를 쓸 수 없습니다: ${raw.slice(0, 100)}`);
+    return srcset;
+  }
+
+  /**
+   * 이미지가 든 picture 의 첫 source (모바일 이미지). 없으면 null
+   * @param {HTMLImageElement} img
+   * @returns {HTMLSourceElement|null}
+   */
+  static mobileSource(img) {
+    const p = img.parentElement;
+    return p?.tagName === 'PICTURE' ? p.querySelector(':scope > source') : null;
+  }
+
+  /**
+   * 모바일 이미지 추가: picture 로 감싸고 source[media][srcset] 를 img 앞에 둔다
+   * @param {HTMLImageElement} img
+   * @param {File} file
+   */
+  async addMobile(img, file) {
+    if (!file.type.startsWith('image/')) return;
+    const srcset = this.#mobileSrcset(await this.#upload(file));
+    if (!srcset) return;
+    let pic = img.parentElement;
+    if (pic?.tagName !== 'PICTURE') {
+      pic = document.createElement('picture');
+      img.before(pic);
+      pic.append(img);
+    }
+    const source = document.createElement('source');
+    source.setAttribute('media', this.mobileMedia);
+    source.setAttribute('srcset', srcset);
+    pic.prepend(source);
+    this.#changed();
+  }
+
+  /**
+   * 모바일 이미지 교체: 첫 source 의 srcset 만 새 주소로. type 이 새 파일 형식과 다르면 지운다
+   * @param {HTMLImageElement} img
+   * @param {File} file
+   */
+  async replaceMobile(img, file) {
+    const source = ImageCommands.mobileSource(img);
+    if (!source || !file.type.startsWith('image/')) return;
+    const srcset = this.#mobileSrcset(await this.#upload(file));
+    if (!srcset) return;
+    source.setAttribute('srcset', srcset);
+    if (source.getAttribute('type') !== file.type) source.removeAttribute('type');
+    this.#changed();
+  }
+
+  /**
+   * 모바일 이미지 삭제: 첫 source 삭제. source 가 더 없으면 picture 를 벗긴다(picture 자체 속성은 버림)
+   * @param {HTMLImageElement} img
+   */
+  removeMobile(img) {
+    const source = ImageCommands.mobileSource(img);
+    if (!source) return;
+    const pic = img.parentElement;
+    source.remove();
+    if (!pic.querySelector(':scope > source')) pic.replaceWith(img);
+    this.#changed();
+  }
+
+  /**
+   * 이미지 삭제: picture 안이면 picture 째로. 이미지만 든 문단이면 빈 문단으로 남긴다
    * @param {HTMLImageElement} img
    */
   remove(img) {
-    const p = img.parentElement;
-    img.remove();
+    const target = img.parentElement?.tagName === 'PICTURE' ? img.parentElement : img;
+    const p = target.parentElement;
+    target.remove();
     if (p && p !== this.root && !p.textContent.trim() && !p.querySelector('img')) p.replaceChildren(document.createElement('br'));
     this.clear();
     this.editor.commit();
@@ -5360,7 +5746,18 @@ class ImageCommands {
     const replace = mk('교체', '다른 이미지 파일로 바꿈', () => this.fileInput.click());
     const del = mk('삭제', '이미지 삭제', (img) => this.remove(img), 'jm-imgbar-del');
 
-    bar.append(this.moveSlot, ...Object.values(this.floatBtns), sep(), ...this.widthBtns, this.sizeLabel, sep(), replace, del);
+    // 모바일 이미지: source 있음 → 썸네일 + 교체 + 삭제, 없음 → 추가
+    this.mobileThumb = document.createElement('img');
+    this.mobileThumb.className = 'jm-imgbar-thumb';
+    this.mobileThumb.alt = '';
+    this.mobileThumb.title = '모바일 이미지';
+    this.mobileAdd = mk('모바일 추가', '모바일 화면용 이미지를 추가', () => this.#pickMobile());
+    this.mobileReplace = mk('모바일 교체', '모바일 화면용 이미지를 바꿈', () => this.#pickMobile());
+    this.mobileDel = mk('모바일 삭제', '모바일 화면용 이미지를 삭제', (img) => this.removeMobile(img), 'jm-imgbar-del');
+    this.mobileSep = sep();
+    this.mobileGroup = [this.mobileSep, this.mobileThumb, this.mobileAdd, this.mobileReplace, this.mobileDel];
+
+    bar.append(this.moveSlot, ...Object.values(this.floatBtns), sep(), ...this.widthBtns, this.sizeLabel, sep(), replace, del, ...this.mobileGroup);
     return bar;
   }
 
@@ -5380,7 +5777,12 @@ class ImageCommands {
     this.moveHandle = h;
   }
 
-  /** 현재 상태 표시 (감싸기 방향·폭) */
+  /** 모바일 이미지 파일 선택창 열기 */
+  #pickMobile() {
+    this.mobileInput.click();
+  }
+
+  /** 현재 상태 표시 (감싸기 방향·폭·모바일 이미지 유무) */
   #refreshBar() {
     const img = this.img;
     if (!img) return;
@@ -5389,6 +5791,10 @@ class ImageCommands {
     const pct = parseInt(img.style.width, 10);
     this.widthBtns.forEach((b) => b.classList.toggle('is-on', +b.dataset.w === pct));
     this.sizeLabel.textContent = pct ? `${pct}%` : '원본';
+    const source = ImageCommands.mobileSource(img);
+    this.mobileThumb.hidden = this.mobileReplace.hidden = this.mobileDel.hidden = !source;
+    this.mobileAdd.hidden = !!source;
+    if (source) this.mobileThumb.src = (source.getAttribute('srcset') || '').trim().split(/\s+/)[0] || '';
   }
 
   #buildResizeHandle() {
@@ -5446,17 +5852,88 @@ class ImageCommands {
     this.handle.style.top = `${r.bottom + sy - 6}px`;
   }
 
+  // ───────────── picture 안 글 정리 ─────────────
+
+  /**
+   * 편집 DOM 의 picture 정리 + 커서 유지. 크롬은 picture 끝에서 입력하거나 뒤 글 앞에서 Backspace 하면 글을 picture 안(img 뒤)에
+   * 넣는데, 저장 정제는 img 뒤 자식을 버리므로 화면과 저장이 어긋난다 → 입력·commit 때마다 글을 picture 밖으로 옮긴다.
+   * 옮긴 글 안에 커서가 있으면 커서도 그 글을 따라간다.
+   */
+  fixPictures() {
+    if (!this.root.querySelector('picture')) return;
+    const r = this.editor.sel.getRange();
+    const start = r && ImageCommands.#boundaryRef(r.startContainer, r.startOffset);
+    const end = r && ImageCommands.#boundaryRef(r.endContainer, r.endOffset);
+    if (!ImageCommands.fixPictures(this.root) || !r) return;
+    const next = document.createRange();
+    if (!ImageCommands.#applyRef(next, start, true) || !ImageCommands.#applyRef(next, end, false)) return;
+    this.editor.sel.setRange(next);
+  }
+
+  /**
+   * picture 의 글·요소를 밖으로 옮긴다: img 뒤의 모든 노드는 picture 바로 뒤로, img 앞의 source 가 아닌 노드(공백 글 제외)는
+   * picture 바로 앞으로 (화면에 보이던 순서 그대로). img 가 없으면 남은 노드를 앞으로 옮기고 picture 를 지운다.
+   * @param {ParentNode} root
+   * @returns {boolean} 옮긴 것이 있으면 true
+   */
+  static fixPictures(root) {
+    let changed = false;
+    root.querySelectorAll('picture').forEach((pic) => {
+      const kids = Array.from(pic.childNodes);
+      const imgAt = kids.findIndex((n) => n.nodeName === 'IMG');
+      const before = (imgAt < 0 ? kids : kids.slice(0, imgAt)).filter((n) => n.nodeName !== 'SOURCE' && !(n.nodeType === Node.TEXT_NODE && !n.textContent.trim()));
+      const after = imgAt < 0 ? [] : kids.slice(imgAt + 1);
+      if (before.length) { pic.before(...before); changed = true; }
+      if (after.length) { pic.after(...after); changed = true; }
+      if (imgAt < 0) { pic.remove(); changed = true; }
+    });
+    return changed;
+  }
+
+  /**
+   * 범위 경계를 노드 기준으로 기억한다 — 글 노드면 (노드, 위치), 요소면 「그 자리 다음 자식 앞」(자식이 옮겨져도 따라가게)
+   * @param {Node} node
+   * @param {number} offset
+   * @returns {{node: Node, offset?: number, before?: Node|null}}
+   */
+  static #boundaryRef(node, offset) {
+    if (node.nodeType === Node.TEXT_NODE) return { node, offset };
+    return { node, before: node.childNodes[offset] || null };
+  }
+
+  /**
+   * 기억한 경계를 범위에 적용
+   * @param {Range} range
+   * @param {{node: Node, offset?: number, before?: Node|null}} ref
+   * @param {boolean} isStart 시작 경계면 true
+   * @returns {boolean} 적용했으면 true (노드가 문서에서 빠졌으면 false)
+   */
+  static #applyRef(range, ref, isStart) {
+    const set = (n, o) => (isStart ? range.setStart(n, o) : range.setEnd(n, o));
+    if (ref.offset != null) {
+      if (!ref.node.isConnected) return false;
+      set(ref.node, Math.min(ref.offset, ref.node.length));
+    } else if (ref.before?.isConnected) {
+      if (isStart) range.setStartBefore(ref.before); else range.setEndBefore(ref.before);
+    } else {
+      if (!ref.node.isConnected) return false;
+      set(ref.node, ref.node.childNodes.length);
+    }
+    return true;
+  }
+
   // ───────────── 저장용 변환 ─────────────
 
   /**
-   * 선택 표시 클래스 제거 (getHTML 에서 호출)
+   * 저장용 정리 (getHTML 에서 호출): 선택 표시 클래스 제거, picture 안 img 뒤 글을 picture 밖으로 (fixPictures — 편집 화면과 같은 결과)
    * @param {string} html
    */
   static unwrapHTML(html) {
-    if (!html.includes(IMG_SELECTED_CLASS)) return html;
+    if (!html.includes(IMG_SELECTED_CLASS) && !html.includes('<picture')) return html;
     const tpl = document.createElement('template');
     tpl.innerHTML = html;
     tpl.content.querySelectorAll(`img.${IMG_SELECTED_CLASS}`).forEach((img) => ImageCommands.#unmark(img));
+    ImageCommands.fixPictures(tpl.content);
     return tpl.innerHTML;
   }
 
@@ -5474,6 +5951,7 @@ class ImageCommands {
     this.bar.remove();
     this.handle.remove();
     this.fileInput.remove();
+    this.mobileInput.remove();
   }
 }
 
@@ -6265,6 +6743,10 @@ class MapCommands {
  */
 
 const HREF_ATTR = 'data-jm-href'; // 편집 중 링크 주소 보관 속성 (href 는 제거해 어떤 환경에서도 열리지 않게)
+const ID_ATTR = HIDDEN_ID_ATTR; // 편집 중 id 보관 속성 (본문 id 가 페이지의 id·window 전역과 겹쳐 페이지 스크립트를 흔들지 않게)
+
+/** id 숨김에서 건너뛸 플러그인 레이어 (헤더·핸들 등 에디터 UI 포함, 표 레이어는 본문이라 제외) */
+const PLUGIN_LAYER_SELECTOR = [GALLERY_LAYER_CLASS, EMBED_LAYER_CLASS, BUTTONS_LAYER_CLASS, SLIDER_LAYER_CLASS, LAYOUT_LAYER_CLASS, MAP_LAYER_CLASS].map((c) => `.${c}`).join(', ');
 
 class JmEditor {
   /** 편집 DOM 의 링크 주소 읽기 (href 또는 보관 속성) */
@@ -6309,7 +6791,7 @@ class JmEditor {
     this.slider = new SliderCommands(this);
     this.layout = new LayoutCommands(this); // 이미지+글 배치 블록
     this.map = new MapCommands(this);       // 카카오 지도(퍼가기) 블록
-    this.image = new ImageCommands(this);   // 본문 이미지 글 감싸기·크기 조절
+    this.image = new ImageCommands(this, resolveConfig('image', options.image));   // 본문 이미지 글 감싸기·크기 조절
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
 
     this.#ensureBlock();
@@ -6391,7 +6873,7 @@ class JmEditor {
     return map[name]?.();
   }
 
-  /** 저장용 HTML 반환 (ZWSP·표 레이어 제거) */
+  /** 저장용 HTML 반환 (ZWSP·표 레이어 제거, picture 안 img 뒤 글은 picture 밖으로) */
   getHTML() {
     let html = this.root.innerHTML.replace(new RegExp(ZWSP, 'g'), '');
     html = TableCommands.unwrapHTML(html);
@@ -6403,6 +6885,7 @@ class JmEditor {
     html = MapCommands.unwrapHTML(html);
     html = ImageCommands.unwrapHTML(html);
     html = JmEditor.#restoreLinks(html);
+    html = JmEditor.#restoreIds(html);
     return BlockDrag.cleanHTML(html);
   }
 
@@ -6419,6 +6902,7 @@ class JmEditor {
     this.layout.wrapAll();
     this.map.wrapAll();
     this.#neutralizeLinks();
+    this.#neutralizeIds();
     this.#ensureBlock();
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
     this.#emitChange();
@@ -6453,7 +6937,9 @@ class JmEditor {
     this.slider.wrapAll();
     this.layout.wrapAll();
     this.map.wrapAll();
+    this.image.fixPictures(); // picture 안 img 뒤 글은 picture 밖으로
     this.#neutralizeLinks();
+    this.#neutralizeIds();
     this.#ensureBlock();
     this.history.push();
     this.#emitChange();
@@ -6480,6 +6966,7 @@ class JmEditor {
     const onInput = () => {
       this.#updateEmpty(); // 조합 중 첫 글자에도 placeholder 가 바로 사라지게
       if (this.composing) return; // IME 조합 중에는 기록하지 않음
+      this.image.fixPictures(); // 크롬이 picture 안(img 뒤)에 넣은 글을 밖으로 (저장 때 사라지지 않게)
       this.#cleanStraySpans();
       this.#ensureBlock();
       this.history.pushDebounced();
@@ -6820,6 +7307,32 @@ class JmEditor {
     this.root.querySelectorAll('a[href]').forEach((a) => JmEditor.setHref(a, a.getAttribute('href')));
   }
 
+  /**
+   * 편집 DOM 의 id 를 보관 속성(data-jm-id)으로 옮긴다 — 편집 중 본문에는 id 가 없게 (getHTML 에서 되돌림).
+   * 플러그인 블록·레이어 안(지도 런타임 등이 만든 요소)은 건너뛴다. 표 레이어는 본문이라 포함.
+   */
+  #neutralizeIds() {
+    Sanitizer.hideIds(this.root, PLUGIN_LAYER_SELECTOR);
+  }
+
+  /**
+   * 저장용 HTML 에서 보관 속성(data-jm-id)을 id 로 되돌린다. 같은 값은 문서 순서상 첫 번째만 남긴다
+   * (편집 중 Enter·복사로 블록이 복제되면 보관 속성도 함께 복제되므로)
+   * @param {string} html
+   * @returns {string}
+   */
+  static #restoreIds(html) {
+    if (!html.includes(ID_ATTR)) return html;
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    Sanitizer.dedupeIds(tpl.content, ID_ATTR);
+    tpl.content.querySelectorAll(`[${ID_ATTR}]`).forEach((el) => {
+      el.setAttribute('id', el.getAttribute(ID_ATTR));
+      el.removeAttribute(ID_ATTR);
+    });
+    return tpl.innerHTML;
+  }
+
   /** 저장용 HTML 에서 보관 속성을 href 로 되돌린다. 허용되지 않는 주소(javascript: 등)는 href 없이 둔다 */
   static #restoreLinks(html) {
     const tpl = document.createElement('template');
@@ -6832,24 +7345,54 @@ class JmEditor {
     return tpl.innerHTML;
   }
 
-  /** 루트가 비었거나 루트 직속에 텍스트/인라인만 있으면 p 로 감싼다 */
+  /**
+   * 루트가 비었거나 루트 직속에 텍스트/인라인만 있으면 p 로 감싼다 (노드마다 문단, 공백 글은 지움 — 예전 동작).
+   * 구조 모드에서 이어진 비블록 구간에 small·sub·sup(INLINE_STRUCTURE_TAGS)가 있으면 그 구간을 한 문단으로 묶는다
+   * (「<sup>1</sup> 각주」가 두 문단으로 갈라지지 않게). 묶을 때 구간 앞뒤 공백 글만 지우고 안의 공백은 둔다.
+   */
   #ensureBlock() {
     const r = this.root;
     if (r.childNodes.length === 0 || (r.childNodes.length === 1 && r.firstChild.tagName === 'BR')) {
       r.innerHTML = '<p><br></p>';
       return;
     }
+    // 루트 직속 노드를 블록 사이의 비블록 구간으로 나눈다
+    const runs = [];
+    let cur = null;
     Array.from(r.childNodes).forEach((n) => {
-      // 블록 사이 줄바꿈 같은 공백 텍스트는 단락으로 만들지 않고 제거
-      if (n.nodeType === Node.TEXT_NODE && !n.textContent.replace(/[\s\u200B]/g, '')) { n.remove(); return; }
-      // 구조 모드에서는 허용된 구조 태그(section·div·dl 등)도 루트 블록으로 인정 (p 로 감싸면 구조가 깨짐)
-      const isBlock = n.nodeType === Node.ELEMENT_NODE && (/^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || this.sel.isStructureTag(n) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type));
-      if (!isBlock) {
-        const p = document.createElement('p');
-        r.insertBefore(p, n);
-        p.appendChild(n);
-      }
+      if (n.nodeType === Node.ELEMENT_NODE && this.#isRootBlock(n)) { cur = null; return; }
+      if (!cur) runs.push(cur = []);
+      cur.push(n);
     });
+    /** 블록 사이 줄바꿈 같은 공백(ZWSP 포함)뿐인 글 */
+    const blank = (n) => n.nodeType === Node.TEXT_NODE && !n.textContent.replace(/[\s\u200B]/g, '');
+    const inlineSel = INLINE_STRUCTURE_TAGS.join(',');
+    const hasInlineStructure = (n) => n.nodeType === Node.ELEMENT_NODE && (n.matches(inlineSel) || !!n.querySelector(inlineSel));
+    const wrap = (nodes) => {
+      const p = document.createElement('p');
+      r.insertBefore(p, nodes[0]);
+      nodes.forEach((x) => p.appendChild(x));
+    };
+    runs.forEach((run) => {
+      if (this.structure && run.some(hasInlineStructure)) {
+        let a = 0;
+        let b = run.length;
+        while (a < b && blank(run[a])) run[a++].remove();
+        while (b > a && blank(run[b - 1])) run[--b].remove();
+        wrap(run.slice(a, b));
+        return;
+      }
+      run.forEach((n) => { if (blank(n)) n.remove(); else wrap([n]); });
+    });
+  }
+
+  /**
+   * 루트 직속에 그대로 둘 블록인지 (문단·제목·목록·인용·표, 구조 모드의 블록 구조 태그, 플러그인 레이어·블록)
+   * @param {Element} n
+   */
+  #isRootBlock(n) {
+    // 구조 모드에서는 허용된 구조 태그(section·div·dl 등)도 루트 블록으로 인정 (p 로 감싸면 구조가 깨짐)
+    return /^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || this.sel.isStructureTag(n) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type);
   }
 
   /** 히스토리 복원 */
@@ -6865,6 +7408,7 @@ class JmEditor {
     this.layout.wrapAll();
     this.map.wrapAll();
     this.#neutralizeLinks();
+    this.#neutralizeIds();
     this.#ensureBlock();
     this.sel.placeCursor(this.root.lastChild || this.root, true);
     this.#emitChange();
@@ -7481,6 +8025,7 @@ class FormatPicker {
       preview.className = 'jm-formatpicker-preview jm-editor';
       preview.contentEditable = 'false';
       preview.innerHTML = Sanitizer.clean(f.html || '', this.policy()); // 서식 HTML 은 외부(서버·연동 코드)에서 오므로 미리보기도 거름
+      Sanitizer.hideIds(preview); // 서식 본문 id 가 관리자 페이지 DOM 에 id 로 붙지 않게
 
       item.append(name, desc, preview);
       this.el.appendChild(item);
@@ -7651,7 +8196,7 @@ const gridPicker=new TableGridPicker({onPick:(rows,cols)=>editor.exec('table',{r
 /* 퍼블 구조 모드: 기본 켜짐, 주소에 ?structure=0 이면 끔 (서버 HtmlSanitizer 도 같은 값이어야 저장 때 남음) */
 const STRUCTURE_ON=new URLSearchParams(location.search).get('structure')!=='0';
 /* 퍼블 샘플 (test/fixtures/publisher/*.html 과 같은 내용) */
-const PUB_SAMPLES={"인사말": "<section class=\"sub-greeting\">\n  <div class=\"greeting-top\">\n    <h3 class=\"tit-h3\">인사말</h3>\n    <p class=\"desc\">함께 성장하는 내일을 만들어 가겠습니다.</p>\n  </div>\n  <div class=\"greeting-cont\">\n    <div class=\"img-area\"><img src=\"/img/sub/greeting.jpg\" alt=\"협회장 사진\" width=\"400\" height=\"500\"></div>\n    <div class=\"txt-area\">\n      <p class=\"lead\"><strong>안녕하십니까.</strong> 협회 홈페이지를 찾아 주신 여러분을 진심으로 환영합니다.</p>\n      <p>저희 협회는 회원 여러분과 함께 교육 데이터의 가치를 높이고, 누구나 배우고 나누는 환경을 만들기 위해 노력하고 있습니다.</p>\n      <p>앞으로도 투명하고 열린 운영으로 신뢰받는 협회가 되겠습니다.</p>\n      <p class=\"sign\">협회장 <span class=\"name\">홍길동</span></p>\n    </div>\n  </div>\n</section>\n", "연혁": "<div class=\"history-wrap\">\n  <div class=\"history-year\">\n    <h3 class=\"year\">2026</h3>\n    <dl class=\"history-list\">\n      <dt>03월</dt>\n      <dd>교육 데이터 표준 가이드 발간</dd>\n      <dt>01월</dt>\n      <dd>제5회 정기총회 개최</dd>\n    </dl>\n  </div>\n  <div class=\"history-year\">\n    <h3 class=\"year\">2025</h3>\n    <dl class=\"history-list\">\n      <dt>10월</dt>\n      <dd>회원사 <strong>100곳</strong> 돌파</dd>\n      <dt>06월</dt>\n      <dd>지역 교육센터 3곳 개소</dd>\n    </dl>\n  </div>\n</div>\n", "주요사업": "<section class=\"sub-business\">\n  <h3 class=\"tit-h3\">주요사업</h3>\n  <ul class=\"biz-list\">\n    <li class=\"biz-item\">\n      <div class=\"biz-icon\"><span class=\"ico ico-edu\"></span></div>\n      <strong class=\"biz-tit\">교육 지원</strong>\n      <p class=\"biz-txt\">현장 맞춤형 데이터 교육 과정을 운영합니다.</p>\n    </li>\n    <li class=\"biz-item\">\n      <div class=\"biz-icon\"><span class=\"ico ico-research\"></span></div>\n      <strong class=\"biz-tit\">연구·조사</strong>\n      <p class=\"biz-txt\">교육 데이터 활용 실태를 조사하고 정책을 제안합니다.</p>\n    </li>\n    <li class=\"biz-item\">\n      <div class=\"biz-icon\"><span class=\"ico ico-network\"></span></div>\n      <strong class=\"biz-tit\">네트워크</strong>\n      <p class=\"biz-txt\">회원사와 기관을 잇는 협력 네트워크를 만듭니다.</p>\n    </li>\n  </ul>\n  <div class=\"box-gray\">\n    <p class=\"txt-point\">사업 문의: <a href=\"tel:0312223333\">031-222-3333</a></p>\n  </div>\n</section>\n", "조직안내": "<section class=\"sub-org\">\n  <h3 class=\"tit-h3\">조직안내</h3>\n  <div class=\"org-chart\">\n    <div class=\"org-top\"><span class=\"org-box type-main\">협회장</span></div>\n    <ul class=\"org-depth2\">\n      <li><span class=\"org-box\">사무국</span></li>\n      <li><span class=\"org-box\">교육사업팀</span></li>\n      <li><span class=\"org-box\">연구지원팀</span></li>\n    </ul>\n  </div>\n  <div class=\"tbl-wrap\">\n    <table class=\"tbl-basic\">\n      <caption>부서별 업무 및 연락처</caption>\n      <colgroup><col style=\"width: 25%\"><col><col style=\"width: 25%\"></colgroup>\n      <thead>\n        <tr><th scope=\"col\">부서</th><th scope=\"col\">담당 업무</th><th scope=\"col\">연락처</th></tr>\n      </thead>\n      <tbody>\n        <tr><td>사무국</td><td class=\"txt-left\">총무·회계·회원 관리</td><td>031-222-3331</td></tr>\n        <tr><td>교육사업팀</td><td class=\"txt-left\">교육 과정 운영</td><td>031-222-3332</td></tr>\n      </tbody>\n    </table>\n  </div>\n</section>\n", "오시는 길·FAQ": "<section class=\"sub-location\">\n  <h3 class=\"tit-h3\">오시는 길</h3>\n  <div class=\"location-info\">\n    <dl class=\"info-row\">\n      <dt>주소</dt>\n      <dd>경기도 성남시 분당구 운중로 227</dd>\n    </dl>\n    <dl class=\"info-row\">\n      <dt>전화</dt>\n      <dd><a href=\"tel:0312223333\">031-222-3333</a></dd>\n    </dl>\n  </div>\n  <ul class=\"traffic-list\">\n    <li><span class=\"badge bus\">버스</span> 판교역 하차 후 도보 10분</li>\n    <li><span class=\"badge subway\">지하철</span> 신분당선 판교역 1번 출구</li>\n  </ul>\n</section>\n<section class=\"sub-faq\">\n  <h3 class=\"tit-h3\">자주 묻는 질문</h3>\n  <dl class=\"faq-list\">\n    <dt class=\"q\">회원 가입은 어떻게 하나요?</dt>\n    <dd class=\"a\"><p>홈페이지 상단의 회원가입 메뉴에서 신청할 수 있습니다.</p></dd>\n    <dt class=\"q\">교육 신청 기간은 언제인가요?</dt>\n    <dd class=\"a\"><p>매 분기 시작 2주 전부터 신청을 받습니다.</p><ul class=\"list-dot\"><li>1분기: 12월 중순</li><li>2분기: 3월 중순</li></ul></dd>\n  </dl>\n</section>\n"};
+const PUB_SAMPLES={"인사말": "<section class=\"sub-greeting\">\n  <div class=\"greeting-top\">\n    <h3 class=\"tit-h3\">인사말</h3>\n    <p class=\"desc\">함께 성장하는 내일을 만들어 가겠습니다.</p>\n  </div>\n  <div class=\"greeting-cont\">\n    <div class=\"img-area\"><img src=\"/img/sub/greeting.jpg\" alt=\"협회장 사진\" width=\"400\" height=\"500\"></div>\n    <div class=\"txt-area\">\n      <p class=\"lead\"><strong>안녕하십니까.</strong> 협회 홈페이지를 찾아 주신 여러분을 진심으로 환영합니다.</p>\n      <p>저희 협회는 회원 여러분과 함께 교육 데이터의 가치를 높이고, 누구나 배우고 나누는 환경을 만들기 위해 노력하고 있습니다.</p>\n      <p>앞으로도 투명하고 열린 운영으로 신뢰받는 협회가 되겠습니다.</p>\n      <p class=\"sign\">협회장 <span class=\"name\">홍길동</span></p>\n    </div>\n  </div>\n</section>\n", "연혁": "<div class=\"history-wrap\">\n  <div class=\"history-year\">\n    <h3 class=\"year\">2026</h3>\n    <dl class=\"history-list\">\n      <dt>03월</dt>\n      <dd>교육 데이터 표준 가이드 발간</dd>\n      <dt>01월</dt>\n      <dd>제5회 정기총회 개최</dd>\n    </dl>\n  </div>\n  <div class=\"history-year\">\n    <h3 class=\"year\">2025</h3>\n    <dl class=\"history-list\">\n      <dt>10월</dt>\n      <dd>회원사 <strong>100곳</strong> 돌파</dd>\n      <dt>06월</dt>\n      <dd>지역 교육센터 3곳 개소</dd>\n    </dl>\n  </div>\n</div>\n", "주요사업": "<section class=\"sub-business\">\n  <h3 class=\"tit-h3\">주요사업</h3>\n  <ul class=\"biz-list\">\n    <li class=\"biz-item\">\n      <div class=\"biz-icon\"><span class=\"ico ico-edu\"></span></div>\n      <strong class=\"biz-tit\">교육 지원</strong>\n      <p class=\"biz-txt\">현장 맞춤형 데이터 교육 과정을 운영합니다.</p>\n    </li>\n    <li class=\"biz-item\">\n      <div class=\"biz-icon\"><span class=\"ico ico-research\"></span></div>\n      <strong class=\"biz-tit\">연구·조사</strong>\n      <p class=\"biz-txt\">교육 데이터 활용 실태를 조사하고 정책을 제안합니다.</p>\n    </li>\n    <li class=\"biz-item\">\n      <div class=\"biz-icon\"><span class=\"ico ico-network\"></span></div>\n      <strong class=\"biz-tit\">네트워크</strong>\n      <p class=\"biz-txt\">회원사와 기관을 잇는 협력 네트워크를 만듭니다.</p>\n    </li>\n  </ul>\n  <div class=\"box-gray\">\n    <p class=\"txt-point\">사업 문의: <a href=\"tel:0312223333\">031-222-3333</a></p>\n  </div>\n</section>\n", "조직안내": "<section class=\"sub-org\">\n  <h3 class=\"tit-h3\">조직안내</h3>\n  <div class=\"org-chart\">\n    <div class=\"org-top\"><span class=\"org-box type-main\">협회장</span></div>\n    <ul class=\"org-depth2\">\n      <li><span class=\"org-box\">사무국</span></li>\n      <li><span class=\"org-box\">교육사업팀</span></li>\n      <li><span class=\"org-box\">연구지원팀</span></li>\n    </ul>\n  </div>\n  <div class=\"tbl-wrap\">\n    <table class=\"tbl-basic\">\n      <caption>부서별 업무 및 연락처</caption>\n      <colgroup><col style=\"width: 25%\"><col><col style=\"width: 25%\"></colgroup>\n      <thead>\n        <tr><th scope=\"col\">부서</th><th scope=\"col\">담당 업무</th><th scope=\"col\">연락처</th></tr>\n      </thead>\n      <tbody>\n        <tr><td>사무국</td><td class=\"txt-left\">총무·회계·회원 관리</td><td>031-222-3331</td></tr>\n        <tr><td>교육사업팀</td><td class=\"txt-left\">교육 과정 운영</td><td>031-222-3332</td></tr>\n      </tbody>\n    </table>\n  </div>\n</section>\n", "오시는 길·FAQ": "<section class=\"sub-location\">\n  <h3 class=\"tit-h3\">오시는 길</h3>\n  <div class=\"location-info\">\n    <dl class=\"info-row\">\n      <dt>주소</dt>\n      <dd>경기도 성남시 분당구 운중로 227</dd>\n    </dl>\n    <dl class=\"info-row\">\n      <dt>전화</dt>\n      <dd><a href=\"tel:0312223333\">031-222-3333</a></dd>\n    </dl>\n  </div>\n  <ul class=\"traffic-list\">\n    <li><span class=\"badge bus\">버스</span> 판교역 하차 후 도보 10분</li>\n    <li><span class=\"badge subway\">지하철</span> 신분당선 판교역 1번 출구</li>\n  </ul>\n</section>\n<section class=\"sub-faq\">\n  <h3 class=\"tit-h3\">자주 묻는 질문</h3>\n  <dl class=\"faq-list\">\n    <dt class=\"q\">회원 가입은 어떻게 하나요?</dt>\n    <dd class=\"a\"><p>홈페이지 상단의 회원가입 메뉴에서 신청할 수 있습니다.</p></dd>\n    <dt class=\"q\">교육 신청 기간은 언제인가요?</dt>\n    <dd class=\"a\"><p>매 분기 시작 2주 전부터 신청을 받습니다.</p><ul class=\"list-dot\"><li>1분기: 12월 중순</li><li>2분기: 3월 중순</li></ul></dd>\n  </dl>\n</section>\n","모바일 이미지": "<section id=\"mobile-guide\" class=\"sub-mobile\" aria-labelledby=\"mobile-guide-tit\">\n  <h3 id=\"mobile-guide-tit\" class=\"tit-h3\">모바일 이미지 안내</h3>\n  <nav class=\"tabs\" aria-label=\"안내 탭\">\n    <a class=\"tab is-active\" href=\"#mobile-guide-pic\">이미지</a>\n    <a class=\"tab\" href=\"#mobile-guide-link\">링크</a>\n    <a class=\"tab\" href=\"tel:02-000-0000\">전화</a>\n  </nav>\n  <div id=\"mobile-guide-pic\">\n    <h4 class=\"tit-h4\"><i class=\"ico ph ph-image\"></i>화면 폭에 따라 바뀌는 이미지</h4>\n    <p>이미지를 클릭하면 나오는 도구 막대에서 「모바일 추가·교체·삭제」를 쓸 수 있습니다. 좁은 화면(767px 이하)에서는 모바일 이미지가 보입니다.</p>\n    <picture class=\"pic-main\"><source media=\"(max-width: 767px)\" srcset=\"/img/sub/greeting.jpg\"><img src=\"/img/sub/greeting.jpg\" alt=\"모바일 이미지 예시\" loading=\"lazy\"></picture>\n  </div>\n  <div id=\"mobile-guide-link\">\n    <h4 class=\"tit-h4\">링크 규칙</h4>\n    <p><a href=\"#mobile-guide\">처음으로</a>(같은 페이지), <a href=\"mailto:info@example.com\">메일</a>, <a href=\"https://example.com\">외부 주소</a>. 외부 주소만 새 창으로 열립니다.</p>\n  </div>\n</section>\n"};
 const editor=new JmEditor(document.getElementById('editor'),{
   placeholder:'내용을 입력하세요',
   structure:{enabled:STRUCTURE_ON},
@@ -7707,7 +8252,7 @@ structLink.href=STRUCTURE_ON?'?structure=0':location.pathname;
 const pubSample=document.getElementById('pubSample');
 Object.keys(PUB_SAMPLES).forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;pubSample.appendChild(o);});
 // 샘플 이미지 파일은 없으므로 자리 표시 그림으로 (이미지를 클릭해 「교체」로 바꿀 수 있음)
-pubSample.addEventListener('change',()=>{if(!pubSample.value)return;if(mode!=='editor')setMode('editor');editor.setHTML(PUB_SAMPLES[pubSample.value].replace('/img/sub/greeting.jpg',IMAGE_PLACEHOLDER));pubSample.value='';});
+pubSample.addEventListener('change',()=>{if(!pubSample.value)return;if(mode!=='editor')setMode('editor');editor.setHTML(PUB_SAMPLES[pubSample.value].replaceAll('/img/sub/greeting.jpg',IMAGE_PLACEHOLDER));pubSample.value='';});
 
 BUTTONS.forEach(def=>{
   if(!def){const s=document.createElement('span');s.className='jm-sep';toolbar.appendChild(s);return;}
@@ -7786,7 +8331,7 @@ function setMode(m){
   area.hidden=m!=='editor';sourceEl.hidden=m!=='html';previewEl.hidden=m!=='preview';
   if(m==='html'){sourceEl.value=prettify(editor.getHTML());sourceEl.focus();}
   if(m!=='preview'){stopPreview?.();stopPreview=null;} // 미리보기 런타임(슬라이드 타이머 등) 정리
-  if(m==='preview'){stopPreview?.();previewEl.innerHTML=Sanitizer.clean(editor.getHTML(),editor.structure);const g=observeGalleries(previewEl),sl=initSliders(previewEl),mp=initMaps(previewEl);stopPreview=()=>{g();sl();mp();};}
+  if(m==='preview'){stopPreview?.();previewEl.innerHTML=Sanitizer.clean(editor.getHTML(),editor.structure);Sanitizer.hideIds(previewEl);const g=observeGalleries(previewEl),sl=initSliders(previewEl),mp=initMaps(previewEl);stopPreview=()=>{g();sl();mp();};}
   else area.focus();
   BUTTONS.forEach(d=>{if(!d)return;const [c,,act,,o={}]=d;if(o.group==='mode')btns[c].classList.toggle('is-active',!!act());else btns[c].disabled=m!=='editor';});
   toolbar.hidden=m!=='editor';

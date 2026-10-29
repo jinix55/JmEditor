@@ -518,7 +518,7 @@ export class Commands {
     const existing = this.sel.closest('a');
 
     if (existing) {
-      if (href) { this.editor.constructor.setHref(existing, href); } // 기존 링크: 주소만 수정
+      if (href) { this.editor.constructor.setHref(existing, href); Sanitizer.applyLinkTarget(existing, href); } // 기존 링크: 주소만 수정(새 창 규칙도 다시 맞춤)
       else this.#unwrapEl(existing);                                // 해제
       this.editor.commit();
       return true;
@@ -531,8 +531,7 @@ export class Commands {
     pieces.forEach((t) => {
       const a = document.createElement('a');
       this.editor.constructor.setHref(a, href);
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
+      Sanitizer.applyLinkTarget(a, href); // #·tel:·mailto: 는 새 창 아님
       t.parentNode.insertBefore(a, t);
       a.appendChild(t);
       this.#mergeSiblings(a); // 같은 주소로 이어진 조각(글자·이미지)은 하나의 링크로

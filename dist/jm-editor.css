@@ -541,6 +541,8 @@ div[data-type="slider"] > img.is-current, div[data-type="slider"]:not(:has(> img
 .jm-imgbar-btn.is-on { background: var(--jm-active); color: var(--jm-accent); font-weight: 600; }
 .jm-imgbar-del { color: var(--jm-danger); }
 .jm-imgbar-sep { width: 1px; height: 16px; margin: 0 3px; background: var(--jm-border); }
+.jm-imgbar-thumb { width: 24px; height: 24px; object-fit: cover; border: 1px solid var(--jm-border); border-radius: 3px; margin: 0 2px; }
+.jm-imgbar-thumb[hidden], .jm-imgbar-btn[hidden] { display: none; }
 .jm-imgbar-size { min-width: 34px; padding: 0 4px; color: var(--jm-muted); font-size: 11px; text-align: center; }
 .jm-imgbar-move { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 24px; color: var(--jm-subtle); font-size: 15px; cursor: grab; user-select: none; }
 .jm-imgbar-move[hidden] { display: none; }

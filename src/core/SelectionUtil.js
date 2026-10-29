@@ -3,6 +3,8 @@
  * - window.getSelection() / Range 를 다루는 공통 유틸.
  * - 에디터 루트 밖 선택은 무시하고, 선택 영역 저장/복원(툴바 클릭으로 포커스가 빠질 때)을 제공한다.
  */
+import { INLINE_STRUCTURE_TAGS } from './structure-policy.js';
+
 /** 기본 글 블록 (커서가 속하는 블록) */
 const CARET_BLOCK = /^(P|H1|H2|H3|LI|BLOCKQUOTE|TD|TH)$/;
 /** 구조 모드에서 더하는 글 블록: 정의 목록·캡션 (자식에 블록이 있어도 직접 글이 있으면 블록 역할) */
@@ -24,11 +26,14 @@ export class SelectionUtil {
   }
 
   /**
-   * 구조 모드에서 허용된 구조 태그인지 (section·div·dl 등)
+   * 구조 모드에서 허용된 블록 구조 태그인지 (section·div·dl 등).
+   * 인라인 구조 태그(small·sub·sup — INLINE_STRUCTURE_TAGS)는 허용돼 있어도 블록·컨테이너가 아니므로 false
    * @param {Node} el
    */
   isStructureTag(el) {
-    return !!this.structure && el?.nodeType === Node.ELEMENT_NODE && this.structure.tags.has(el.tagName.toLowerCase());
+    if (!this.structure || el?.nodeType !== Node.ELEMENT_NODE) return false;
+    const tag = el.tagName.toLowerCase();
+    return this.structure.tags.has(tag) && !INLINE_STRUCTURE_TAGS.includes(tag);
   }
 
   /** 블록 자식이 있는 요소인지 (구조 컨테이너 판정) */

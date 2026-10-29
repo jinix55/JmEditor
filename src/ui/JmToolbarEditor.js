@@ -534,6 +534,7 @@ export class JmToolbarEditor {
   #renderPreview() {
     this.#stopPreviewLayout?.();
     this.previewPane.innerHTML = Sanitizer.clean(this.editor.getHTML(), this.editor.structure);
+    Sanitizer.hideIds(this.previewPane); // 본문 id 가 관리자 페이지 DOM 에 id 로 붙지 않게 (미리보기 안 #앵커 이동은 하지 않음)
     const stopGalleries = observeGalleries(this.previewPane); // 갤러리 저스티파이드 배치 (뷰어와 동일)
     const stopSliders = initSliders(this.previewPane);       // 슬라이드 자동 전환
     const stopMaps = initMaps(this.previewPane);             // 카카오 지도
