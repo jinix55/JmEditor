@@ -396,6 +396,26 @@ test.describe('엑셀·파워포인트·워드 붙여넣기', () => {
     expect(ms).toBeLessThan(1000);
   });
 
+  test('규칙을 겹쳐도 옮기는 글자 수에 상한이 있고, 태그 수 상한도 거친다', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const office = '<html xmlns:x="urn:schemas-microsoft-com:office:excel">';
+      const css = Array.from({ length: 200 }, () => '.xl1{color:red;' + 'x'.repeat(4000) + '}').join('');
+      const huge = office + '<style>.xl1{color:red;' + 'x'.repeat(5000) + '}.xl2{color:blue}</style><table><tr><td class="xl1 xl2">a</td></tr></table>';
+      const cells = '<td class=xl1>a</td>'.repeat(20000);
+      const t = performance.now();
+      const out = window.JM.Sanitizer.inlineOfficeStyles(office + '<style>' + css + '</style><table><tr>' + cells + '</tr></table>');
+      const ms = performance.now() - t;
+      const t2 = performance.now();
+      window.JM.Sanitizer.inlineOfficeStyles(office + '<style>.a{}</style>' + '<div>'.repeat(200000));
+      return { len: out.length, ms, nested: performance.now() - t2, huge: window.JM.Sanitizer.inlineOfficeStyles(huge) };
+    });
+    expect(r.len).toBeLessThan(10 * 1024 * 1024);
+    expect(r.ms).toBeLessThan(3000);
+    expect(r.nested).toBeLessThan(2000);
+    expect(r.huge).toContain('color:blue');
+    expect(r.huge).not.toContain('xxx'); // 너무 긴 규칙은 건너뜀
+  });
+
   test('한글·워드 형식 HTML: font 태그와 글꼴·크기', async ({ page }) => {
     await paste(page, { text: '가', htmlData: '<p class=MsoNormal style="line-height:160%"><font color=red size=5 face="굴림">가</font><span style="font-family:함초롬바탕;font-size:10.0pt;mso-hansi-font-family:함초롬바탕">나</span></p>' });
     const raw = await html(page);

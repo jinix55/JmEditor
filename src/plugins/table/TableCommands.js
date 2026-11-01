@@ -178,9 +178,14 @@ export class TableCommands {
         // 모든 열을 현재 렌더 폭(px)으로 고정한 뒤, 당기는 열과 오른쪽 이웃 열이 폭을 주고받는다 (표 전체 폭 유지)
         const cols = Array.from(table.querySelectorAll('colgroup > col'));
         const widths = cols.map((_, i) => this.#colWidth(table, i));
+        const tableWidth = table.getBoundingClientRect().width;
+        if (table.style.width === 'auto') table.style.width = `${Math.round(tableWidth)}px`; // 내용 맞춤 표는 % 열 폭의 기준이 없어 폭이 튄다
         cols.forEach((col, i) => { col.style.width = `${widths[i]}px`; });
         const next = cols[h.index + 1] ? h.index + 1 : null;
-        drag = { ...h, start: e.clientX, cols, widths, next };
+        const total = widths.reduce((a, b) => a + b, 0);
+        const box = getComputedStyle(layer);
+        const room = layer.clientWidth - parseFloat(box.paddingLeft) - parseFloat(box.paddingRight); // 레이어 안쪽 폭
+        drag = { ...h, start: e.clientX, cols, widths, next, total, maxTotal: Math.max(total, room) };
       } else {
         const tr = table.rows[h.index];
         drag = { ...h, start: e.clientY, startSize: tr.getBoundingClientRect().height, tr };
@@ -202,7 +207,9 @@ export class TableCommands {
           delta = Math.max(MIN - w0, Math.min(w1 - MIN, delta)); // 양쪽 최소 폭 유지
           drag.cols[drag.next].style.width = `${w1 - delta}px`;
         } else {
-          delta = Math.max(MIN - w0, delta); // 마지막 열: 표 폭 자체가 늘어남
+          // 마지막 열: 표 폭 자체가 바뀐다 (편집 영역 폭까지만 늘림, 놓을 때 % 로 바꿔도 다른 열이 줄지 않게 표 폭을 함께 저장)
+          delta = Math.min(Math.max(MIN - w0, delta), drag.maxTotal - drag.total);
+          table.style.width = `${Math.round(drag.total + delta)}px`;
         }
         drag.cols[drag.index].style.width = `${w0 + delta}px`;
       } else {
@@ -213,6 +220,7 @@ export class TableCommands {
       document.removeEventListener('mousemove', move);
       document.removeEventListener('mouseup', up);
       if (!drag) return;
+      table.style.removeProperty('cursor'); // 표 밖에서 놓으면 mouseleave 가 지나가 저장 HTML 에 남는다
       if (drag.kind === 'col') this.#writeColPercents(table, this.#colPercents(table)); // px → % 로 되돌려 저장
       drag = null;
       table._resizing = false;

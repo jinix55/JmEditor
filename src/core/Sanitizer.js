@@ -98,6 +98,10 @@ const TH_SCOPES = ['row', 'col', 'rowgroup', 'colgroup'];
 
 /** 오피스 머리 style 의 class 서식을 옮길 요소 */
 const OFFICE_STYLE_TARGETS = 'table, tr, td, th, col, font';
+/** 서식 옮기기 상한 (악성 문서가 규칙을 겹쳐 글자 수를 불리지 못하게): 규칙 하나의 길이, 요소 하나에 적용할 규칙 수, 붙여넣기 한 번에 옮길 총 글자 수 */
+const OFFICE_RULE_BODY_MAX = 4096;
+const OFFICE_RULES_PER_ELEMENT = 16;
+const OFFICE_INLINE_BUDGET = 8 * 1024 * 1024;
 
 /**
  * CSS 글에서 class 규칙(.a, td.a)만 뽑는다. 복잡한 선택자·@규칙·태그 규칙은 버린다 (indexOf 로 훑어 입력 길이에 선형)
@@ -123,7 +127,7 @@ function parseClassRules(css) {
     const close = plain.indexOf('}', open);
     if (close < 0) break;
     const body = plain.slice(open + 1, close);
-    plain.slice(at, open).split(',').forEach((sel) => {
+    if (body.length <= OFFICE_RULE_BODY_MAX) plain.slice(at, open).split(',').forEach((sel) => {
       const m = /^([a-z][a-z0-9]*)?\.([\w-]+)$/i.exec(sel.trim());
       if (!m) return;
       if (!rules.has(m[2])) rules.set(m[2], []);
@@ -337,17 +341,21 @@ export class Sanitizer {
    */
   static inlineOfficeStyles(html) {
     if (!OFFICE_MARK.test(html) || !html.includes('<style')) return html;
-    const doc = new DOMParser().parseFromString(html, 'text/html'); // 스크립트가 실행되지 않는 문서
+    const doc = new DOMParser().parseFromString(Sanitizer.#limitOpenTags(html), 'text/html'); // 스크립트가 실행되지 않는 문서
     const rules = parseClassRules(Array.from(doc.querySelectorAll('style'), (s) => s.textContent).join('\n'));
     if (!rules.size) return html;
+    let budget = OFFICE_INLINE_BUDGET;
     doc.querySelectorAll(OFFICE_STYLE_TARGETS).forEach((el) => {
+      if (budget <= 0) return; // 상한을 넘으면 나머지 칸은 서식 없이
       const tag = el.localName;
       const found = Array.from(el.classList).flatMap((c) => rules.get(c) || []).filter((r) => !r.tag || r.tag === tag);
       if (!found.length) return;
-      const decls = found.sort((a, b) => a.order - b.order).map((r) => r.body);
+      const decls = found.sort((a, b) => a.order - b.order).slice(-OFFICE_RULES_PER_ELEMENT).map((r) => r.body);
       const own = el.getAttribute('style');
       if (own) decls.push(own);
-      el.setAttribute('style', decls.join(';'));
+      const style = decls.join(';');
+      budget -= style.length;
+      el.setAttribute('style', style);
     });
     return doc.body.innerHTML;
   }
