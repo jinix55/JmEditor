@@ -345,6 +345,57 @@ test.describe('엑셀·파워포인트·워드 붙여넣기', () => {
     expect(raw).not.toContain('StartFragment');
   });
 
+  /** 엑셀이 클립보드에 넣는 형식 (서식이 머리 style 의 class 에 있다) */
+  const excelDoc = (style, body) => `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta name=Generator content="Microsoft Excel 15"><style><!--${style}--></style></head><body><!--StartFragment-->${body}<!--EndFragment--></body></html>`;
+  const excelStyle = `table {mso-displayed-decimal-separator:"\\.";}
+    @page {margin:.75in .7in;}
+    td {padding-top:1px; color:black; font-size:11.0pt; border:none;}
+    .xl65 {mso-style-parent:style0; mso-number-format:"\\#\\,\\#\\#0\;"; border:.5pt solid windowtext; background:#FFFF00; font-weight:700;}
+    .xl66 {border-top:.5pt solid windowtext; border-right:none; text-align:center;}
+    .font5 {color:red;}
+    p.MsoNormal {margin:0;}`;
+
+  test('엑셀 머리 style 의 칸 서식을 살린다: 테두리·배경·굵기·정렬', async ({ page }) => {
+    await paste(page, { htmlData: excelDoc(excelStyle, '<table border=0 style="border-collapse:collapse"><tr><td class=xl65>가</td><td class=xl66 style="text-align:right">나</td><td>다</td></tr></table>') });
+    const cell = (i) => page.locator('.jm-editor td').nth(i);
+    await expect(cell(0)).toHaveCSS('border-top-style', 'solid');
+    await expect(cell(0)).toHaveCSS('background-color', 'rgb(255, 255, 0)');
+    await expect(cell(0).locator('strong')).toHaveText('가');
+    await expect(cell(1)).toHaveCSS('border-top-style', 'solid');
+    await expect(cell(1)).toHaveCSS('text-align', 'right'); // 칸에 직접 쓴 값이 우선
+    const raw = await html(page);
+    expect(raw).not.toContain('xl6');
+    expect(raw).not.toContain('mso-');
+    expect(raw).not.toContain('color: black'); // 태그 규칙(td)은 옮기지 않음
+  });
+
+  test('엑셀 글자 조각(font class)의 색도 살린다, 표 밖 문단 규칙은 옮기지 않는다', async ({ page }) => {
+    await paste(page, { htmlData: excelDoc(excelStyle, '<p class=MsoNormal>문단</p><table border=0><tr><td><font class=font5>빨강</font></td></tr></table>') });
+    const raw = await html(page);
+    expect(raw).toContain('color: red');
+    expect(raw).not.toContain('margin');
+  });
+
+  test('머리 style 의 위험한 값은 정제에서 지워지고, 오피스가 아닌 글은 옮기지 않는다', async ({ page }) => {
+    await page.evaluate(() => { window.__x = 0; });
+    await paste(page, { htmlData: excelDoc('.xl1 {background:url(javascript:window.__x=1); color:expression(1); border:1px solid url(x);} .xl2" onclick="x {color:red}', '<table><tr><td class=xl1>가</td></tr></table>') });
+    const raw = await html(page);
+    expect(raw).not.toMatch(/url\(|expression|onclick/);
+    await page.evaluate(() => { window.core.setHTML('<p><br></p>'); });
+    await caret(page, 'p', 0);
+    await paste(page, { htmlData: '<style>.t{background:red}</style><table><tr><td class="t">가</td></tr></table>' });
+    expect(await html(page)).not.toContain('background');
+  });
+
+  test('닫히지 않은 주석·긴 style 도 빠르다', async ({ page }) => {
+    const ms = await page.evaluate(() => {
+      const t = performance.now();
+      window.JM.Sanitizer.inlineOfficeStyles('<html xmlns:x="urn:schemas-microsoft-com:office:excel"><style>' + '/*'.repeat(200000) + '.xl1{'.repeat(100000) + '</style><table><tr><td class=xl1>a</td></tr></table></html>');
+      return performance.now() - t;
+    });
+    expect(ms).toBeLessThan(1000);
+  });
+
   test('한글·워드 형식 HTML: font 태그와 글꼴·크기', async ({ page }) => {
     await paste(page, { text: '가', htmlData: '<p class=MsoNormal style="line-height:160%"><font color=red size=5 face="굴림">가</font><span style="font-family:함초롬바탕;font-size:10.0pt;mso-hansi-font-family:함초롬바탕">나</span></p>' });
     const raw = await html(page);
@@ -363,5 +414,26 @@ test.describe('데모', () => {
     await page.goto('/examples/demo/index.html');
     await expect(page.locator('[data-cmd="fontFamily"]')).toBeVisible();
     await expect(page.locator('[data-cmd="fontFamily"] .jm-btn-select-label')).toHaveText('글꼴');
+  });
+});
+
+test.describe('데모 붙여넣기', () => {
+  test('엑셀 머리 style 의 테두리가 데모에서도 살아난다', async ({ page }) => {
+    await page.route(/fonts\.googleapis\.com\/css2/, (route) => route.abort());
+    await page.route(/youtube(-nocookie)?\.com\/embed\//, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '' }));
+    await page.goto('/examples/demo/index.html', { waitUntil: 'domcontentloaded' });
+    const border = await page.evaluate(async () => {
+      const root = document.querySelector('.jm-editor');
+      root.focus();
+      getSelection().selectAllChildren(root);
+      getSelection().collapseToEnd();
+      const dt = new DataTransfer();
+      dt.setData('text/html', '<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><style>.xl65{border:1pt solid red}</style></head><body><table border=0 id="zz"><tr><td class=xl65>칸테두리</td></tr></table></body></html>');
+      root.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 50));
+      const td = Array.from(root.querySelectorAll('td')).find((c) => c.textContent === '칸테두리');
+      return td && td.style.borderTopColor;
+    });
+    expect(border).toBe('red');
   });
 });

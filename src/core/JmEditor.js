@@ -729,7 +729,7 @@ export class JmEditor {
     // 카카오맵 「지도 퍼가기」 코드를 본문에 붙여 넣으면 지도 블록으로
     if (isRoughmapCode(text)) { this.map.insertFromCode(text); return; }
     if (html) {
-      this.commands.insertHTML(Sanitizer.stripPasteClasses(Sanitizer.clean(html, this.structure, this.fontFamilies), html));
+      this.commands.insertHTML(Sanitizer.stripPasteClasses(Sanitizer.clean(Sanitizer.inlineOfficeStyles(html), this.structure, this.fontFamilies), html));
     } else if (text) {
       // 한 줄이면 커서 위치에 글자로, 여러 줄이면 줄마다 단락으로 (현재 문단을 나눠 그 사이에)
       const lines = text.split(/\r?\n/);

@@ -269,7 +269,7 @@ initSliders(document.querySelector('.jm-content'));
 | `font-family` | 허용 목록의 첫 이름만 `font-family: "맑은 고딕"` 으로. 없으면 지움 |
 | `mso-*` 등 그 밖의 속성 | 지움 |
 
-엑셀·파워포인트는 표·글과 함께 그림 미리보기도 클립보드에 넣으므로, `text/html`·`text/plain` 이 있으면 그림은 무시하고 파일만 있을 때 이미지로 넣습니다. 엑셀이 문서 머리의 `<style>`(`.xl65{…}`)에 둔 서식은 옮기지 않습니다.
+엑셀·파워포인트는 표·글과 함께 그림 미리보기도 클립보드에 넣으므로, `text/html`·`text/plain` 이 있으면 그림은 무시하고 파일만 있을 때 이미지로 넣습니다. 오피스 문서를 붙여 넣으면 문서 머리 `<style>` 의 class 규칙(`.xl65{…}`)을 표 칸·`font` 의 `style` 로 옮겨 테두리·배경·정렬을 살립니다 (붙여넣기 전용, 칸에 직접 쓴 값 우선, 값 검사는 정제가 그대로 함). `td{…}` 같은 태그 규칙과 표 밖 문단 규칙은 옮기지 않습니다.
 
 **글꼴** — 허용 목록은 `font.families` 입니다 (생성 옵션 `font` > `window.JmEditorConfig.font` > 기본값). 툴바 글꼴 목록과 정제가 같이 씁니다. 서버는 `jm-editor.font.families` 로 같은 값을 주세요. 대소문자는 무시하고 `Malgun Gothic`·`HCR Batang`·`Gulim`·`Dotum`·`Batang` 은 한글 이름으로 바꿉니다.
 

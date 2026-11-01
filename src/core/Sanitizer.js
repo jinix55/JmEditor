@@ -96,6 +96,44 @@ const STRUCTURE_ATTRS = ['style'];
 /** th[scope] 허용 값 (구조 모드) */
 const TH_SCOPES = ['row', 'col', 'rowgroup', 'colgroup'];
 
+/** 오피스 머리 style 의 class 서식을 옮길 요소 */
+const OFFICE_STYLE_TARGETS = 'table, tr, td, th, col, font';
+
+/**
+ * CSS 글에서 class 규칙(.a, td.a)만 뽑는다. 복잡한 선택자·@규칙·태그 규칙은 버린다 (indexOf 로 훑어 입력 길이에 선형)
+ * @param {string} css
+ * @returns {Map<string, Array<{tag: string, body: string, order: number}>>} class 이름 → 규칙들
+ */
+function parseClassRules(css) {
+  const rules = new Map();
+  const text = css.split('\x3C!--').join('').split('-->').join('');
+  let plain = '';
+  for (let at = 0; at < text.length;) { // 주석 제거 (닫히지 않으면 끝까지 주석)
+    const open = text.indexOf('/*', at);
+    if (open < 0) { plain += text.slice(at); break; }
+    plain += text.slice(at, open);
+    const close = text.indexOf('*/', open + 2);
+    if (close < 0) break;
+    at = close + 2;
+  }
+  let order = 0;
+  for (let at = 0; ;) {
+    const open = plain.indexOf('{', at);
+    if (open < 0) break;
+    const close = plain.indexOf('}', open);
+    if (close < 0) break;
+    const body = plain.slice(open + 1, close);
+    plain.slice(at, open).split(',').forEach((sel) => {
+      const m = /^([a-z][a-z0-9]*)?\.([\w-]+)$/i.exec(sel.trim());
+      if (!m) return;
+      if (!rules.has(m[2])) rules.set(m[2], []);
+      rules.get(m[2]).push({ tag: (m[1] || '').toLowerCase(), body, order: order++ });
+    });
+    at = close + 1;
+  }
+  return rules;
+}
+
 export class Sanitizer {
   /** 지금 정리 중인 구조 정책 (clean 호출 동안만, null 이면 기본 규칙) */
   static #policy = null;
@@ -288,6 +326,30 @@ export class Sanitizer {
     if (hidden) el.setAttribute('aria-hidden', hidden);
     Array.from(node.childNodes).forEach((c) => { const r = Sanitizer.#cleanNode(c); if (r) el.appendChild(r); });
     return el;
+  }
+
+  /**
+   * 붙여넣기 전용: 오피스 문서가 머리 style 의 class 에 둔 표 서식을 칸의 style 로 옮긴다 (정제 전에 적용, 값 검사는 정제가 맡음).
+   * 엑셀은 테두리·배경을 .xl65 같은 class 로만 주므로 옮기지 않으면 사라진다. 표 요소와 font 의 class 규칙만 옮기고
+   * (td 같은 태그 규칙은 모든 칸에 글자색·크기를 고정하고, p 규칙은 본문 문단을 바꾸므로 제외) 칸에 직접 쓴 값이 우선한다.
+   * @param {string} html 붙여넣은 원본 HTML
+   * @returns {string} 오피스 문서가 아니거나 옮길 규칙이 없으면 원본 그대로
+   */
+  static inlineOfficeStyles(html) {
+    if (!OFFICE_MARK.test(html) || !html.includes('<style')) return html;
+    const doc = new DOMParser().parseFromString(html, 'text/html'); // 스크립트가 실행되지 않는 문서
+    const rules = parseClassRules(Array.from(doc.querySelectorAll('style'), (s) => s.textContent).join('\n'));
+    if (!rules.size) return html;
+    doc.querySelectorAll(OFFICE_STYLE_TARGETS).forEach((el) => {
+      const tag = el.localName;
+      const found = Array.from(el.classList).flatMap((c) => rules.get(c) || []).filter((r) => !r.tag || r.tag === tag);
+      if (!found.length) return;
+      const decls = found.sort((a, b) => a.order - b.order).map((r) => r.body);
+      const own = el.getAttribute('style');
+      if (own) decls.push(own);
+      el.setAttribute('style', decls.join(';'));
+    });
+    return doc.body.innerHTML;
   }
 
   /**
