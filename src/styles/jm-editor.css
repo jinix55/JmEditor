@@ -467,7 +467,7 @@ div[data-type="buttons"][data-align="right"] { justify-content: flex-end; }
 .jm-buttons-addrow input { height: 26px; padding: 0 8px; border: 1px solid var(--jm-border); border-radius: 4px; font-size: 12px; }
 .jm-buttons-addname { width: 140px; } .jm-buttons-addurl { flex: 1; min-width: 0; font-family: ui-monospace, Menlo, monospace; }
 .jm-btn-item { display: inline-flex; align-items: center; gap: 2px; }
-.jm-btn-grip { color: var(--jm-subtle); cursor: grab; font-size: 14px; padding: 0 2px; user-select: none; }
+.jm-btn-grip { display: inline-flex; align-items: center; align-self: stretch; color: var(--jm-subtle); cursor: grab; font-size: 14px; line-height: 1; padding: 0 2px; user-select: none; } /* 줄 높이 때문에 글자가 위로 뜨지 않게 */
 .jm-btn-grip:hover { color: var(--jm-strong); }
 .jm-btn-item.is-dragging { opacity: .4; }
 .jm-btn-item.drop-before { box-shadow: -4px 0 0 0 var(--jm-accent); }

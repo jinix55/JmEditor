@@ -745,6 +745,21 @@ test.describe('11. 글자 크기·글꼴 버튼 표시', () => {
     await expect(page.locator('.jm-editor p span[style*="font-size"]')).toHaveCount(0);
   });
 
+  test('데모 입력줄 앞 글자는 입력란과 세로 중앙이 같다', async ({ page }) => {
+    await page.route(/fonts\.googleapis\.com\/css2/, (route) => route.abort());
+    await page.route(/youtube(-nocookie)?\.com\/embed\//, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '' }));
+    await page.goto('/examples/demo/index.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('.jm-btn[data-cmd="link"]').click();
+    const mid = (sel) => page.locator(sel).evaluate((e) => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; });
+    expect(Math.abs(await mid('#linkLabel') - await mid('#linkUrl'))).toBeLessThanOrEqual(1);
+  });
+
+  test('버튼 손잡이는 버튼과 세로 중앙이 같다', async ({ page }) => {
+    await setHTML(page, '<div data-type="buttons" data-align="center"><a href="/x" data-role="button">버튼</a></div>');
+    const [g, a] = await page.evaluate(() => [document.querySelector('.jm-btn-grip'), document.querySelector('a[data-role="button"]')].map((e) => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; }));
+    expect(Math.abs(g - a)).toBeLessThanOrEqual(1);
+  });
+
   test('데모 툴바도 같은 표시·접근성 속성', async ({ page }) => {
     await page.route(/fonts\.googleapis\.com\/css2/, (route) => route.abort());
     await page.route(/youtube(-nocookie)?\.com\/embed\//, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '' }));
