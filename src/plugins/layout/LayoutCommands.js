@@ -23,7 +23,7 @@ const TEXT_PLACEHOLDER = '글을 입력하세요.';
 /** 글 칸에 둘 수 없는 것: 표·이미지·iframe·다른 블록(레이어) — 붙여넣기 등으로 들어오면 제거. 일반 div 는 p 로 바꿈 (Sanitizer 와 같은 결과) */
 const TEXT_CELL_FORBIDDEN = 'table, img, iframe, div[data-type], [class*="-layer"]';
 /** 글 칸 직속으로 허용하는 블록 */
-const TEXT_BLOCK = /^(P|H1|H2|H3|UL|OL|BLOCKQUOTE)$/;
+const TEXT_BLOCK = /^(P|H[1-6]|UL|OL|BLOCKQUOTE)$/;
 
 export class LayoutCommands {
   /** @param {import('../../core/JmEditor.js').JmEditor} editor */
@@ -232,7 +232,7 @@ export class LayoutCommands {
       if (!loose) { loose = document.createElement('p'); cell.insertBefore(loose, n); }
       loose.appendChild(n);
     });
-    if (!cell.querySelector('p, h1, h2, h3, ul, ol, blockquote')) {
+    if (!cell.querySelector('p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote')) {
       const p = document.createElement('p');
       p.appendChild(document.createElement('br'));
       cell.appendChild(p);

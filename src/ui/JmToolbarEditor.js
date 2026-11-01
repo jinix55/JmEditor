@@ -5,7 +5,7 @@
  */
 import { JmEditor } from '../core/JmEditor.js';
 import { Sanitizer } from '../core/Sanitizer.js';
-import { usedFontName } from '../core/font-policy.js';
+import { inheritedFontSize, inheritedFontName } from '../core/font-policy.js';
 import { TableGridPicker } from './TableGridPicker.js';
 import { ColorPicker } from './ColorPicker.js';
 import { FormatPicker, SAMPLE_FORMATS } from './FormatPicker.js';
@@ -93,12 +93,12 @@ const BUTTONS = [
   ['strike', 'S', (s) => s.s, false, { tip: '취소선' }],
   ['color', 'A', (s) => !!s.color, false, { tip: '글자색' }],     // 버튼 하단 색 띠로 현재 색 표시
   ['bgColor', 'A', (s) => !!s.bg, false, { tip: '글자 배경색' }],
-  ['fontSize', '크기', () => false, false, { tip: '글자 크기', select: FONT_SIZES.map((n) => [`${n}px`, `${n}px`]), selectDefault: ['', '기본'], emptyLabel: '크기' }],
+  ['fontSize', '크기', () => false, false, { tip: '글자 크기', select: FONT_SIZES.map((n) => [`${n}px`, `${n}px`]), inherited: (editor, node) => inheritedFontSize(node, editor.root), sorted: true }],
   // 글꼴: 목록은 에디터 설정(font.families)에서
-  ['fontFamily', '글꼴', () => false, false, { tip: '글꼴', select: (editor) => editor.fontFamilies.map((n) => [n, n]), selectDefault: ['', '기본'], defaultHint: (editor) => usedFontName(editor.root) ?? '브라우저 글꼴', emptyLabel: '글꼴' }],
+  ['fontFamily', '글꼴', () => false, false, { tip: '글꼴', select: (editor) => editor.fontFamilies.map((n) => [n, n]), inherited: (editor, node) => inheritedFontName(node, editor.root, editor.fontFamilies), unknownLabel: '브라우저 글꼴' }],
   null, // 구분선
-  // 제목: 셀렉트 (본문 / 제목 1~3). 값 선택 시 exec('heading', 'p'|'h1'|'h2'|'h3')
-  ['heading', '제목', () => false, false, { tip: '제목 단계', select: [['h1', '제목 1'], ['h2', '제목 2'], ['h3', '제목 3']], selectDefault: ['p', '본문'] }],
+  // 제목: 셀렉트 (제목 1~6 / 본문). 값 선택 시 exec('heading', 'p'|'h1'~'h6')
+  ['heading', '제목', () => false, false, { tip: '제목 단계', select: [['h1', '제목 1'], ['h2', '제목 2'], ['h3', '제목 3'], ['h4', '제목 4'], ['h5', '제목 5'], ['h6', '제목 6']], selectDefault: ['p', '본문'], defaultLast: true }],
   ['quote', '인용', (s) => s.block === 'blockquote', false, { tip: '인용 (스타일 선택)', icon: QUOTE_ICON, iconOnly: true, dropdown: true }],
   null,
   // 정렬: 드롭다운 두 개 (가로 / 세로). 버튼 아이콘은 현재 상태를 보여주고, 누르면 목록
@@ -227,6 +227,7 @@ export class JmToolbarEditor {
     });
     if (!this.editor.fontFamilies.length) this.buttons.fontFamily.hidden = true; // 글꼴 목록을 비우면 도구도 숨김
     if (options.initialHTML) this.editor.setHTML(options.initialHTML);
+    this.#refreshState(); // 처음부터 실제 크기·글꼴 표시
     this.dirty = false;
     // 수정 화면: id 가 있으면 API 로 조회해서 채움
     if (this.api && this.contentId != null) this.load(this.contentId);
@@ -319,7 +320,7 @@ export class JmToolbarEditor {
         btn.dataset.value = opts.selectDefault?.[0] ?? '';
         if (opts.tip) { btn.title = opts.tip; btn.setAttribute('aria-label', opts.tip); }
         btn.innerHTML = `<span class="jm-btn-select-label"></span>${CHEVRON_ICON}`;
-        btn.firstChild.textContent = opts.emptyLabel ?? opts.selectDefault?.[1] ?? label;
+        btn.firstChild.textContent = opts.selectDefault?.[1] ?? label;
         btn.addEventListener('mousedown', (e) => e.preventDefault()); // 선택 영역 유지
         btn.addEventListener('click', () => this.#openSelectMenu(cmd, opts));
         bar.appendChild(btn);
@@ -370,17 +371,17 @@ export class JmToolbarEditor {
   /**
    * 값 고르기 버튼(글자 크기·제목)의 목록 열기. 현재 값은 강조, 고르면 exec(cmd, 값)
    * @param {string} cmd
-   * @param {{select: Array<[string,string]>|((editor: JmEditor) => Array<[string,string]>), selectDefault?: [string,string], defaultHint?: (editor: JmEditor) => string}} opts
-   *        defaultHint: 기본 항목 뒤에 괄호로 보여 줄 실제 값
+   * inherited 가 있는 도구(크기·글꼴)는 기본 항목 없이 실제 값을 표시하고, 지정 안 했을 때의 값을 고르면 지정을 해제한다 (기본값이 저장되지 않게)
+   * @param {{select: Array<[string,string]>|((editor: JmEditor) => Array<[string,string]>), selectDefault?: [string,string], inherited?: (editor: JmEditor, node: Node) => string|null}} opts
    */
   #openSelectMenu(cmd, opts) {
     const btn = this.buttons[cmd];
     const r = btn.getBoundingClientRect();
     this.editor.sel.save();
-    const [defaultValue, defaultText] = opts.selectDefault ?? [];
-    const first = opts.selectDefault && [defaultValue, opts.defaultHint ? `${defaultText} (${opts.defaultHint(this.editor)})` : defaultText];
-    this.listMenu.open(r.left, r.bottom + 4, [first, ...this.#selectItems(opts)].filter(Boolean).map(([v, text]) => ({
-      label: text, checked: v === btn.dataset.value, action: () => this.editor.exec(cmd, v || null),
+    const inherited = opts.inherited?.(this.editor, this.editor.sel.getRange()?.startContainer) ?? null;
+    const items = opts.inherited ? this.#valueItems(opts, btn.dataset.value, inherited) : (opts.defaultLast ? [...this.#selectItems(opts), opts.selectDefault] : [opts.selectDefault, ...this.#selectItems(opts)]).filter(Boolean); // 제목은 큰 글자부터 본문까지
+    this.listMenu.open(r.left, r.bottom + 4, items.map(([v, text]) => ({
+      label: text, checked: v === btn.dataset.value, action: () => this.editor.exec(cmd, (v && v !== inherited) ? v : null),
     })));
   }
 
@@ -394,6 +395,21 @@ export class JmToolbarEditor {
   }
 
   /**
+   * 크기·글꼴 목록: 설정 목록에 없는 현재 값·상속 값을 더한다. 상속 값을 알 수 없으면 해제용 항목을 맨 앞에
+   * @param {{select: *, sorted?: boolean, unknownLabel?: string}} opts
+   * @param {string} current 표시 중인 값
+   * @param {string|null} inherited
+   * @returns {Array<[string,string]>}
+   */
+  #valueItems(opts, current, inherited) {
+    const items = [...this.#selectItems(opts)];
+    [current, inherited].forEach((v) => { if (v && !items.some(([x]) => x === v)) items[opts.sorted ? 'push' : 'unshift']([v, v]); });
+    if (opts.sorted) items.sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
+    if (!inherited && opts.unknownLabel) items.unshift(['', opts.unknownLabel]);
+    return items;
+  }
+
+  /**
    * 값 고르기 버튼에 현재 값 표시
    * @param {string} cmd
    * @param {string} value 목록에 없으면 기본 값
@@ -402,10 +418,16 @@ export class JmToolbarEditor {
     const btn = this.buttons[cmd];
     const opts = BUTTONS.find((d) => d?.[0] === cmd)?.[4];
     if (!btn || !opts) return;
+    if (opts.inherited) { // 크기·글꼴: 지정 값, 없으면 실제로 적용되는 값
+      const shown = value || opts.inherited(this.editor, this.editor.sel.getRange()?.startContainer) || '';
+      btn.dataset.value = shown;
+      btn.firstChild.textContent = shown || opts.unknownLabel || '';
+      return;
+    }
     const found = this.#selectItems(opts).find(([x]) => x === value);
     const [v, text] = found || opts.selectDefault;
     btn.dataset.value = v;
-    btn.firstChild.textContent = found ? text : (opts.emptyLabel ?? text); // 값이 없으면 크기·글꼴은 도구 이름으로
+    btn.firstChild.textContent = text;
   }
 
   /** 버튼 클릭 → 명령 실행. 링크/이미지는 입력 UI 를 거친다 */
@@ -590,8 +612,8 @@ export class JmToolbarEditor {
   /** 블록 태그 앞뒤에 줄바꿈을 넣어 읽기 쉽게 (내용은 변경하지 않음) */
   static prettify(html) {
     return html
-      .replace(/<(p|h1|h2|h3|ul|ol|li|blockquote|table|tbody|thead|tr|div)(\s[^>]*)?>/g, '\n<$1$2>')
-      .replace(/<\/(p|h1|h2|h3|ul|ol|blockquote|table|tbody|thead|tr|div)>/g, '</$1>\n')
+      .replace(/<(p|h[1-6]|ul|ol|li|blockquote|table|tbody|thead|tr|div)(\s[^>]*)?>/g, '\n<$1$2>')
+      .replace(/<\/(p|h[1-6]|ul|ol|blockquote|table|tbody|thead|tr|div)>/g, '</$1>\n')
       .replace(/\n{2,}/g, '\n')
       .trim();
   }

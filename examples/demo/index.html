@@ -114,7 +114,7 @@
 .jm-preview-pane { min-height: 240px; padding: 14px 16px; line-height: 1.6; }
 /* .jm-content: 저장된 HTML 을 보여주는 뷰어 공통 스타일 — 실제 조회 페이지에도 같은 클래스로 적용 */
 .jm-content p { margin: 0 0 8px; }
-.jm-content h1 { font-size: 1.8em; margin: 12px 0 8px; } .jm-content h2 { font-size: 1.5em; margin: 12px 0 8px; } .jm-content h3 { font-size: 1.2em; margin: 10px 0 6px; }
+.jm-content h1 { font-size: 1.8em; margin: 12px 0 8px; } .jm-content h2 { font-size: 1.5em; margin: 12px 0 8px; } .jm-content h3 { font-size: 1.2em; margin: 10px 0 6px; } .jm-content h4 { font-size: 1.1em; margin: 10px 0 6px; } .jm-content h5 { font-size: 1.05em; margin: 8px 0 4px; } .jm-content h6 { font-size: 1em; margin: 8px 0 4px; }
 .jm-content blockquote { margin: 8px 0; padding: 6px 12px; border-left: 4px solid var(--jm-text-soft); color: var(--jm-text-soft); }
 .jm-content ul, .jm-content ol { margin: 0 0 8px; padding-left: 24px; }
 .jm-content img { max-width: 100%; height: auto; display: block; }
@@ -145,6 +145,9 @@
 .jm-editor h1 { font-size: 1.8em; margin: 12px 0 8px; }
 .jm-editor h2 { font-size: 1.5em; margin: 12px 0 8px; }
 .jm-editor h3 { font-size: 1.2em; margin: 10px 0 6px; }
+.jm-editor h4 { font-size: 1.1em; margin: 10px 0 6px; }
+.jm-editor h5 { font-size: 1.05em; margin: 8px 0 4px; }
+.jm-editor h6 { font-size: 1em; margin: 8px 0 4px; } /* 제목은 본문보다 작아지지 않게 (브라우저 기본 h5·h6 은 본문보다 작음) */
 .jm-editor blockquote {
   margin: 8px 0;
   padding: 6px 12px;
@@ -966,6 +969,43 @@ function usedFontName(el) {
 }
 
 /**
+ * 인라인 지정이 없을 때 글자가 따를 값을 읽을 요소: 커서에서 위로 올라가며 prop 을 직접 지정한 요소들의 바깥 부모
+ * @param {Node|null|undefined} node 커서 위치
+ * @param {Element} root 편집 영역
+ * @param {string} prop style 속성 이름 (font-size 등)
+ * @returns {Element}
+ */
+function inheritFrom(node, root, prop) {
+  let el = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  if (!el || !root.contains(el)) return root;
+  let from = el;
+  for (; el && el !== root; el = el.parentElement) if (el.style?.getPropertyValue(prop)) from = el.parentElement;
+  return from;
+}
+
+/**
+ * 인라인 지정이 없을 때의 글자 크기 (사이트 CSS·제목 단계 반영)
+ * @param {Node|null|undefined} node
+ * @param {Element} root
+ * @returns {string} 예: '16px'
+ */
+function inheritedFontSize(node, root) {
+  return `${Math.round(parseFloat(getComputedStyle(inheritFrom(node, root, 'font-size')).fontSize))}px`;
+}
+
+/**
+ * 인라인 지정이 없을 때의 글꼴 이름 (허용 목록에 있으면 그 표기로)
+ * @param {Node|null|undefined} node
+ * @param {Element} root
+ * @param {string[]} families
+ * @returns {string|null} 알 수 없으면(브라우저·시스템 글꼴) null
+ */
+function inheritedFontName(node, root, families) {
+  const name = usedFontName(inheritFrom(node, root, 'font-family'));
+  return name && (fontFamilyName(name, families) ?? name);
+}
+
+/**
  * legacy-format — 옛 글·워드·한글·엑셀 HTML 변환 (Sanitizer 허용 검사 전 단계)
  * - normalizeLegacy: font 태그·표 옛 속성을 style 로, font-weight 를 strong 으로 (파싱한 DOM 을 한 번 훑음)
  * - parseStyle·cleanLegacyDecl: style 선언 파싱과 값 변환(pt→px, background→색, 테두리·글꼴 정규화)
@@ -1408,7 +1448,7 @@ function wrapRuns(el, { bold, done, pending, host, withBlock, stack }) {
 /** 허용 태그와 각 태그에서 허용하는 속성 */
 const ALLOWED = {
   p: ['style'], br: [], strong: [], em: [], u: [], s: [],
-  h1: ['style'], h2: ['style'], h3: ['style'],
+  h1: ['style'], h2: ['style'], h3: ['style'], h4: ['style'], h5: ['style'], h6: ['style'],
   ul: ['style'], ol: ['style', 'start'], li: ['style'],
   blockquote: ['style', 'data-style'], // 인용 스타일: box·quote (세로선은 기본값이라 속성 없음)
   a: ['href', 'target', 'rel', 'data-role', 'data-style', 'data-size', 'data-color', 'data-tone', 'data-icon', 'data-icon-pos'], // data-role=button → 버튼 모양 링크 (값 검사는 #cleanButton)
@@ -2259,13 +2299,13 @@ class Sanitizer {
  * - 에디터 루트 밖 선택은 무시하고, 선택 영역 저장/복원(툴바 클릭으로 포커스가 빠질 때)을 제공한다.
  */
 /** 기본 글 블록 (커서가 속하는 블록) */
-const CARET_BLOCK = /^(P|H1|H2|H3|LI|BLOCKQUOTE|TD|TH)$/;
+const CARET_BLOCK = /^(P|H[1-6]|LI|BLOCKQUOTE|TD|TH)$/;
 /** 구조 모드에서 더하는 글 블록: 정의 목록·캡션 (자식에 블록이 있어도 직접 글이 있으면 블록 역할) */
 const STRUCTURE_CARET_BLOCK = /^(DT|DD|FIGCAPTION|CAPTION)$/;
 /** h4~h6 — 정책이 허용한 경우에만 글 블록(제목) */
 const SUB_HEADING = /^H[4-6]$/;
 /** 태그를 바꿀 수 있는 블록 (제목·인용·목록 전환 대상) */
-const TRANSFORMABLE_BLOCK = /^(P|H1|H2|H3|BLOCKQUOTE)$/;
+const TRANSFORMABLE_BLOCK = /^(P|H[1-6]|BLOCKQUOTE)$/;
 /** 블록 요소 태그 (구조 컨테이너인지 — 블록 자식이 있는지 — 판정용) */
 const BLOCK_TAG = /^(P|H[1-6]|UL|OL|LI|BLOCKQUOTE|TABLE|DIV|SECTION|ARTICLE|ASIDE|HEADER|FOOTER|NAV|DL|DT|DD|FIGURE|FIGCAPTION)$/;
 
@@ -2821,7 +2861,7 @@ class Commands {
       if (t.nodeType === Node.ELEMENT_NODE) return true; // 이미지 (편집 가능한 본문 안)
       if (!t.textContent.replace(new RegExp(ZWSP, 'g'), '')) return false;
       // 블록 사이 줄바꿈 공백(표 tbody 안 등)은 제외 — 글이 들어갈 수 있는 블록 안의 텍스트만
-      if (parent.closest('p, h1, h2, h3, li, blockquote, td, th, [data-cell="text"], [data-role="title"], a[data-role="button"]')) return true;
+      if (parent.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, [data-cell="text"], [data-role="title"], a[data-role="button"]')) return true;
       // 구조 모드: dt·dd·글만 있는 div 등 구조 글 블록 안의 텍스트도 (블록 사이 공백만 있는 텍스트는 제외)
       if (!this.sel.structure) return false;
       for (let e = parent; e && e !== this.root; e = e.parentElement) {
@@ -3059,7 +3099,7 @@ class Commands {
 
   /**
    * 현재 블록을 다른 블록 태그로 교체. 같은 태그면 p 로 되돌림.
-   * @param {'p'|'h1'|'h2'|'h3'|'blockquote'} tag
+   * @param {'p'|'h1'|'h2'|'h3'|'h4'|'h5'|'h6'|'blockquote'} tag
    */
   setBlock(tag) {
     const block = this.sel.getBlock();
@@ -6937,7 +6977,7 @@ const TEXT_PLACEHOLDER = '글을 입력하세요.';
 /** 글 칸에 둘 수 없는 것: 표·이미지·iframe·다른 블록(레이어) — 붙여넣기 등으로 들어오면 제거. 일반 div 는 p 로 바꿈 (Sanitizer 와 같은 결과) */
 const TEXT_CELL_FORBIDDEN = 'table, img, iframe, div[data-type], [class*="-layer"]';
 /** 글 칸 직속으로 허용하는 블록 */
-const TEXT_BLOCK = /^(P|H1|H2|H3|UL|OL|BLOCKQUOTE)$/;
+const TEXT_BLOCK = /^(P|H[1-6]|UL|OL|BLOCKQUOTE)$/;
 
 class LayoutCommands {
   /** @param {import('../../core/JmEditor.js').JmEditor} editor */
@@ -7146,7 +7186,7 @@ class LayoutCommands {
       if (!loose) { loose = document.createElement('p'); cell.insertBefore(loose, n); }
       loose.appendChild(n);
     });
-    if (!cell.querySelector('p, h1, h2, h3, ul, ol, blockquote')) {
+    if (!cell.querySelector('p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote')) {
       const p = document.createElement('p');
       p.appendChild(document.createElement('br'));
       cell.appendChild(p);
@@ -7805,8 +7845,11 @@ class JmEditor {
       h1: () => c.setBlock('h1'),
       h2: () => c.setBlock('h2'),
       h3: () => c.setBlock('h3'),
+      h4: () => c.setBlock('h4'),
+      h5: () => c.setBlock('h5'),
+      h6: () => c.setBlock('h6'),
       paragraph: () => c.setBlock('p'),
-      heading: () => c.setBlock(['h1', 'h2', 'h3'].includes(value) ? value : 'p'), // 툴바 제목 셀렉트
+      heading: () => c.setBlock(/^h[1-6]$/.test(value) ? value : 'p'), // 툴바 제목 셀렉트
 
       // 값 없이 부르면 인용 토글, 'line'·'box'·'quote' 면 그 스타일로, null 이면 인용 해제
       quote: () => (value === undefined ? c.setBlock('blockquote') : c.setQuote(value)),
@@ -8657,7 +8700,7 @@ class JmEditor {
    */
   #isRootBlock(n) {
     // 구조 모드에서는 허용된 구조 태그(section·div·dl 등)도 루트 블록으로 인정 (p 로 감싸면 구조가 깨짐)
-    return /^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || this.sel.isStructureTag(n) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type);
+    return /^(P|H[1-6]|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || this.sel.isStructureTag(n) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type);
   }
 
   /** 히스토리 복원 */
@@ -9522,8 +9565,8 @@ const BUTTONS = [
   ['modeHtml','HTML',s=>mode==='html',false,{icon:CODE_ICON,group:'mode',row:'top'}],
   ['modePreview','미리보기',s=>mode==='preview',false,{icon:PREVIEW_ICON,group:'mode',segLast:true,row:'top'}],
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
-  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),selectDefault:['','기본'],emptyLabel:'크기'}],['fontFamily','글꼴',()=>false,false,{tip:'글꼴',select:()=>editor.fontFamilies.map(n=>[n,n]),selectDefault:['','기본'],defaultHint:()=>usedFontName(editor.root)??'브라우저 글꼴',emptyLabel:'글꼴'}],null,
-  ['heading','제목',()=>false,false,{tip:'제목 단계',select:[['h1','제목 1'],['h2','제목 2'],['h3','제목 3']],selectDefault:['p','본문']}],['quote','인용',s=>s.block==='blockquote',false,{tip:'인용 (스타일 선택)',icon:QUOTE_ICON,iconOnly:true,dropdown:true}],null,
+  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),inherited:n=>inheritedFontSize(n,editor.root),sorted:true}],['fontFamily','글꼴',()=>false,false,{tip:'글꼴',select:()=>editor.fontFamilies.map(n=>[n,n]),inherited:n=>inheritedFontName(n,editor.root,editor.fontFamilies),unknownLabel:'브라우저 글꼴'}],null,
+  ['heading','제목',()=>false,false,{tip:'제목 단계',select:[['h1','제목 1'],['h2','제목 2'],['h3','제목 3'],['h4','제목 4'],['h5','제목 5'],['h6','제목 6']],selectDefault:['p','본문'],defaultLast:true}],['quote','인용',s=>s.block==='blockquote',false,{tip:'인용 (스타일 선택)',icon:QUOTE_ICON,iconOnly:true,dropdown:true}],null,
   ['alignMenu','가로 정렬',()=>false,false,{tip:'가로 정렬',icon:ALIGN_LEFT_ICON,iconOnly:true,dropdown:true}],['valignMenu','세로 정렬',()=>false,false,{tip:'세로 정렬 (표 셀)',icon:VALIGN_TOP_ICON,iconOnly:true,dropdown:true,tableEnabled:true}],null,
   ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true,splitMain:true}],['ulType','비순서 목록 유형',()=>false,false,{tip:'비순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true,splitMain:true}],['olType','순서 목록 유형',()=>false,false,{tip:'순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],null,
   ['link','링크',s=>s.a,false,{tip:'링크',icon:LINK_ICON,iconOnly:true}],['image','이미지',()=>false,false,{tip:'이미지',icon:IMAGE_ICON,iconOnly:true}],['youtube','유튜브',()=>false,false,{icon:YOUTUBE_ICON,iconOnly:true}],['table','표',s=>s.table,false,{tip:'표 삽입',icon:TABLE_ICON,iconOnly:true}],null,
@@ -9609,7 +9652,7 @@ BUTTONS.forEach(def=>{
   const [cmd,label,,tableOnly,opts={}]=def;
   if(opts.select){ // 값 고르기 버튼 (글자 크기·제목): 현재 값 표시, 누르면 다른 메뉴와 같은 목록
     const b=document.createElement('button');b.type='button';b.className='jm-btn jm-btn-dropdown jm-btn-select';b.dataset.cmd=cmd;b.dataset.value=opts.selectDefault?.[0]??'';b.title=opts.tip||cmd;b.setAttribute('aria-label',opts.tip||cmd);
-    b.innerHTML='<span class="jm-btn-select-label"></span>'+CHEVRON_ICON;b.firstChild.textContent=opts.emptyLabel??opts.selectDefault?.[1]??label;
+    b.innerHTML='<span class="jm-btn-select-label"></span>'+CHEVRON_ICON;b.firstChild.textContent=opts.selectDefault?.[1]??label;
     b.addEventListener('mousedown',e=>e.preventDefault());b.addEventListener('click',()=>openSelectMenu(cmd,opts));
     (opts.row==='top'?toolbarTop:toolbar).appendChild(b);btns[cmd]=b;return;}
   const b=document.createElement('button');
@@ -9629,11 +9672,12 @@ BUTTONS.forEach(def=>{
   btns[cmd]=b;
 });
 /** 값 고르기 버튼(글자 크기·제목)의 목록 열기. 현재 값은 강조 */
-function openSelectMenu(cmd,opts){const b=btns[cmd];const r=b.getBoundingClientRect();editor.sel.save();const first=opts.selectDefault&&[opts.selectDefault[0],opts.defaultHint?opts.selectDefault[1]+' ('+opts.defaultHint()+')':opts.selectDefault[1]];listMenu.open(r.left,r.bottom+4,[first,...selectItems(opts)].filter(Boolean).map(([v,tx])=>({label:tx,checked:v===b.dataset.value,action:()=>editor.exec(cmd,v||null)})));}
+function openSelectMenu(cmd,opts){const b=btns[cmd];const r=b.getBoundingClientRect();editor.sel.save();const inh=opts.inherited?.(editor.sel.getRange()?.startContainer)??null;const items=opts.inherited?valueItems(opts,b.dataset.value,inh):(opts.defaultLast?[...selectItems(opts),opts.selectDefault]:[opts.selectDefault,...selectItems(opts)]).filter(Boolean);listMenu.open(r.left,r.bottom+4,items.map(([v,tx])=>({label:tx,checked:v===b.dataset.value,action:()=>editor.exec(cmd,(v&&v!==inh)?v:null)})));}
 /** 값 고르기 목록 (설정에 따라 달라지는 목록은 함수) */
 function selectItems(opts){return typeof opts.select==='function'?opts.select():opts.select;}
 /** 값 고르기 버튼에 현재 값 표시 (목록에 없으면 기본 값) */
-function setSelectValue(cmd,value){const b=btns[cmd];const opts=BUTTONS.find(d=>d?.[0]===cmd)?.[4];if(!b||!opts)return;const found=selectItems(opts).find(([x])=>x===value);const [v,tx]=found||opts.selectDefault;b.dataset.value=v;b.firstChild.textContent=found?tx:(opts.emptyLabel??tx);}
+function valueItems(opts,current,inh){const items=[...selectItems(opts)];[current,inh].forEach(v=>{if(v&&!items.some(([x])=>x===v))items[opts.sorted?'push':'unshift']([v,v]);});if(opts.sorted)items.sort((a,c)=>parseFloat(a[0])-parseFloat(c[0]));if(!inh&&opts.unknownLabel)items.unshift(['',opts.unknownLabel]);return items;}
+function setSelectValue(cmd,value){const b=btns[cmd];const opts=BUTTONS.find(d=>d?.[0]===cmd)?.[4];if(!b||!opts)return;if(opts.inherited){const shown=value||opts.inherited(editor.sel.getRange()?.startContainer)||'';b.dataset.value=shown;b.firstChild.textContent=shown||opts.unknownLabel||'';return;}const found=selectItems(opts).find(([x])=>x===value);const [v,tx]=found||opts.selectDefault;b.dataset.value=v;b.firstChild.textContent=tx;}
 function run(cmd){
   if(cmd==='link'){
     const a=editor.sel.closest('a');
@@ -9675,7 +9719,7 @@ function refresh(){if(mode!=='editor')return;const s=editor.getState();BUTTONS.f
   btns.color.style.setProperty('--jm-swatch',s.color||'transparent');btns.bgColor.style.setProperty('--jm-swatch',s.bg||'transparent');}
 
 /* 모드 전환: editor / html / preview. html 모드에서 나갈 때 textarea 내용을 setHTML 로 반영 */
-function prettify(html){return html.replace(/<(p|h1|h2|h3|ul|ol|li|blockquote|table|tbody|thead|tr|div)(\s[^>]*)?>/g,'\n<$1$2>').replace(/<\/(p|h1|h2|h3|ul|ol|blockquote|table|tbody|thead|tr|div)>/g,'</$1>\n').replace(/\n{2,}/g,'\n').trim();}
+function prettify(html){return html.replace(/<(p|h[1-6]|ul|ol|li|blockquote|table|tbody|thead|tr|div)(\s[^>]*)?>/g,'\n<$1$2>').replace(/<\/(p|h[1-6]|ul|ol|blockquote|table|tbody|thead|tr|div)>/g,'</$1>\n').replace(/\n{2,}/g,'\n').trim();}
 const previewEl=document.getElementById('preview');let stopPreview=null;let sourceBase='';
 function setMode(m){
   if(m===mode)return;
@@ -9708,6 +9752,7 @@ editor.setHTML(`<h2>공지사항 작성 샘플</h2>
 <p style="text-align:center"><span style="font-size:12px"><span style="color:#667085">영상: Big Buck Bunny © Blender Foundation (CC BY 3.0) — peach.blender.org</span></span></p>
 <div data-type="gallery" data-layout="justify"><p data-role="title">현장 사진 — 사진은 드래그로 순서 변경·선택 후 교체, 헤더의 ⠿ 로 블록 이동</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJmNmY0ZSIvPjx0ZXh0IHg9IjQwMCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDQ6MzwvdGV4dD48L3N2Zz4=" alt="가로 4:3" width="800" height="600"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzNiNmVhNSIvPjx0ZXh0IHg9IjMwMCIgeT0iNDEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDM6NDwvdGV4dD48L3N2Zz4=" alt="세로 3:4" width="600" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjUwMCI+PHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNTAwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjAwIiB5PSIyNjIiIGZvbnQtc2l6ZT0iNjIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7tjIzrhbjrnbzrp4g8L3RleHQ+PC9zdmc+" alt="파노라마" width="1200" height="500"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NTAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNDUwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzZiNGZhMCIvPjx0ZXh0IHg9IjIyNSIgeT0iNDEyIiBmb250LXNpemU9IjU2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDk6MTY8L3RleHQ+PC9zdmc+" alt="세로 9:16" width="450" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MDAiIGhlaWdodD0iNzAwIj48cmVjdCB3aWR0aD0iNzAwIiBoZWlnaHQ9IjcwMCIgZmlsbD0iIzhhNmQzYiIvPjx0ZXh0IHg9IjM1MCIgeT0iMzYyIiBmb250LXNpemU9Ijg3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7KCV7IKs6rCBPC90ZXh0Pjwvc3ZnPg==" alt="정사각" width="700" height="700"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iOTAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJhN2Y4ZiIvPjx0ZXh0IHg9IjQ1MCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDM6MjwvdGV4dD48L3N2Zz4=" alt="가로 3:2" width="900" height="600"></div>
 <div data-type="buttons" data-align="center"><a href="https://github.com/jinix55/JmEditor" data-role="button" data-style="primary">GitHub 저장소</a><a href="https://jinix55.github.io/JmEditor/" data-role="button" data-style="outline">데모 페이지</a></div>`);
+refresh(); // 처음부터 실제 크기·글꼴 표시
 </script>
 </body>
 </html>

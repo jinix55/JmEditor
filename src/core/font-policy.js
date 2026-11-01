@@ -89,3 +89,40 @@ export function usedFontName(el) {
   }
   return null;
 }
+
+/**
+ * 인라인 지정이 없을 때 글자가 따를 값을 읽을 요소: 커서에서 위로 올라가며 prop 을 직접 지정한 요소들의 바깥 부모
+ * @param {Node|null|undefined} node 커서 위치
+ * @param {Element} root 편집 영역
+ * @param {string} prop style 속성 이름 (font-size 등)
+ * @returns {Element}
+ */
+function inheritFrom(node, root, prop) {
+  let el = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  if (!el || !root.contains(el)) return root;
+  let from = el;
+  for (; el && el !== root; el = el.parentElement) if (el.style?.getPropertyValue(prop)) from = el.parentElement;
+  return from;
+}
+
+/**
+ * 인라인 지정이 없을 때의 글자 크기 (사이트 CSS·제목 단계 반영)
+ * @param {Node|null|undefined} node
+ * @param {Element} root
+ * @returns {string} 예: '16px'
+ */
+export function inheritedFontSize(node, root) {
+  return `${Math.round(parseFloat(getComputedStyle(inheritFrom(node, root, 'font-size')).fontSize))}px`;
+}
+
+/**
+ * 인라인 지정이 없을 때의 글꼴 이름 (허용 목록에 있으면 그 표기로)
+ * @param {Node|null|undefined} node
+ * @param {Element} root
+ * @param {string[]} families
+ * @returns {string|null} 알 수 없으면(브라우저·시스템 글꼴) null
+ */
+export function inheritedFontName(node, root, families) {
+  const name = usedFontName(inheritFrom(node, root, 'font-family'));
+  return name && (fontFamilyName(name, families) ?? name);
+}

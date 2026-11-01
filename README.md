@@ -206,7 +206,7 @@ api: {
 
 ## 저장되는 HTML
 
-허용 태그는 p, br, strong, em, u, s, h1~h3, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`(모양 `data-style`, 테마 색 `data-color`, 직접 색 `style="--jm-btn: #rrggbb"`+`data-tone`, 아이콘 `data-icon`·`data-icon-pos` — 테마 실제 색은 `:root { --jm-btn-green: … }` 처럼 사이트에서 바꿀 수 있음), 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]`, 카카오 지도용 `div[data-type="map"]`(속성 `data-timestamp`·`data-key`·`data-height`·`data-title` 만, 안의 내용은 버림) 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100), `loading`(lazy·eager)만 더 남고, 모바일 이미지용 `picture > source + img` 도 남습니다(아래 「퍼블리싱 구조 보존」 참고). 인용은 `blockquote` 기본(세로선)에 `data-style="box"`(박스)·`data-style="quote"`(글 처음·끝에 따옴표)가 있습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 만 남고 값 형식도 검사합니다.
+허용 태그는 p, br, strong, em, u, s, h1~h6, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`(모양 `data-style`, 테마 색 `data-color`, 직접 색 `style="--jm-btn: #rrggbb"`+`data-tone`, 아이콘 `data-icon`·`data-icon-pos` — 테마 실제 색은 `:root { --jm-btn-green: … }` 처럼 사이트에서 바꿀 수 있음), 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]`, 카카오 지도용 `div[data-type="map"]`(속성 `data-timestamp`·`data-key`·`data-height`·`data-title` 만, 안의 내용은 버림) 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100), `loading`(lazy·eager)만 더 남고, 모바일 이미지용 `picture > source + img` 도 남습니다(아래 「퍼블리싱 구조 보존」 참고). 인용은 `blockquote` 기본(세로선)에 `data-style="box"`(박스)·`data-style="quote"`(글 처음·끝에 따옴표)가 있습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 만 남고 값 형식도 검사합니다.
 
 표는 이렇게 저장됩니다. 열 너비는 `colgroup`, 행 높이는 `tr`, 병합은 `colspan` / `rowspan`, 테두리 숨김은 `data-border="0"` 입니다.
 
@@ -273,7 +273,7 @@ initSliders(document.querySelector('.jm-content'));
 
 **글꼴** — 허용 목록은 `font.families` 입니다 (생성 옵션 `font` > `window.JmEditorConfig.font` > 기본값). 툴바 글꼴 목록과 정제가 같이 씁니다. 서버는 `jm-editor.font.families` 로 같은 값을 주세요. 대소문자는 무시하고 `Malgun Gothic`·`HCR Batang`·`Gulim`·`Dotum`·`Batang` 은 한글 이름으로 바꿉니다.
 
-툴바 글꼴 목록의 "기본"에는 지금 실제로 적용되는 글꼴 이름이 괄호로 표시됩니다(예: `기본 (맑은 고딕)`). 편집 영역은 페이지의 글꼴을 물려받으므로 사이트 CSS 에 따라 달라지고, 이 컴퓨터에 없는 글꼴은 건너뜁니다. 표시일 뿐 저장 내용에는 들어가지 않습니다.
+툴바의 크기·글꼴 도구에는 "기본" 항목이 없고 지금 실제로 적용되는 값(예: `16px`, `맑은 고딕`)이 선택되어 보입니다. 편집 영역은 페이지의 값을 물려받으므로 사이트 CSS 에 따라 달라지고, 이 컴퓨터에 없는 글꼴은 건너뜁니다(알 수 없으면 `브라우저 글꼴`). **지정 안 했을 때의 값을 고르면 지정을 해제**하므로 기본값은 저장 내용에 들어가지 않습니다.
 
 웹폰트는 번들에 넣지 않습니다. 없는 글꼴은 사이트 CSS 에서 대체할 수 있습니다. 라이선스는 사이트에서 확인하세요.
 
@@ -362,7 +362,7 @@ window.JmEditorConfig = {
 | 동작 | 규칙 |
 |---|---|
 | 글자 서식·색·크기·링크 | `dt`·`dd`·캡션·글만 있는 `div` 안, 블록과 섞인 직접 글에서도 됩니다 |
-| 제목·인용·목록 바꾸기 | `p`·`h1~h3`·`blockquote` 만 바뀌고 class·정렬은 그대로. `dt`·`dd` 같은 구조 블록과 안에 블록이 있는 `li` 는 바꾸지 않습니다 |
+| 제목·인용·목록 바꾸기 | `p`·`h1~h6`·`blockquote` 만 바뀌고 class·정렬은 그대로. `dt`·`dd` 같은 구조 블록과 안에 블록이 있는 `li` 는 바꾸지 않습니다 |
 | Enter | `p`·제목·목록은 지금처럼. `dt`·`dd`·`figcaption`·`caption`·글만 있는 `div` 는 줄바꿈(`<br>`) |
 | Backspace·Delete | 같은 구조 안의 문단끼리는 합치고, 다른 구조나 `dt`/`dd` 경계는 넘지 않습니다 |
 | 여러 구조에 걸친 선택 | 지우기·입력·잘라내기·붙여넣기 모두 글자만 지우고 구조는 남깁니다 |

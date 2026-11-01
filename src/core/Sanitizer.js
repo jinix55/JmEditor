@@ -13,7 +13,7 @@ import { resolveConfig } from '../config.js';
 /** 허용 태그와 각 태그에서 허용하는 속성 */
 const ALLOWED = {
   p: ['style'], br: [], strong: [], em: [], u: [], s: [],
-  h1: ['style'], h2: ['style'], h3: ['style'],
+  h1: ['style'], h2: ['style'], h3: ['style'], h4: ['style'], h5: ['style'], h6: ['style'],
   ul: ['style'], ol: ['style', 'start'], li: ['style'],
   blockquote: ['style', 'data-style'], // 인용 스타일: box·quote (세로선은 기본값이라 속성 없음)
   a: ['href', 'target', 'rel', 'data-role', 'data-style', 'data-size', 'data-color', 'data-tone', 'data-icon', 'data-icon-pos'], // data-role=button → 버튼 모양 링크 (값 검사는 #cleanButton)

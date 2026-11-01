@@ -103,7 +103,7 @@ export class JmEditor {
 
   /**
    * 명령 실행. 툴바 등 외부에서 호출한다.
-   * @param {string} name bold|italic|underline|strike|h1|h2|h3|paragraph|quote|ul|ol|link|unlink|image|undo|redo
+   * @param {string} name bold|italic|underline|strike|h1~h6|paragraph|quote|ul|ol|link|unlink|image|undo|redo
    *                      |table|tableRowBelow|tableRowAbove|tableColRight|tableColLeft|tableDeleteRow|tableDeleteCol|tableDelete
    *                      |color|bgColor (value: 색상 문자열, null 이면 해제)
    *                      |fontSize (value: '14px' 등, null 이면 해제)
@@ -131,8 +131,11 @@ export class JmEditor {
       h1: () => c.setBlock('h1'),
       h2: () => c.setBlock('h2'),
       h3: () => c.setBlock('h3'),
+      h4: () => c.setBlock('h4'),
+      h5: () => c.setBlock('h5'),
+      h6: () => c.setBlock('h6'),
       paragraph: () => c.setBlock('p'),
-      heading: () => c.setBlock(['h1', 'h2', 'h3'].includes(value) ? value : 'p'), // 툴바 제목 셀렉트
+      heading: () => c.setBlock(/^h[1-6]$/.test(value) ? value : 'p'), // 툴바 제목 셀렉트
 
       // 값 없이 부르면 인용 토글, 'line'·'box'·'quote' 면 그 스타일로, null 이면 인용 해제
       quote: () => (value === undefined ? c.setBlock('blockquote') : c.setQuote(value)),
@@ -983,7 +986,7 @@ export class JmEditor {
    */
   #isRootBlock(n) {
     // 구조 모드에서는 허용된 구조 태그(section·div·dl 등)도 루트 블록으로 인정 (p 로 감싸면 구조가 깨짐)
-    return /^(P|H1|H2|H3|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || this.sel.isStructureTag(n) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type);
+    return /^(P|H[1-6]|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || this.sel.isStructureTag(n) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type);
   }
 
   /** 히스토리 복원 */

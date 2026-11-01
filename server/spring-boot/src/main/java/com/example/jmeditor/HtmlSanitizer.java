@@ -24,7 +24,7 @@ public class HtmlSanitizer {
     private static final java.util.Map<String, String> TAG_ALIAS = java.util.Map.of("b", "strong", "i", "em", "strike", "s", "font", "span");
 
     /** 기본 허용 태그 (구조 정책 전) — 플러그인 안에서 구조 전용 태그를 가려낼 때 */
-    private static final java.util.Set<String> BASE_TAGS = java.util.Set.of("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
+    private static final java.util.Set<String> BASE_TAGS = java.util.Set.of("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote",
             "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe", "picture", "source");
 
     /** 요소가 플러그인 블록(div[data-type=gallery 등]) 안이거나 그 자체인지 */
@@ -85,7 +85,7 @@ public class HtmlSanitizer {
     /** 기본 허용 목록 (구조 정책 전) */
     private static Safelist baseSafelist() {
         return new Safelist()
-            .addTags("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
+            .addTags("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote",
                      "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe",
                      "picture", "source")   // 모바일 이미지: 구성·srcset·media·type 검사는 후처리(cleanPicture)
             .addAttributes("a", "href", "target", "rel", "data-role", "data-style", "data-size",
@@ -93,7 +93,7 @@ public class HtmlSanitizer {
             .addAttributes("img", "src", "alt", "width", "height", "data-float", "style", "loading")   // 글 감싸기: 방향 + 폭(%), loading 은 lazy·eager 만(후처리)
             .addAttributes("source", "srcset", "media", "type")
             .addAttributes("p", "style")
-            .addAttributes("h1", "style").addAttributes("h2", "style").addAttributes("h3", "style")
+            .addAttributes("h1", "style").addAttributes("h2", "style").addAttributes("h3", "style").addAttributes("h4", "style").addAttributes("h5", "style").addAttributes("h6", "style")
             .addAttributes("li", "style").addAttributes("blockquote", "style", "data-style")   // 인용 스타일: box·quote (세로선은 기본값)
             .addAttributes("ul", "style")
             .addAttributes("ol", "style", "start")

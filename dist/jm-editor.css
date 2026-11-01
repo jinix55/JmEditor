@@ -105,7 +105,7 @@
 .jm-preview-pane { min-height: 240px; padding: 14px 16px; line-height: 1.6; }
 /* .jm-content: 저장된 HTML 을 보여주는 뷰어 공통 스타일 — 실제 조회 페이지에도 같은 클래스로 적용 */
 .jm-content p { margin: 0 0 8px; }
-.jm-content h1 { font-size: 1.8em; margin: 12px 0 8px; } .jm-content h2 { font-size: 1.5em; margin: 12px 0 8px; } .jm-content h3 { font-size: 1.2em; margin: 10px 0 6px; }
+.jm-content h1 { font-size: 1.8em; margin: 12px 0 8px; } .jm-content h2 { font-size: 1.5em; margin: 12px 0 8px; } .jm-content h3 { font-size: 1.2em; margin: 10px 0 6px; } .jm-content h4 { font-size: 1.1em; margin: 10px 0 6px; } .jm-content h5 { font-size: 1.05em; margin: 8px 0 4px; } .jm-content h6 { font-size: 1em; margin: 8px 0 4px; }
 .jm-content blockquote { margin: 8px 0; padding: 6px 12px; border-left: 4px solid var(--jm-text-soft); color: var(--jm-text-soft); }
 .jm-content ul, .jm-content ol { margin: 0 0 8px; padding-left: 24px; }
 .jm-content img { max-width: 100%; height: auto; display: block; }
@@ -136,6 +136,9 @@
 .jm-editor h1 { font-size: 1.8em; margin: 12px 0 8px; }
 .jm-editor h2 { font-size: 1.5em; margin: 12px 0 8px; }
 .jm-editor h3 { font-size: 1.2em; margin: 10px 0 6px; }
+.jm-editor h4 { font-size: 1.1em; margin: 10px 0 6px; }
+.jm-editor h5 { font-size: 1.05em; margin: 8px 0 4px; }
+.jm-editor h6 { font-size: 1em; margin: 8px 0 4px; } /* 제목은 본문보다 작아지지 않게 (브라우저 기본 h5·h6 은 본문보다 작음) */
 .jm-editor blockquote {
   margin: 8px 0;
   padding: 6px 12px;

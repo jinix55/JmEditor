@@ -132,7 +132,7 @@ export class Commands {
       if (t.nodeType === Node.ELEMENT_NODE) return true; // 이미지 (편집 가능한 본문 안)
       if (!t.textContent.replace(new RegExp(ZWSP, 'g'), '')) return false;
       // 블록 사이 줄바꿈 공백(표 tbody 안 등)은 제외 — 글이 들어갈 수 있는 블록 안의 텍스트만
-      if (parent.closest('p, h1, h2, h3, li, blockquote, td, th, [data-cell="text"], [data-role="title"], a[data-role="button"]')) return true;
+      if (parent.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, [data-cell="text"], [data-role="title"], a[data-role="button"]')) return true;
       // 구조 모드: dt·dd·글만 있는 div 등 구조 글 블록 안의 텍스트도 (블록 사이 공백만 있는 텍스트는 제외)
       if (!this.sel.structure) return false;
       for (let e = parent; e && e !== this.root; e = e.parentElement) {
@@ -366,11 +366,11 @@ export class Commands {
     this.editor.commit();
   }
 
-  // ───────────── 블록 서식 (p / h1~h3 / blockquote) ─────────────
+  // ───────────── 블록 서식 (p / h1~h6 / blockquote) ─────────────
 
   /**
    * 현재 블록을 다른 블록 태그로 교체. 같은 태그면 p 로 되돌림.
-   * @param {'p'|'h1'|'h2'|'h3'|'blockquote'} tag
+   * @param {'p'|'h1'|'h2'|'h3'|'h4'|'h5'|'h6'|'blockquote'} tag
    */
   setBlock(tag) {
     const block = this.sel.getBlock();

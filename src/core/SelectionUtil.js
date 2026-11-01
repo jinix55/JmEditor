@@ -6,13 +6,13 @@
 import { INLINE_STRUCTURE_TAGS } from './structure-policy.js';
 
 /** 기본 글 블록 (커서가 속하는 블록) */
-const CARET_BLOCK = /^(P|H1|H2|H3|LI|BLOCKQUOTE|TD|TH)$/;
+const CARET_BLOCK = /^(P|H[1-6]|LI|BLOCKQUOTE|TD|TH)$/;
 /** 구조 모드에서 더하는 글 블록: 정의 목록·캡션 (자식에 블록이 있어도 직접 글이 있으면 블록 역할) */
 const STRUCTURE_CARET_BLOCK = /^(DT|DD|FIGCAPTION|CAPTION)$/;
 /** h4~h6 — 정책이 허용한 경우에만 글 블록(제목) */
 const SUB_HEADING = /^H[4-6]$/;
 /** 태그를 바꿀 수 있는 블록 (제목·인용·목록 전환 대상) */
-export const TRANSFORMABLE_BLOCK = /^(P|H1|H2|H3|BLOCKQUOTE)$/;
+export const TRANSFORMABLE_BLOCK = /^(P|H[1-6]|BLOCKQUOTE)$/;
 /** 블록 요소 태그 (구조 컨테이너인지 — 블록 자식이 있는지 — 판정용) */
 const BLOCK_TAG = /^(P|H[1-6]|UL|OL|LI|BLOCKQUOTE|TABLE|DIV|SECTION|ARTICLE|ASIDE|HEADER|FOOTER|NAV|DL|DT|DD|FIGURE|FIGCAPTION)$/;
 

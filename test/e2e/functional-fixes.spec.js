@@ -515,17 +515,120 @@ test.describe('11. 글자 크기·글꼴 버튼 표시', () => {
 
   test.beforeEach(async ({ page }) => { await open(page); });
 
-  test('처음에는 크기·글꼴, 제목은 지금처럼 본문', async ({ page }) => {
-    await expect(label(page, 'fontSize')).toHaveText('크기');
-    await expect(label(page, 'fontFamily')).toHaveText('글꼴');
+  test('처음부터 실제 크기·글꼴을 보여 준다, 제목은 지금처럼 본문', async ({ page }) => {
+    await expect(label(page, 'fontSize')).toHaveText(/^\d+px$/);
+    await expect(label(page, 'fontFamily')).not.toHaveText('글꼴');
     await expect(label(page, 'heading')).toHaveText('본문');
   });
 
-  test('값이 없는 글자로 옮겨도 크기·글꼴', async ({ page }) => {
+  test('값이 없는 글자는 사이트 CSS 의 크기·글꼴을 보여 준다', async ({ page }) => {
+    await page.evaluate(() => { window.core.root.style.fontSize = '17px'; window.core.root.style.fontFamily = 'Arial'; });
     await setHTML(page, '<p>보통</p>');
     await caret(page, 'p', 1);
-    await expect(label(page, 'fontSize')).toHaveText('크기');
-    await expect(label(page, 'fontFamily')).toHaveText('글꼴');
+    await expect(label(page, 'fontSize')).toHaveText('17px');
+    await expect(label(page, 'fontFamily')).toHaveText('Arial');
+  });
+
+  test('목록에 기본 항목이 없고, 현재 값이 선택되어 있다', async ({ page }) => {
+    await page.evaluate(() => { window.core.root.style.fontSize = '17px'; window.core.root.style.fontFamily = 'Arial'; });
+    await setHTML(page, '<p>보통</p>');
+    await caret(page, 'p', 1);
+    await page.locator('.jm-btn[data-cmd="fontSize"]').click();
+    const items = page.locator('.jm-listmenu .jm-ctxmenu-item');
+    await expect(items.filter({ hasText: '기본' })).toHaveCount(0);
+    const texts = await items.allTextContents();
+    expect(texts.map((t) => parseInt(t, 10))).toEqual([...texts.map((t) => parseInt(t, 10))].sort((x, y) => x - y)); // 17px 도 순서대로
+    await expect(page.getByRole('menuitemradio', { name: '17px', checked: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.locator('.jm-btn[data-cmd="fontFamily"]').click();
+    await expect(items.filter({ hasText: '기본' })).toHaveCount(0);
+    await expect(page.getByRole('menuitemradio', { name: 'Arial', exact: true, checked: true })).toBeVisible();
+  });
+
+  test('지정 안 했을 때의 값을 고르면 지정을 해제한다 (기본값을 저장하지 않음)', async ({ page }) => {
+    await page.evaluate(() => { window.core.root.style.fontSize = '16px'; window.core.root.style.fontFamily = 'Arial'; });
+    await setHTML(page, '<p><span style="font-size:24px;font-family:바탕">글자</span></p>');
+    await select(page, 'span', 0, 2);
+    await expect(label(page, 'fontSize')).toHaveText('24px');
+    await page.locator('.jm-btn[data-cmd="fontSize"]').click();
+    await page.getByRole('menuitemradio', { name: '16px', exact: true }).click();
+    expect(await html(page)).not.toContain('font-size');
+    await expect(label(page, 'fontSize')).toHaveText('16px');
+    await page.locator('.jm-btn[data-cmd="fontFamily"]').click();
+    await page.getByRole('menuitemradio', { name: 'Arial', exact: true }).click();
+    expect(await html(page)).not.toContain('font-family');
+    await expect(label(page, 'fontFamily')).toHaveText('Arial');
+  });
+
+  test('다른 값을 고르면 지금처럼 지정된다', async ({ page }) => {
+    await setHTML(page, '<p>글자</p>');
+    await select(page, 'p', 0, 2);
+    await page.locator('.jm-btn[data-cmd="fontSize"]').click();
+    await page.getByRole('menuitemradio', { name: '28px', exact: true }).click();
+    expect(await html(page)).toContain('font-size: 28px');
+  });
+
+  test('제목 안에서는 제목 크기를 보여 주고, 그 크기를 고르면 지정을 지운다', async ({ page }) => {
+    await setHTML(page, '<h1><span style="font-size:14px">제목</span></h1>');
+    const size = await page.evaluate(() => Math.round(parseFloat(getComputedStyle(document.querySelector('.jm-editor h1')).fontSize)) + 'px');
+    await select(page, 'span', 0, 2);
+    await page.locator('.jm-btn[data-cmd="fontSize"]').click();
+    await page.getByRole('menuitemradio', { name: size, exact: true }).click();
+    expect(await html(page)).not.toContain('font-size');
+    await expect(label(page, 'fontSize')).toHaveText(size);
+  });
+
+  test('목록에 없는 사이트 글꼴도 표시·선택되고, 알 수 없으면 브라우저 글꼴', async ({ page }) => {
+    await page.evaluate(() => { window.core.root.style.fontFamily = 'Verdana, sans-serif'; });
+    await setHTML(page, '<p><span style="font-family:바탕">글자</span></p>');
+    await select(page, 'span', 0, 2);
+    await page.locator('.jm-btn[data-cmd="fontFamily"]').click();
+    await page.getByRole('menuitemradio', { name: 'Verdana', exact: true }).click();
+    expect(await html(page)).not.toContain('font-family');
+    await expect(label(page, 'fontFamily')).toHaveText('Verdana');
+    await page.evaluate(() => { window.core.root.style.fontFamily = 'serif'; });
+    await setHTML(page, '<p><span style="font-family:바탕">글자</span></p>');
+    await select(page, 'span', 0, 2);
+    await page.locator('.jm-btn[data-cmd="fontFamily"]').click();
+    await page.getByRole('menuitemradio', { name: '브라우저 글꼴', exact: true }).click();
+    expect(await html(page)).not.toContain('font-family');
+    await expect(label(page, 'fontFamily')).toHaveText('브라우저 글꼴');
+  });
+
+  test('제목 목록은 큰 글자부터: 제목 1 → 본문', async ({ page }) => {
+    await page.locator('.jm-btn[data-cmd="heading"]').click();
+    expect(await page.locator('.jm-listmenu .jm-ctxmenu-item').allTextContents()).toEqual(['제목 1', '제목 2', '제목 3', '제목 4', '제목 5', '제목 6', '본문']);
+  });
+
+  for (const q of ['?structure=0', '?structure=1']) {
+    test(`제목 4~6: 적용·표시·저장, 본문으로 복귀, 크기는 내림차순 ${q}`, async ({ page }) => {
+      await open(page, q);
+      const sizes = [];
+      for (const n of [1, 2, 3, 4, 5, 6]) {
+        await setHTML(page, '<p>글자</p>');
+        await caret(page, 'p', 1);
+        await page.locator('.jm-btn[data-cmd="heading"]').click();
+        await page.getByRole('menuitemradio', { name: `제목 ${n}`, exact: true }).click();
+        await expect(label(page, 'heading')).toHaveText(`제목 ${n}`);
+        expect(await html(page)).toBe(`<h${n}>글자</h${n}>`);
+        sizes.push(await page.locator(`.jm-editor h${n}`).evaluate((el) => parseFloat(getComputedStyle(el).fontSize)));
+      }
+      const body = await page.evaluate(() => parseFloat(getComputedStyle(window.core.root).fontSize));
+      sizes.forEach((v, i) => { if (i) expect(v).toBeLessThan(sizes[i - 1]); });
+      expect(sizes[5]).toBeGreaterThanOrEqual(body);
+      await page.locator('.jm-btn[data-cmd="heading"]').click();
+      await page.getByRole('menuitemradio', { name: '본문', exact: true }).click();
+      expect(await html(page)).toBe('<p>글자</p>');
+    });
+  }
+
+  test('제목 5 끝 Enter 는 문단, 다시 정제해도 유지', async ({ page }) => {
+    await setHTML(page, '<h5 style="text-align:center">제목</h5>');
+    expect(await html(page)).toContain('<h5 style="text-align: center">');
+    await caret(page, 'h5', -1);
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('본문');
+    expect(await html(page)).toContain('</h5><p>본문</p>');
   });
 
   test('지정된 글자에 커서를 두면 그 값', async ({ page }) => {
@@ -533,18 +636,6 @@ test.describe('11. 글자 크기·글꼴 버튼 표시', () => {
     await caret(page, 'span', 1);
     await expect(label(page, 'fontSize')).toHaveText('14px');
     await expect(label(page, 'fontFamily')).toHaveText('맑은 고딕');
-  });
-
-  test('목록 첫 항목은 기본이고, 고르면 라벨로 돌아간다', async ({ page }) => {
-    await setHTML(page, '<p><span style="font-size:14px">글자</span></p>');
-    await select(page, 'span', 0, 2);
-    await expect(label(page, 'fontSize')).toHaveText('14px');
-    await page.locator('.jm-btn[data-cmd="fontSize"]').click();
-    const first = page.locator('.jm-listmenu button, .jm-listmenu [role="menuitem"], .jm-listmenu > *').first();
-    await expect(first).toHaveText('기본');
-    await first.click();
-    await expect(label(page, 'fontSize')).toHaveText('크기');
-    expect(await html(page)).not.toContain('font-size');
   });
 
   test('긴 글꼴 이름은 말줄임으로 버튼 폭을 넘지 않는다', async ({ page }) => {
@@ -557,34 +648,39 @@ test.describe('11. 글자 크기·글꼴 버튼 표시', () => {
     expect(m.w).toBeLessThanOrEqual(84);
   });
 
-  test('글꼴 목록의 기본 항목은 실제 적용되는 글꼴 이름을 알려 준다', async ({ page }) => {
-    const firstItem = async () => {
-      await page.locator('[data-cmd="fontFamily"]').click();
-      const text = await page.locator('.jm-listmenu .jm-ctxmenu-item').first().textContent();
-      await page.keyboard.press('Escape');
-      return text;
-    };
+  test('없는 글꼴은 건너뛰고 실제 적용되는 글꼴을 표시, 저장 내용은 그대로', async ({ page }) => {
     await page.evaluate(() => { window.core.root.style.fontFamily = '"없는글꼴테스트", Arial, sans-serif'; });
-    expect(await firstItem()).toContain('기본 (Arial)'); // 없는 글꼴은 건너뜀
-    await page.evaluate(() => { window.core.root.style.fontFamily = 'serif'; });
-    expect(await firstItem()).toContain('기본 (브라우저 글꼴)');
-    expect(await html(page)).not.toContain('font-family'); // 표시만, 저장 내용은 그대로
+    await setHTML(page, '<p>글</p>');
+    await caret(page, 'p', 1);
+    await expect(label(page, 'fontFamily')).toHaveText('Arial');
+    expect(await html(page)).not.toContain('font-family');
   });
 
-  test('데모 툴바의 기본 글꼴 표시', async ({ page }) => {
+  test('데모 툴바도 기본 항목 없이 실제 값 표시', async ({ page }) => {
     await page.route(/fonts\.googleapis\.com\/css2/, (route) => route.abort());
     await page.route(/youtube(-nocookie)?\.com\/embed\//, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '' }));
     await page.goto('/examples/demo/index.html', { waitUntil: 'domcontentloaded' });
-    await page.locator('.jm-btn[data-cmd="fontFamily"]').click();
-    await expect(page.locator('.jm-listmenu .jm-ctxmenu-item').first()).toContainText(/기본 \(.+\)/);
+    await expect(page.locator('.jm-btn[data-cmd="fontSize"] .jm-btn-select-label')).toHaveText(/^\d+px$/);
+    await page.locator('.jm-btn[data-cmd="fontSize"]').click();
+    await expect(page.locator('.jm-listmenu .jm-ctxmenu-item').filter({ hasText: '기본' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    const size = await page.locator('.jm-btn[data-cmd="fontSize"] .jm-btn-select-label').textContent();
+    const pick = size === '28px' ? '32px' : '28px';
+    await page.evaluate(() => { const root = document.querySelector('.jm-editor'); root.innerHTML = '<p>글자</p>'; root.focus(); getSelection().selectAllChildren(root.firstChild); });
+    await page.locator('.jm-btn[data-cmd="fontSize"]').click();
+    await page.getByRole('menuitemradio', { name: pick, exact: true }).click();
+    await expect(page.locator('.jm-editor p span')).toHaveCSS('font-size', pick);
+    await page.locator('.jm-btn[data-cmd="fontSize"]').click();
+    await page.getByRole('menuitemradio', { name: size, exact: true }).click();
+    await expect(page.locator('.jm-editor p span[style*="font-size"]')).toHaveCount(0);
   });
 
   test('데모 툴바도 같은 표시·접근성 속성', async ({ page }) => {
     await page.route(/fonts\.googleapis\.com\/css2/, (route) => route.abort());
     await page.route(/youtube(-nocookie)?\.com\/embed\//, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '' }));
     await page.goto('/examples/demo/index.html', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('.jm-btn[data-cmd="fontSize"] .jm-btn-select-label')).toHaveText('크기');
-    await expect(page.locator('.jm-btn[data-cmd="fontFamily"] .jm-btn-select-label')).toHaveText('글꼴');
+    await expect(page.locator('.jm-btn[data-cmd="fontSize"] .jm-btn-select-label')).toHaveText(/^\d+px$/);
+    await expect(page.locator('.jm-btn[data-cmd="fontFamily"] .jm-btn-select-label')).not.toHaveText('글꼴');
     await expect(page.locator('#toolbar')).toHaveAttribute('role', 'toolbar');
     await expect(page.locator('.jm-btn[data-cmd="bold"]')).toHaveAttribute('aria-pressed', /true|false/);
     await expect(page.locator('.jm-btn[data-cmd="undo"]')).toHaveAttribute('title', '실행 취소 (Ctrl+Z)');

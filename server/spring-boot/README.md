@@ -118,7 +118,7 @@ jm-editor:
 | 태그 | 허용 속성 |
 |---|---|
 | p | style, data-role (갤러리·슬라이드 제목에서만 유지) |
-| h1, h2, h3, li, ul, span | style |
+| h1~h6, li, ul, span | style |
 | blockquote | style, data-style(box·quote 만 — 세로선은 기본값이라 속성 없음) |
 | ol | style, start |
 | br, strong, em, u, s, tbody, thead | — |

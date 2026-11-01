@@ -310,3 +310,7 @@
 > <table><tbody><tr><td style="border-width: 0px">a</td></tr></tbody></table>
 < <table><tbody><tr><td style="border-width:20.5px">a</td></tr></tbody></table>
 > <table><tbody><tr><td>a</td></tr></tbody></table>
+
+# ── 제목 h4~h6 (구조 모드 켬·끔 모두 유지)
+< <h4 style="text-align:center">a</h4><h5>b</h5><h6>c</h6>
+> <h4 style="text-align: center">a</h4><h5>b</h5><h6>c</h6>
