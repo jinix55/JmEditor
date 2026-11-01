@@ -197,20 +197,19 @@ ol[style*="hangul-consonant"] > li::before { content: counter(jm-hangul, hangul-
 .jm-ctxmenu-divider { height: 1px; margin: 4px 6px; background: var(--jm-border-soft); }
 .jm-ctxmenu-item:disabled { opacity: .4; cursor: default; }
 .jm-ctxmenu-item.has-sub::after { content: "›"; float: right; margin-left: 12px; color: var(--jm-subtle); }
-.jm-ctxmenu-item.is-checked { color: var(--jm-accent); font-weight: 600; }
+.jm-ctxmenu-item.is-checked { color: var(--jm-accent); font-weight: 700; }
 /* 툴바 드롭다운 목록: 내용 폭에 맞춤 (우클릭 메뉴는 기본 폭 유지) */
 .jm-listmenu { min-width: 96px; }
 .jm-listmenu .jm-ctxmenu-item { padding-right: 14px; white-space: nowrap; }
 /* 제목 목록: 단계별 크기를 미리 보여 줌 (메뉴 안 크기라 본문 규칙과 별도) */
-.jm-heading-item { font-weight: 700; line-height: 1.3; }
+.jm-heading-item { line-height: 1.3; } /* 굵기는 선택 표시(is-checked)에만 쓴다 */
 .jm-heading-item-h1 { font-size: 22px; }
 .jm-heading-item-h2 { font-size: 19px; }
 .jm-heading-item-h3 { font-size: 17px; }
 .jm-heading-item-h4 { font-size: 15px; }
 .jm-heading-item-h5 { font-size: 14px; }
 .jm-heading-item-h6 { font-size: 13px; }
-.jm-heading-item-p { font-size: 13px; font-weight: 400; }
-.jm-heading-item-p.is-checked { font-weight: 400; }
+.jm-heading-item-p { font-size: 13px; }
 /* 인용 스타일 목록: 항목을 그 스타일 모양으로 */
 .jm-quote-item { margin: 2px 0; }
 .jm-quote-item-line { box-shadow: inset 3px 0 0 var(--jm-text-soft); padding-left: 14px; border-radius: 0 4px 4px 0; }
@@ -9683,7 +9682,7 @@ BUTTONS.forEach(def=>{
   btns[cmd]=b;
 });
 /** 값 고르기 버튼(글자 크기·제목)의 목록 열기. 현재 값은 강조 */
-function openSelectMenu(cmd,opts){const b=btns[cmd];const r=b.getBoundingClientRect();editor.sel.save();const inh=opts.inherited?.(editor.sel.getRange()?.startContainer)??null;const items=opts.inherited?valueItems(opts,b.dataset.value,inh):(opts.defaultLast?[...selectItems(opts),opts.selectDefault]:[opts.selectDefault,...selectItems(opts)]).filter(Boolean);listMenu.open(r.left,r.bottom+4,items.map(([v,tx])=>({label:tx,className:opts.itemClass?.(v),checked:v===b.dataset.value,action:()=>editor.exec(cmd,(v&&v!==inh)?v:null)})));}
+function openSelectMenu(cmd,opts){refresh();const b=btns[cmd];const r=b.getBoundingClientRect();editor.sel.save();const inh=opts.inherited?.(editor.sel.getRange()?.startContainer)??null;const items=opts.inherited?valueItems(opts,b.dataset.value,inh):(opts.defaultLast?[...selectItems(opts),opts.selectDefault]:[opts.selectDefault,...selectItems(opts)]).filter(Boolean);listMenu.open(r.left,r.bottom+4,items.map(([v,tx])=>({label:tx,className:opts.itemClass?.(v),checked:v===b.dataset.value,action:()=>editor.exec(cmd,(v&&v!==inh)?v:null)})));}
 /** 값 고르기 목록 (설정에 따라 달라지는 목록은 함수) */
 function selectItems(opts){return typeof opts.select==='function'?opts.select():opts.select;}
 /** 값 고르기 버튼에 현재 값 표시 (목록에 없으면 기본 값) */
@@ -9703,7 +9702,7 @@ function run(cmd){
   if(cmd==='image'){fileInput.click();return;}
   if(cmd==='color'||cmd==='bgColor'){const s=editor.getState();editor.sel.save();colorPicker.toggleAt(btns[cmd],c=>editor.exec(cmd,c),{current:cmd==='color'?s.color:s.bg,sampleMode:cmd==='color'?'color':'background'});return;}
   if(cmd==='alignMenu'||cmd==='valignMenu'){const r=btns[cmd].getBoundingClientRect();editor.sel.save();const items=cmd==='alignMenu'?ALIGN_ITEMS:VALIGN_ITEMS;const prefix=cmd==='alignMenu'?'align':'valign';listMenu.open(r.left,r.bottom+4,items.map(([v,label])=>({label,action:()=>editor.exec(prefix+v.charAt(0).toUpperCase()+v.slice(1))})));return;}
-  if(cmd==='ulType'||cmd==='olType'){const tag=cmd==='ulType'?'ul':'ol';const r=btns[cmd].getBoundingClientRect();editor.sel.save();listMenu.open(r.left,r.bottom+4,(tag==='ul'?UL_TYPES:OL_TYPES).map(([v,label])=>({label,action:()=>editor.exec(tag,v)})));return;}
+  if(cmd==='ulType'||cmd==='olType'){const tag=cmd==='ulType'?'ul':'ol';const r=btns[cmd].getBoundingClientRect();editor.sel.save();const types=tag==='ul'?UL_TYPES:OL_TYPES;const list=editor.sel.closest('li')?.parentNode;const current=list?.localName===tag?(list.style.listStyleType||types[0][0]):null;listMenu.open(r.left,r.bottom+4,types.map(([v,label])=>({label,checked:v===current,action:()=>editor.exec(tag,v)})));return;}
   if(cmd==='quote'){const r=btns.quote.getBoundingClientRect();editor.sel.save();const cur=editor.getState().quote;const items=[['line','세로선'],['box','박스'],['quote','따옴표']].map(([v,l])=>({label:l,className:'jm-quote-item jm-quote-item-'+v,checked:cur===v,action:()=>editor.exec('quote',v)}));if(cur)items.push({divider:true},{label:'인용 해제',action:()=>editor.exec('quote',null)});listMenu.open(r.left,r.bottom+4,items);return;} // 인용 스타일 목록
   if(cmd==='table'){editor.sel.save();gridPicker.toggle(btns.table);return;}
   if(cmd==='format'){editor.sel.save();formatPicker.toggle(btns.format);return;}
@@ -9764,6 +9763,7 @@ editor.setHTML(`<h2>공지사항 작성 샘플</h2>
 <div data-type="gallery" data-layout="justify"><p data-role="title">현장 사진 — 사진은 드래그로 순서 변경·선택 후 교체, 헤더의 ⠿ 로 블록 이동</p><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJmNmY0ZSIvPjx0ZXh0IHg9IjQwMCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDQ6MzwvdGV4dD48L3N2Zz4=" alt="가로 4:3" width="800" height="600"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzNiNmVhNSIvPjx0ZXh0IHg9IjMwMCIgeT0iNDEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDM6NDwvdGV4dD48L3N2Zz4=" alt="세로 3:4" width="600" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAwIiBoZWlnaHQ9IjUwMCI+PHJlY3Qgd2lkdGg9IjEyMDAiIGhlaWdodD0iNTAwIiBmaWxsPSIjYjU2NTFkIi8+PHRleHQgeD0iNjAwIiB5PSIyNjIiIGZvbnQtc2l6ZT0iNjIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNmZmYiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7tjIzrhbjrnbzrp4g8L3RleHQ+PC9zdmc+" alt="파노라마" width="1200" height="500"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NTAiIGhlaWdodD0iODAwIj48cmVjdCB3aWR0aD0iNDUwIiBoZWlnaHQ9IjgwMCIgZmlsbD0iIzZiNGZhMCIvPjx0ZXh0IHg9IjIyNSIgeT0iNDEyIiBmb250LXNpemU9IjU2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7IS466GcIDk6MTY8L3RleHQ+PC9zdmc+" alt="세로 9:16" width="450" height="800"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MDAiIGhlaWdodD0iNzAwIj48cmVjdCB3aWR0aD0iNzAwIiBoZWlnaHQ9IjcwMCIgZmlsbD0iIzhhNmQzYiIvPjx0ZXh0IHg9IjM1MCIgeT0iMzYyIiBmb250LXNpemU9Ijg3IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+7KCV7IKs6rCBPC90ZXh0Pjwvc3ZnPg==" alt="정사각" width="700" height="700"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI5MDAiIGhlaWdodD0iNjAwIj48cmVjdCB3aWR0aD0iOTAwIiBoZWlnaHQ9IjYwMCIgZmlsbD0iIzJhN2Y4ZiIvPjx0ZXh0IHg9IjQ1MCIgeT0iMzEyIiBmb250LXNpemU9Ijc1IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZmIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiI+6rCA66GcIDM6MjwvdGV4dD48L3N2Zz4=" alt="가로 3:2" width="900" height="600"></div>
 <div data-type="buttons" data-align="center"><a href="https://github.com/jinix55/JmEditor" data-role="button" data-style="primary">GitHub 저장소</a><a href="https://jinix55.github.io/JmEditor/" data-role="button" data-style="outline">데모 페이지</a></div>`);
 refresh(); // 처음부터 실제 크기·글꼴 표시
+document.fonts?.addEventListener('loadingdone',refresh); // 웹폰트 로드 후 글꼴 이름 다시 읽기
 </script>
 </body>
 </html>

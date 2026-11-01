@@ -600,16 +600,74 @@ test.describe('11. 글자 크기·글꼴 버튼 표시', () => {
     expect(await page.locator('.jm-listmenu .jm-ctxmenu-item').allTextContents()).toEqual(['제목 1', '제목 2', '제목 3', '제목 4', '제목 5', '제목 6', '본문']);
   });
 
-  test('제목 목록 항목은 단계별 크기로 보이고, 본문은 굵지 않다', async ({ page }) => {
+  test('크기·글꼴 목록에서 선택된 항목만 굵다', async ({ page }) => {
+    await setHTML(page, '<p><span style="font-size:24px;font-family:바탕">글자</span></p>');
+    await caret(page, 'span', 1);
+    for (const [cmd, name] of [['fontSize', '24px'], ['fontFamily', '바탕']]) {
+      await page.locator(`.jm-btn[data-cmd="${cmd}"]`).click();
+      const weights = await page.locator('.jm-listmenu .jm-ctxmenu-item').evaluateAll((els) => els.map((e) => [e.textContent, parseInt(getComputedStyle(e).fontWeight, 10), e.getAttribute('aria-checked')]));
+      const checked = weights.filter((w) => w[2] === 'true');
+      expect(checked.map((w) => w[0])).toEqual([name]);
+      expect(checked[0][1]).toBe(700);
+      weights.filter((w) => w[2] !== 'true').forEach((w) => expect(w[1]).toBe(400));
+      await page.keyboard.press('Escape');
+    }
+  });
+
+  test('지정 안 한 글자도 목록에서 현재 값이 선택되어 굵다, 표시 값이 낡았어도 목록을 열면 맞춘다', async ({ page }) => {
+    await setHTML(page, '<p>글자</p>');
+    await caret(page, 'p', 1);
+    await page.evaluate(() => { window.core.root.style.fontFamily = 'Arial'; window.core.root.style.fontSize = '18px'; }); // 웹폰트·CSS 가 나중에 적용된 경우
+    for (const [cmd, name] of [['fontSize', '18px'], ['fontFamily', 'Arial']]) {
+      await page.locator(`.jm-btn[data-cmd="${cmd}"]`).click();
+      const item = page.getByRole('menuitemradio', { name, exact: true, checked: true });
+      await expect(item).toHaveCSS('font-weight', '700');
+      await expect(label(page, cmd)).toHaveText(name);
+      await page.keyboard.press('Escape');
+    }
+  });
+
+  test('웹폰트 로드가 끝나면 글꼴 표시를 다시 읽는다', async ({ page }) => {
+    await page.evaluate(() => { window.core.root.style.fontFamily = 'Arial'; document.fonts.dispatchEvent(new Event('loadingdone')); });
+    await expect(label(page, 'fontFamily')).toHaveText('Arial');
+  });
+
+  test('제목 목록 항목은 단계별 크기로 보이고, 선택된 항목만 굵다', async ({ page }) => {
+    for (const [html0, sel, name] of [['<p>글</p>', 'p', '본문'], ['<h3>글</h3>', 'h3', '제목 3']]) {
+      await setHTML(page, html0);
+      await caret(page, sel, 1);
+      await page.locator('.jm-btn[data-cmd="heading"]').click();
+      const m = await page.locator('.jm-listmenu .jm-ctxmenu-item').evaluateAll((els) => els.map((e) => [e.textContent, parseFloat(getComputedStyle(e).fontSize), parseInt(getComputedStyle(e).fontWeight, 10)]));
+      for (let i = 1; i < 6; i++) expect(m[i][1]).toBeLessThan(m[i - 1][1]);
+      m.forEach(([text, , weight]) => expect(weight).toBe(text === name ? 700 : 400));
+      await page.keyboard.press('Escape');
+    }
     await page.locator('.jm-btn[data-cmd="heading"]').click();
-    const m = await page.locator('.jm-listmenu .jm-ctxmenu-item').evaluateAll((els) => els.map((e) => { const s = getComputedStyle(e); return [parseFloat(s.fontSize), parseInt(s.fontWeight, 10)]; }));
-    for (let i = 1; i < 6; i++) expect(m[i][0]).toBeLessThan(m[i - 1][0]);
-    expect(m[5][1]).toBeGreaterThanOrEqual(600);
-    expect(m[6][1]).toBe(400);
-    const others = page.locator('.jm-heading-item');
     await page.keyboard.press('Escape');
     await page.locator('.jm-btn[data-cmd="fontSize"]').click();
-    await expect(others).toHaveCount(0); // 다른 목록에는 안 묻는다
+    await expect(page.locator('.jm-heading-item')).toHaveCount(0); // 다른 목록에는 안 묻는다
+  });
+
+  for (const [cmd, html0, sel, name] of [
+    ['olType', '<ol style="list-style-type: hangul"><li>글</li></ol>', 'li', '가. 한글'],
+    ['olType', '<ol><li>글</li></ol>', 'li', '1. 숫자'],
+    ['ulType', '<ul style="list-style-type: square"><li>글</li></ul>', 'li', '■ 사각'],
+    ['ulType', '<ul><li>글</li></ul>', 'li', '● 기본'],
+  ]) {
+    test(`목록 종류: ${html0} → ${name} 만 굵다`, async ({ page }) => {
+      await setHTML(page, html0);
+      await caret(page, sel, 1);
+      await page.locator(`.jm-btn[data-cmd="${cmd}"]`).click();
+      const m = await page.locator('.jm-listmenu .jm-ctxmenu-item').evaluateAll((els) => els.map((e) => [e.textContent, parseInt(getComputedStyle(e).fontWeight, 10)]));
+      m.forEach(([text, weight]) => expect(weight).toBe(text === name ? 700 : 400));
+    });
+  }
+
+  test('목록 밖이거나 다른 종류 목록이면 선택 표시가 없다', async ({ page }) => {
+    await setHTML(page, '<ul><li>글</li></ul>');
+    await caret(page, 'li', 1);
+    await page.locator('.jm-btn[data-cmd="olType"]').click();
+    await expect(page.locator('.jm-listmenu .is-checked')).toHaveCount(0);
   });
 
   for (const q of ['?structure=0', '?structure=1']) {

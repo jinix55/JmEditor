@@ -228,6 +228,9 @@ export class JmToolbarEditor {
     if (!this.editor.fontFamilies.length) this.buttons.fontFamily.hidden = true; // 글꼴 목록을 비우면 도구도 숨김
     if (options.initialHTML) this.editor.setHTML(options.initialHTML);
     this.#refreshState(); // 처음부터 실제 크기·글꼴 표시
+    // 웹폰트는 나중에 로드되므로 그때 글꼴 이름을 다시 읽는다
+    this.onFontsLoaded = () => this.#refreshState();
+    document.fonts?.addEventListener('loadingdone', this.onFontsLoaded);
     this.dirty = false;
     // 수정 화면: id 가 있으면 API 로 조회해서 채움
     if (this.api && this.contentId != null) this.load(this.contentId);
@@ -375,6 +378,7 @@ export class JmToolbarEditor {
    * @param {{select: Array<[string,string]>|((editor: JmEditor) => Array<[string,string]>), selectDefault?: [string,string], inherited?: (editor: JmEditor, node: Node) => string|null}} opts
    */
   #openSelectMenu(cmd, opts) {
+    this.#refreshState(); // 사이트 CSS 가 바뀌었어도 표시 값과 목록의 선택 표시가 어긋나지 않게
     const btn = this.buttons[cmd];
     const r = btn.getBoundingClientRect();
     this.editor.sel.save();
@@ -475,8 +479,12 @@ export class JmToolbarEditor {
       const tag = cmd === 'ulType' ? 'ul' : 'ol';
       const r = this.buttons[cmd].getBoundingClientRect();
       this.editor.sel.save();
-      this.listMenu.open(r.left, r.bottom + 4, (tag === 'ul' ? UL_TYPES : OL_TYPES).map(([v, label]) => ({
-        label, action: () => this.editor.exec(tag, v),
+      const types = tag === 'ul' ? UL_TYPES : OL_TYPES;
+      // 커서가 이 종류의 목록 안이면 현재 번호 형식을 선택 표시 (지정이 없으면 첫 항목이 기본)
+      const list = this.editor.sel.closest('li')?.parentNode;
+      const current = list?.localName === tag ? (list.style.listStyleType || types[0][0]) : null;
+      this.listMenu.open(r.left, r.bottom + 4, types.map(([v, label]) => ({
+        label, checked: v === current, action: () => this.editor.exec(tag, v),
       })));
       return;
     }
@@ -637,6 +645,7 @@ export class JmToolbarEditor {
   /** 서식 관리에서 변경 후 호출하면 다음 열 때 다시 불러옴 */
   refreshFormats() { this.formatPicker.refresh(); }
   destroy() {
+    document.fonts?.removeEventListener('loadingdone', this.onFontsLoaded);
     this.#stopPreviewLayout?.(); // 미리보기 런타임(갤러리 감시·슬라이드 타이머) 정리
     this.#stopPreviewLayout = null;
     this.gridPicker.destroy(); this.colorPicker.destroy(); this.formatPicker.destroy(); this.listMenu.destroy(); this.editor.destroy();
