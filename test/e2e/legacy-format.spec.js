@@ -416,6 +416,26 @@ test.describe('엑셀·파워포인트·워드 붙여넣기', () => {
     expect(r.huge).not.toContain('xxx'); // 너무 긴 규칙은 건너뜀
   });
 
+  test('한 class 에 규칙을 아주 많이 넣어도 빠르고, 뒤의 규칙이 이긴다', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const office = '<html xmlns:x="urn:schemas-microsoft-com:office:excel">';
+      const cells = '<td class=xl1>a</td>'.repeat(20000);
+      const run = (css, body) => {
+        const t = performance.now();
+        const out = window.JM.Sanitizer.inlineOfficeStyles(office + '<style>' + css + '</style><table><tr>' + body + '</tr></table>');
+        return { ms: performance.now() - t, out };
+      };
+      const same = run('.xl1{color:red}'.repeat(100000) + '.xl1{color:blue}', cells);
+      const otherTag = run('font.xl1{color:red}'.repeat(100000), cells); // 태그가 달라 아무것도 옮기지 않는 경우
+      const manyClasses = run(Array.from({ length: 5000 }, (_, i) => '.c' + i + '{color:red}').join(''), ('<td class="' + Array.from({ length: 5000 }, (_, i) => 'c' + i).join(' ') + '">a</td>').repeat(2000));
+      return { same: same.ms, otherTag: otherTag.ms, manyClasses: manyClasses.ms, last: same.out.slice(0, 2000) };
+    });
+    expect(r.same).toBeLessThan(2000);
+    expect(r.otherTag).toBeLessThan(2000);
+    expect(r.manyClasses).toBeLessThan(3000);
+    expect(r.last).toContain('color:blue');
+  });
+
   test('한글·워드 형식 HTML: font 태그와 글꼴·크기', async ({ page }) => {
     await paste(page, { text: '가', htmlData: '<p class=MsoNormal style="line-height:160%"><font color=red size=5 face="굴림">가</font><span style="font-family:함초롬바탕;font-size:10.0pt;mso-hansi-font-family:함초롬바탕">나</span></p>' });
     const raw = await html(page);

@@ -101,12 +101,13 @@ const OFFICE_STYLE_TARGETS = 'table, tr, td, th, col, font';
 /** 서식 옮기기 상한 (악성 문서가 규칙을 겹쳐 글자 수를 불리지 못하게): 규칙 하나의 길이, 요소 하나에 적용할 규칙 수, 붙여넣기 한 번에 옮길 총 글자 수 */
 const OFFICE_RULE_BODY_MAX = 4096;
 const OFFICE_RULES_PER_ELEMENT = 16;
+const OFFICE_CLASSES_PER_ELEMENT = 16;
 const OFFICE_INLINE_BUDGET = 8 * 1024 * 1024;
 
 /**
  * CSS 글에서 class 규칙(.a, td.a)만 뽑는다. 복잡한 선택자·@규칙·태그 규칙은 버린다 (indexOf 로 훑어 입력 길이에 선형)
  * @param {string} css
- * @returns {Map<string, Array<{tag: string, body: string, order: number}>>} class 이름 → 규칙들
+ * @returns {Map<string, Array<{body: string, order: number}>>} "태그.class"(태그 없으면 ".class") → 뒤쪽 규칙 OFFICE_RULES_PER_ELEMENT 개
  */
 function parseClassRules(css) {
   const rules = new Map();
@@ -130,8 +131,11 @@ function parseClassRules(css) {
     if (body.length <= OFFICE_RULE_BODY_MAX) plain.slice(at, open).split(',').forEach((sel) => {
       const m = /^([a-z][a-z0-9]*)?\.([\w-]+)$/i.exec(sel.trim());
       if (!m) return;
-      if (!rules.has(m[2])) rules.set(m[2], []);
-      rules.get(m[2]).push({ tag: (m[1] || '').toLowerCase(), body, order: order++ });
+      const key = `${(m[1] || '').toLowerCase()}.${m[2]}`;
+      if (!rules.has(key)) rules.set(key, []);
+      const list = rules.get(key);
+      list.push({ body, order: order++ });
+      if (list.length > OFFICE_RULES_PER_ELEMENT) list.shift(); // 칸마다 훑는 양이 입력 크기에 비례하지 않게
     });
     at = close + 1;
   }
@@ -348,7 +352,7 @@ export class Sanitizer {
     doc.querySelectorAll(OFFICE_STYLE_TARGETS).forEach((el) => {
       if (budget <= 0) return; // 상한을 넘으면 나머지 칸은 서식 없이
       const tag = el.localName;
-      const found = Array.from(el.classList).flatMap((c) => rules.get(c) || []).filter((r) => !r.tag || r.tag === tag);
+      const found = Array.from(el.classList).slice(0, OFFICE_CLASSES_PER_ELEMENT).flatMap((c) => [...(rules.get(`.${c}`) || []), ...(rules.get(`${tag}.${c}`) || [])]);
       if (!found.length) return;
       const decls = found.sort((a, b) => a.order - b.order).slice(-OFFICE_RULES_PER_ELEMENT).map((r) => r.body);
       const own = el.getAttribute('style');
