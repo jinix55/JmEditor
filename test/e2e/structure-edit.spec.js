@@ -176,7 +176,7 @@ test.describe('인라인 구조 태그(small·sub·sup)는 블록이 아니라 �
   });
 });
 
-test.describe('루트 인라인 묶기는 small·sub·sup 가 있는 구간만 (그 밖은 예전처럼 노드마다 문단)', () => {
+test.describe('루트의 이어진 글·인라인 묶기', () => {
   /** commit 경로(편집 DOM 에 직접 넣고 commit)와 setHTML 경로 결과 */
   async function both(page, h) {
     const viaCommit = await page.evaluate((x) => { window.core.root.innerHTML = x; window.core.commit(); return window.ed.getHTML(); }, h);
@@ -185,10 +185,15 @@ test.describe('루트 인라인 묶기는 small·sub·sup 가 있는 구간만 (
   }
 
   for (const q of ['?structure=1', '?structure=0']) {
-    test(`글·strong·이미지는 예전대로 노드마다 문단 ${q}`, async ({ page }) => {
+    test(`이어진 글·인라인·이미지는 한 문단, 앞뒤 공백 글은 지움 ${q}`, async ({ page }) => {
       await open(page, q);
-      expect(await both(page, 'a<strong>b</strong>c')).toEqual({ viaCommit: '<p>a</p><p><strong>b</strong></p><p>c</p>', viaSet: '<p>a</p><p><strong>b</strong></p><p>c</p>' });
-      expect(await both(page, '<img src="/a.png" alt="a">캡션')).toEqual({ viaCommit: '<p><img src="/a.png" alt="a"></p><p>캡션</p>', viaSet: '<p><img src="/a.png" alt="a"></p><p>캡션</p>' });
+      expect(await both(page, 'a<strong>b</strong>c')).toEqual({ viaCommit: '<p>a<strong>b</strong>c</p>', viaSet: '<p>a<strong>b</strong>c</p>' });
+      expect(await both(page, '<img src="/a.png" alt="a">캡션')).toEqual({ viaCommit: '<p><img src="/a.png" alt="a">캡션</p>', viaSet: '<p><img src="/a.png" alt="a">캡션</p>' });
+      await setHTML(page, '<span style="color: red">x</span> <em>y</em>');
+      expect(await page.evaluate(() => window.ed.getHTML())).toBe('<p><span style="color: red">x</span> <em>y</em></p>'); // 띄어쓰기 유지 (helpers.html 은 태그 사이 공백을 지움)
+      expect((await both(page, 'a<br>b')).viaSet).toBe('<p>a<br>b</p>');
+      expect((await both(page, '\n  a<strong>b</strong>\n<p>c</p>\n  d\n')).viaSet).toBe('<p>a<strong>b</strong></p><p>c</p><p>d</p>');
+      expect((await both(page, '\n<p>c</p>\n')).viaSet).toBe('<p>c</p>');
     });
   }
 

@@ -1280,9 +1280,8 @@ export class JmEditor {
   }
 
   /**
-   * 루트가 비었거나 루트 직속에 텍스트/인라인만 있으면 p 로 감싼다 (노드마다 문단, 공백 글은 지움 — 예전 동작).
-   * 이어진 비블록 구간에 small·sub·sup(INLINE_STRUCTURE_TAGS)가 있으면 그 구간을 한 문단으로 묶는다
-   * (「<sup>1</sup> 각주」가 두 문단으로 갈라지지 않게). 묶을 때 구간 앞뒤 공백 글만 지우고 안의 공백은 둔다.
+   * 루트가 비었거나 루트 직속에 텍스트/인라인이 있으면 p 로 감싼다. 블록 사이의 이어진 구간은 한 문단으로 묶어
+   * 옛 글의 한 줄이 여러 문단으로 갈라지지 않게 한다. 구간 앞뒤 공백 글만 지우고 안의 공백은 둔다.
    */
   #ensureBlock() {
     const r = this.root;
@@ -1300,23 +1299,15 @@ export class JmEditor {
     });
     /** 블록 사이 줄바꿈 같은 공백(ZWSP 포함)뿐인 글 */
     const blank = (n) => n.nodeType === Node.TEXT_NODE && !n.textContent.replace(/[\s\u200B]/g, '');
-    const inlineSel = INLINE_STRUCTURE_TAGS.join(',');
-    const hasInlineStructure = (n) => n.nodeType === Node.ELEMENT_NODE && (n.matches(inlineSel) || !!n.querySelector(inlineSel));
-    const wrap = (nodes) => {
-      const p = document.createElement('p');
-      r.insertBefore(p, nodes[0]);
-      nodes.forEach((x) => p.appendChild(x));
-    };
     runs.forEach((run) => {
-      if (run.some(hasInlineStructure)) {
-        let a = 0;
-        let b = run.length;
-        while (a < b && blank(run[a])) run[a++].remove();
-        while (b > a && blank(run[b - 1])) run[--b].remove();
-        wrap(run.slice(a, b));
-        return;
-      }
-      run.forEach((n) => { if (blank(n)) n.remove(); else wrap([n]); });
+      let a = 0;
+      let b = run.length;
+      while (a < b && blank(run[a])) run[a++].remove();
+      while (b > a && blank(run[b - 1])) run[--b].remove();
+      if (a === b) return;
+      const p = document.createElement('p');
+      r.insertBefore(p, run[a]);
+      run.slice(a, b).forEach((x) => p.appendChild(x));
     });
   }
 

@@ -142,9 +142,9 @@ test.describe('클라이언트·서버 일치 보정 (서버 StructureSanitizerT
     expect(r.out).toBe('<p class="foo bar">a</p>');
   });
 
-  test('최상위 공백 텍스트는 지운다 (정규화 없이 비교)', async ({ page }) => {
+  test('최상위 공백 글: 인라인 사이 띄어쓰기는 유지 (정규화 없이 비교)', async ({ page }) => {
     const out = await page.evaluate(() => window.JM.Sanitizer.clean('<span class="a">A</span> <span class="b">B</span>', window.JM.makeStructurePolicy({ enabled: true })));
-    expect(out).toBe('<span class="a">A</span><span class="b">B</span>');
+    expect(out).toBe('<span class="a">A</span> <span class="b">B</span>');
   });
 });
 

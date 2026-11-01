@@ -1711,6 +1711,11 @@ function parseClassRules(css) {
   return rules;
 }
 
+/** 최상위에서 글자와 이어지는 인라인 태그 (이 사이의 공백 글은 띄어쓰기) */
+const ROOT_INLINE_TAGS = new Set(['a', 'abbr', 'b', 'cite', 'code', 'del', 'em', 'font', 'i', 'img', 'ins', 'kbd', 'mark', 'picture', 'q', 's', 'small', 'span', 'strike', 'strong', 'sub', 'sup', 'u']);
+/** 최상위 노드가 글자이거나 인라인 태그인지 */
+const isRootInline = (n) => !!n && ((n.nodeType === Node.TEXT_NODE && !!n.textContent.trim()) || (n.nodeType === Node.ELEMENT_NODE && ROOT_INLINE_TAGS.has(n.localName)));
+
 /** 붙여넣기에서 항상 뺄 class 토큰 (오피스·브라우저 생성 이름) */
 const PASTE_JUNK_CLASS = /^(Mso.*|Apple-.*)$/;
 /** 오피스 원본일 때만 뺄 class 토큰 (font14 같은 퍼블 이름과 겹칠 수 있음) */
@@ -1810,7 +1815,8 @@ class Sanitizer {
     normalizeLegacy(doc.body, Sanitizer.#fonts, !!Sanitizer.#policy?.tags.has('caption'));
     const frag = document.createDocumentFragment();
     Array.from(doc.body.childNodes).forEach((n) => {
-      if (n.nodeType === Node.TEXT_NODE && !n.textContent.trim()) return; // 최상위 공백 텍스트(블록 사이 줄바꿈) 제거
+      // 최상위 공백 글: 블록 사이 줄바꿈은 지우고, 글자·인라인 사이의 띄어쓰기는 둔다 (한 문단으로 묶일 때 단어가 붙지 않게)
+      if (n.nodeType === Node.TEXT_NODE && !n.textContent.trim() && !(isRootInline(n.previousSibling) && isRootInline(n.nextSibling))) return;
       const r = Sanitizer.#cleanNode(n);
       if (r) frag.appendChild(r);
     });
@@ -10878,9 +10884,8 @@ class JmEditor {
   }
 
   /**
-   * 루트가 비었거나 루트 직속에 텍스트/인라인만 있으면 p 로 감싼다 (노드마다 문단, 공백 글은 지움 — 예전 동작).
-   * 이어진 비블록 구간에 small·sub·sup(INLINE_STRUCTURE_TAGS)가 있으면 그 구간을 한 문단으로 묶는다
-   * (「<sup>1</sup> 각주」가 두 문단으로 갈라지지 않게). 묶을 때 구간 앞뒤 공백 글만 지우고 안의 공백은 둔다.
+   * 루트가 비었거나 루트 직속에 텍스트/인라인이 있으면 p 로 감싼다. 블록 사이의 이어진 구간은 한 문단으로 묶어
+   * 옛 글의 한 줄이 여러 문단으로 갈라지지 않게 한다. 구간 앞뒤 공백 글만 지우고 안의 공백은 둔다.
    */
   #ensureBlock() {
     const r = this.root;
@@ -10898,23 +10903,15 @@ class JmEditor {
     });
     /** 블록 사이 줄바꿈 같은 공백(ZWSP 포함)뿐인 글 */
     const blank = (n) => n.nodeType === Node.TEXT_NODE && !n.textContent.replace(/[\s\u200B]/g, '');
-    const inlineSel = INLINE_STRUCTURE_TAGS.join(',');
-    const hasInlineStructure = (n) => n.nodeType === Node.ELEMENT_NODE && (n.matches(inlineSel) || !!n.querySelector(inlineSel));
-    const wrap = (nodes) => {
-      const p = document.createElement('p');
-      r.insertBefore(p, nodes[0]);
-      nodes.forEach((x) => p.appendChild(x));
-    };
     runs.forEach((run) => {
-      if (run.some(hasInlineStructure)) {
-        let a = 0;
-        let b = run.length;
-        while (a < b && blank(run[a])) run[a++].remove();
-        while (b > a && blank(run[b - 1])) run[--b].remove();
-        wrap(run.slice(a, b));
-        return;
-      }
-      run.forEach((n) => { if (blank(n)) n.remove(); else wrap([n]); });
+      let a = 0;
+      let b = run.length;
+      while (a < b && blank(run[a])) run[a++].remove();
+      while (b > a && blank(run[b - 1])) run[--b].remove();
+      if (a === b) return;
+      const p = document.createElement('p');
+      r.insertBefore(p, run[a]);
+      run.slice(a, b).forEach((x) => p.appendChild(x));
     });
   }
 

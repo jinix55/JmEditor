@@ -548,3 +548,11 @@
 > <strong><em>a</em></strong>
 < <div data-type="buttons" data-align="left"><a href="/x" target="_self" data-role="button" data-style="primary" style="font-style:italic">a</a></div>
 > <div data-type="buttons" data-align="left"><a href="/x" target="_self" data-role="button" data-style="primary">a</a></div>
+
+# ── 최상위 공백 글: 인라인 사이 띄어쓰기는 유지, 블록 사이 줄바꿈은 제거
+< <em>x</em> <u>y</u>
+> <em>x</em> <u>y</u>
+< <p>a</p> <p>b</p>
+> <p>a</p><p>b</p>
+< <em>x</em> <p>b</p>
+> <em>x</em><p>b</p>

@@ -24,6 +24,15 @@ public class HtmlSanitizer {
     private static final java.util.Map<String, String> TAG_ALIAS = java.util.Map.of("b", "strong", "i", "em", "strike", "s", "font", "span");
 
     /** 기본 허용 태그 (구조 정책 전) — 플러그인 안에서 구조 전용 태그를 가려낼 때 */
+    /** 최상위에서 글자와 이어지는 인라인 태그 (이 사이의 공백 글은 띄어쓰기) */
+    private static final java.util.Set<String> ROOT_INLINE_TAGS = java.util.Set.of("a", "abbr", "b", "cite", "code", "del", "em", "font", "i", "img", "ins", "kbd", "mark", "picture", "q", "s", "small", "span", "strike", "strong", "sub", "sup", "u");
+
+    /** 최상위 노드가 글자이거나 인라인 태그인지 */
+    private static boolean isRootInline(org.jsoup.nodes.Node n) {
+        if (n instanceof org.jsoup.nodes.TextNode t) return !t.isBlank();
+        return n instanceof Element e && ROOT_INLINE_TAGS.contains(e.normalName());
+    }
+
     private static final java.util.Set<String> BASE_TAGS = java.util.Set.of("hr", "sub", "sup", "p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote",
             "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe", "picture", "source");
 
@@ -396,8 +405,10 @@ public class HtmlSanitizer {
         // 같은 id 는 문서 순서상 첫 번째만 (대소문자가 다르면 다른 id — 클라이언트 Sanitizer.dedupeIds 와 같게)
         java.util.Set<String> seenIds = new java.util.HashSet<>();
         for (Element el : doc.select("[id]")) if (!seenIds.add(el.attr("id"))) el.removeAttr("id");
-        // 최상위 공백 텍스트(블록 사이 줄바꿈 등)는 지운다 — 클라이언트 Sanitizer 와 같게
-        for (org.jsoup.nodes.TextNode tn : new java.util.ArrayList<>(doc.body().textNodes())) if (tn.isBlank()) tn.remove();
+        // 최상위 공백 글: 블록 사이 줄바꿈은 지우고, 글자·인라인 사이의 띄어쓰기는 둔다 — 클라이언트 Sanitizer 와 같게
+        for (org.jsoup.nodes.TextNode tn : new java.util.ArrayList<>(doc.body().textNodes())) {
+            if (tn.isBlank() && !(isRootInline(tn.previousSibling()) && isRootInline(tn.nextSibling()))) tn.remove();
+        }
         // 줄 맞춤(pretty print) 없이 — 켜 두면 dt·dd·div·caption 처럼 글만 있는 블록 안에 줄바꿈·들여쓰기가 들어가 글자가 바뀐다
         doc.outputSettings().prettyPrint(false);
         return doc.body().html();

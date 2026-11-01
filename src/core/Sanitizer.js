@@ -45,6 +45,11 @@ const SAFE_URL = /^(https?:\/\/|\/(?![/\\])|data:image\/(png|jpeg|jpg|gif|webp|s
 const URL_CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 /** href·srcset(data: 제외) 값 길이 상한 — 넘으면 그 속성(srcset 은 그 source)을 버린다 (서버 URL_MAX 와 같음) */
 const URL_MAX = 8192;
+/** 최상위에서 글자와 이어지는 인라인 태그 (이 사이의 공백 글은 띄어쓰기) */
+const ROOT_INLINE_TAGS = new Set(['a', 'abbr', 'b', 'cite', 'code', 'del', 'em', 'font', 'i', 'img', 'ins', 'kbd', 'mark', 'picture', 'q', 's', 'small', 'span', 'strike', 'strong', 'sub', 'sup', 'u']);
+/** 최상위 노드가 글자이거나 인라인 태그인지 */
+const isRootInline = (n) => !!n && ((n.nodeType === Node.TEXT_NODE && !!n.textContent.trim()) || (n.nodeType === Node.ELEMENT_NODE && ROOT_INLINE_TAGS.has(n.localName)));
+
 /** 붙여넣기에서 항상 뺄 class 토큰 (오피스·브라우저 생성 이름) */
 const PASTE_JUNK_CLASS = /^(Mso.*|Apple-.*)$/;
 /** 오피스 원본일 때만 뺄 class 토큰 (font14 같은 퍼블 이름과 겹칠 수 있음) */
@@ -223,7 +228,8 @@ export class Sanitizer {
     normalizeLegacy(doc.body, Sanitizer.#fonts, !!Sanitizer.#policy?.tags.has('caption'));
     const frag = document.createDocumentFragment();
     Array.from(doc.body.childNodes).forEach((n) => {
-      if (n.nodeType === Node.TEXT_NODE && !n.textContent.trim()) return; // 최상위 공백 텍스트(블록 사이 줄바꿈) 제거
+      // 최상위 공백 글: 블록 사이 줄바꿈은 지우고, 글자·인라인 사이의 띄어쓰기는 둔다 (한 문단으로 묶일 때 단어가 붙지 않게)
+      if (n.nodeType === Node.TEXT_NODE && !n.textContent.trim() && !(isRootInline(n.previousSibling) && isRootInline(n.nextSibling))) return;
       const r = Sanitizer.#cleanNode(n);
       if (r) frag.appendChild(r);
     });
