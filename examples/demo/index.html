@@ -942,6 +942,29 @@ function fontFamilyName(value, families) {
   return null;
 }
 
+/** 실제 글꼴이 아니라 브라우저가 고르는 이름 (화면에 무엇이 나올지 이름으로 알 수 없다) */
+const GENERIC_FONTS = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji', 'fangsong', '-apple-system', 'blinkmacsystemfont']);
+
+/**
+ * 요소에 실제로 적용되는 글꼴 이름. font-family 목록에서 이 컴퓨터에 있는 첫 글꼴을 찾는다
+ * (글자 폭을 대체 글꼴과 비교해 판별. 사이트가 불러온 웹폰트도 로드 후에는 포함)
+ * @param {Element} el
+ * @returns {string|null} 글꼴 이름, 브라우저 기본·시스템 글꼴이 쓰이면 null
+ */
+function usedFontName(el) {
+  const ctx = document.createElement('canvas').getContext('2d');
+  if (!ctx) return null;
+  const SAMPLE = 'mmwwlliiWW0123 가나다라마바';
+  const width = (font) => { ctx.font = `72px ${font}`; return ctx.measureText(SAMPLE).width; };
+  const fallbacks = ['monospace', 'serif'].map((g) => [g, width(g)]);
+  for (const name of splitFontNames(getComputedStyle(el).fontFamily)) {
+    if (GENERIC_FONTS.has(name.toLowerCase())) return null;
+    const quoted = `"${name.replace(/["\\]/g, '\\$&')}"`;
+    if (fallbacks.some(([g, w]) => width(`${quoted}, ${g}`) !== w)) return name;
+  }
+  return null;
+}
+
 /**
  * legacy-format — 옛 글·워드·한글·엑셀 HTML 변환 (Sanitizer 허용 검사 전 단계)
  * - normalizeLegacy: font 태그·표 옛 속성을 style 로, font-weight 를 strong 으로 (파싱한 DOM 을 한 번 훑음)
@@ -9397,7 +9420,7 @@ const BUTTONS = [
   ['modeHtml','HTML',s=>mode==='html',false,{icon:CODE_ICON,group:'mode',row:'top'}],
   ['modePreview','미리보기',s=>mode==='preview',false,{icon:PREVIEW_ICON,group:'mode',segLast:true,row:'top'}],
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
-  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),selectDefault:['','기본'],emptyLabel:'크기'}],['fontFamily','글꼴',()=>false,false,{tip:'글꼴',select:()=>editor.fontFamilies.map(n=>[n,n]),selectDefault:['','기본'],emptyLabel:'글꼴'}],null,
+  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),selectDefault:['','기본'],emptyLabel:'크기'}],['fontFamily','글꼴',()=>false,false,{tip:'글꼴',select:()=>editor.fontFamilies.map(n=>[n,n]),selectDefault:['','기본'],defaultHint:()=>usedFontName(editor.root)??'브라우저 글꼴',emptyLabel:'글꼴'}],null,
   ['heading','제목',()=>false,false,{tip:'제목 단계',select:[['h1','제목 1'],['h2','제목 2'],['h3','제목 3']],selectDefault:['p','본문']}],['quote','인용',s=>s.block==='blockquote',false,{tip:'인용 (스타일 선택)',icon:QUOTE_ICON,iconOnly:true,dropdown:true}],null,
   ['alignMenu','가로 정렬',()=>false,false,{tip:'가로 정렬',icon:ALIGN_LEFT_ICON,iconOnly:true,dropdown:true}],['valignMenu','세로 정렬',()=>false,false,{tip:'세로 정렬 (표 셀)',icon:VALIGN_TOP_ICON,iconOnly:true,dropdown:true,tableEnabled:true}],null,
   ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true,splitMain:true}],['ulType','비순서 목록 유형',()=>false,false,{tip:'비순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true,splitMain:true}],['olType','순서 목록 유형',()=>false,false,{tip:'순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],null,
@@ -9504,7 +9527,7 @@ BUTTONS.forEach(def=>{
   btns[cmd]=b;
 });
 /** 값 고르기 버튼(글자 크기·제목)의 목록 열기. 현재 값은 강조 */
-function openSelectMenu(cmd,opts){const b=btns[cmd];const r=b.getBoundingClientRect();editor.sel.save();listMenu.open(r.left,r.bottom+4,[opts.selectDefault,...selectItems(opts)].filter(Boolean).map(([v,tx])=>({label:tx,checked:v===b.dataset.value,action:()=>editor.exec(cmd,v||null)})));}
+function openSelectMenu(cmd,opts){const b=btns[cmd];const r=b.getBoundingClientRect();editor.sel.save();const first=opts.selectDefault&&[opts.selectDefault[0],opts.defaultHint?opts.selectDefault[1]+' ('+opts.defaultHint()+')':opts.selectDefault[1]];listMenu.open(r.left,r.bottom+4,[first,...selectItems(opts)].filter(Boolean).map(([v,tx])=>({label:tx,checked:v===b.dataset.value,action:()=>editor.exec(cmd,v||null)})));}
 /** 값 고르기 목록 (설정에 따라 달라지는 목록은 함수) */
 function selectItems(opts){return typeof opts.select==='function'?opts.select():opts.select;}
 /** 값 고르기 버튼에 현재 값 표시 (목록에 없으면 기본 값) */

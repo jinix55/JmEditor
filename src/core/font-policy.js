@@ -66,3 +66,26 @@ export function fontFamilyName(value, families) {
   }
   return null;
 }
+
+/** 실제 글꼴이 아니라 브라우저가 고르는 이름 (화면에 무엇이 나올지 이름으로 알 수 없다) */
+const GENERIC_FONTS = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji', 'fangsong', '-apple-system', 'blinkmacsystemfont']);
+
+/**
+ * 요소에 실제로 적용되는 글꼴 이름. font-family 목록에서 이 컴퓨터에 있는 첫 글꼴을 찾는다
+ * (글자 폭을 대체 글꼴과 비교해 판별. 사이트가 불러온 웹폰트도 로드 후에는 포함)
+ * @param {Element} el
+ * @returns {string|null} 글꼴 이름, 브라우저 기본·시스템 글꼴이 쓰이면 null
+ */
+export function usedFontName(el) {
+  const ctx = document.createElement('canvas').getContext('2d');
+  if (!ctx) return null;
+  const SAMPLE = 'mmwwlliiWW0123 가나다라마바';
+  const width = (font) => { ctx.font = `72px ${font}`; return ctx.measureText(SAMPLE).width; };
+  const fallbacks = ['monospace', 'serif'].map((g) => [g, width(g)]);
+  for (const name of splitFontNames(getComputedStyle(el).fontFamily)) {
+    if (GENERIC_FONTS.has(name.toLowerCase())) return null;
+    const quoted = `"${name.replace(/["\\]/g, '\\$&')}"`;
+    if (fallbacks.some(([g, w]) => width(`${quoted}, ${g}`) !== w)) return name;
+  }
+  return null;
+}

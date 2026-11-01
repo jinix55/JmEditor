@@ -273,6 +273,8 @@ initSliders(document.querySelector('.jm-content'));
 
 **글꼴** — 허용 목록은 `font.families` 입니다 (생성 옵션 `font` > `window.JmEditorConfig.font` > 기본값). 툴바 글꼴 목록과 정제가 같이 씁니다. 서버는 `jm-editor.font.families` 로 같은 값을 주세요. 대소문자는 무시하고 `Malgun Gothic`·`HCR Batang`·`Gulim`·`Dotum`·`Batang` 은 한글 이름으로 바꿉니다.
 
+툴바 글꼴 목록의 "기본"에는 지금 실제로 적용되는 글꼴 이름이 괄호로 표시됩니다(예: `기본 (맑은 고딕)`). 편집 영역은 페이지의 글꼴을 물려받으므로 사이트 CSS 에 따라 달라지고, 이 컴퓨터에 없는 글꼴은 건너뜁니다. 표시일 뿐 저장 내용에는 들어가지 않습니다.
+
 웹폰트는 번들에 넣지 않습니다. 없는 글꼴은 사이트 CSS 에서 대체할 수 있습니다. 라이선스는 사이트에서 확인하세요.
 
 ```css

@@ -5,6 +5,7 @@
  */
 import { JmEditor } from '../core/JmEditor.js';
 import { Sanitizer } from '../core/Sanitizer.js';
+import { usedFontName } from '../core/font-policy.js';
 import { TableGridPicker } from './TableGridPicker.js';
 import { ColorPicker } from './ColorPicker.js';
 import { FormatPicker, SAMPLE_FORMATS } from './FormatPicker.js';
@@ -94,7 +95,7 @@ const BUTTONS = [
   ['bgColor', 'A', (s) => !!s.bg, false, { tip: '글자 배경색' }],
   ['fontSize', '크기', () => false, false, { tip: '글자 크기', select: FONT_SIZES.map((n) => [`${n}px`, `${n}px`]), selectDefault: ['', '기본'], emptyLabel: '크기' }],
   // 글꼴: 목록은 에디터 설정(font.families)에서
-  ['fontFamily', '글꼴', () => false, false, { tip: '글꼴', select: (editor) => editor.fontFamilies.map((n) => [n, n]), selectDefault: ['', '기본'], emptyLabel: '글꼴' }],
+  ['fontFamily', '글꼴', () => false, false, { tip: '글꼴', select: (editor) => editor.fontFamilies.map((n) => [n, n]), selectDefault: ['', '기본'], defaultHint: (editor) => usedFontName(editor.root) ?? '브라우저 글꼴', emptyLabel: '글꼴' }],
   null, // 구분선
   // 제목: 셀렉트 (본문 / 제목 1~3). 값 선택 시 exec('heading', 'p'|'h1'|'h2'|'h3')
   ['heading', '제목', () => false, false, { tip: '제목 단계', select: [['h1', '제목 1'], ['h2', '제목 2'], ['h3', '제목 3']], selectDefault: ['p', '본문'] }],
@@ -369,13 +370,16 @@ export class JmToolbarEditor {
   /**
    * 값 고르기 버튼(글자 크기·제목)의 목록 열기. 현재 값은 강조, 고르면 exec(cmd, 값)
    * @param {string} cmd
-   * @param {{select: Array<[string,string]>|((editor: JmEditor) => Array<[string,string]>), selectDefault?: [string,string]}} opts
+   * @param {{select: Array<[string,string]>|((editor: JmEditor) => Array<[string,string]>), selectDefault?: [string,string], defaultHint?: (editor: JmEditor) => string}} opts
+   *        defaultHint: 기본 항목 뒤에 괄호로 보여 줄 실제 값
    */
   #openSelectMenu(cmd, opts) {
     const btn = this.buttons[cmd];
     const r = btn.getBoundingClientRect();
     this.editor.sel.save();
-    this.listMenu.open(r.left, r.bottom + 4, [opts.selectDefault, ...this.#selectItems(opts)].filter(Boolean).map(([v, text]) => ({
+    const [defaultValue, defaultText] = opts.selectDefault ?? [];
+    const first = opts.selectDefault && [defaultValue, opts.defaultHint ? `${defaultText} (${opts.defaultHint(this.editor)})` : defaultText];
+    this.listMenu.open(r.left, r.bottom + 4, [first, ...this.#selectItems(opts)].filter(Boolean).map(([v, text]) => ({
       label: text, checked: v === btn.dataset.value, action: () => this.editor.exec(cmd, v || null),
     })));
   }

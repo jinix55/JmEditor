@@ -557,6 +557,28 @@ test.describe('11. 글자 크기·글꼴 버튼 표시', () => {
     expect(m.w).toBeLessThanOrEqual(84);
   });
 
+  test('글꼴 목록의 기본 항목은 실제 적용되는 글꼴 이름을 알려 준다', async ({ page }) => {
+    const firstItem = async () => {
+      await page.locator('[data-cmd="fontFamily"]').click();
+      const text = await page.locator('.jm-listmenu .jm-ctxmenu-item').first().textContent();
+      await page.keyboard.press('Escape');
+      return text;
+    };
+    await page.evaluate(() => { window.core.root.style.fontFamily = '"없는글꼴테스트", Arial, sans-serif'; });
+    expect(await firstItem()).toContain('기본 (Arial)'); // 없는 글꼴은 건너뜀
+    await page.evaluate(() => { window.core.root.style.fontFamily = 'serif'; });
+    expect(await firstItem()).toContain('기본 (브라우저 글꼴)');
+    expect(await html(page)).not.toContain('font-family'); // 표시만, 저장 내용은 그대로
+  });
+
+  test('데모 툴바의 기본 글꼴 표시', async ({ page }) => {
+    await page.route(/fonts\.googleapis\.com\/css2/, (route) => route.abort());
+    await page.route(/youtube(-nocookie)?\.com\/embed\//, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '' }));
+    await page.goto('/examples/demo/index.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('.jm-btn[data-cmd="fontFamily"]').click();
+    await expect(page.locator('.jm-listmenu .jm-ctxmenu-item').first()).toContainText(/기본 \(.+\)/);
+  });
+
   test('데모 툴바도 같은 표시·접근성 속성', async ({ page }) => {
     await page.route(/fonts\.googleapis\.com\/css2/, (route) => route.abort());
     await page.route(/youtube(-nocookie)?\.com\/embed\//, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '' }));
