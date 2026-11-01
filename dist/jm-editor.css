@@ -106,6 +106,7 @@
 .jm-preview-pane { color: var(--jm-text); min-height: 240px; padding: 14px 16px; line-height: 1.6; }
 /* .jm-content: 저장된 HTML 을 보여주는 뷰어 공통 스타일 — 실제 조회 페이지에도 같은 클래스로 적용 */
 .jm-content p { margin: 0 0 8px; }
+.jm-editor hr, .jm-content hr { height: 0; margin: 16px 0; border: 0; border-top: 1px solid var(--jm-border); }
 .jm-content h1 { font-size: 1.8em; margin: 12px 0 8px; } .jm-content h2 { font-size: 1.5em; margin: 12px 0 8px; } .jm-content h3 { font-size: 1.2em; margin: 10px 0 6px; } .jm-content h4 { font-size: 1.1em; margin: 10px 0 6px; } .jm-content h5 { font-size: 1.05em; margin: 8px 0 4px; } .jm-content h6 { font-size: 1em; margin: 8px 0 4px; }
 .jm-content blockquote { margin: 8px 0; padding: 6px 12px; border-left: 4px solid var(--jm-text-soft); color: var(--jm-text-soft); }
 .jm-content ul, .jm-content ol { margin: 0 0 8px; padding-left: 24px; }
@@ -555,6 +556,7 @@ div[data-type="slider"] > img.is-current, div[data-type="slider"]:not(:has(> img
 .jm-imgbar-btn:hover { background: var(--jm-hover); }
 .jm-imgbar-btn.is-on { background: var(--jm-active); color: var(--jm-accent); font-weight: 600; }
 .jm-imgbar-del { color: var(--jm-danger); }
+.jm-imgbar-alt { width: 120px; height: 24px; box-sizing: border-box; padding: 0 6px; font-size: 12px; }
 .jm-imgbar-sep { width: 1px; height: 16px; margin: 0 3px; background: var(--jm-border); }
 .jm-imgbar-thumb { width: 24px; height: 24px; object-fit: cover; border: 1px solid var(--jm-border); border-radius: 3px; margin: 0 2px; }
 .jm-imgbar-thumb[hidden], .jm-imgbar-btn[hidden] { display: none; }

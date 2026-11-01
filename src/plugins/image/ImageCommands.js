@@ -89,6 +89,7 @@ export class ImageCommands {
    * @param {HTMLImageElement} img
    */
   select(img) {
+    if (this.img !== img) this.#flushAlt();
     if (this.img && this.img !== img) ImageCommands.#unmark(this.img);
     this.img = img;
     img.classList.add(IMG_SELECTED_CLASS);
@@ -109,6 +110,7 @@ export class ImageCommands {
 
   /** 선택 해제 */
   clear() {
+    this.#flushAlt();
     if (this.img) ImageCommands.#unmark(this.img);
     this.img = null;
     this.bar.hidden = true;
@@ -150,7 +152,7 @@ export class ImageCommands {
     if (!src) return;
     img.removeAttribute('width');
     img.removeAttribute('height');
-    img.alt = file.name;
+    img.alt = ''; // 이미지가 바뀌면 옛 설명은 맞지 않는다
     await new Promise((resolve) => { img.onload = () => { stampSize(img, true); resolve(); }; img.onerror = resolve; img.src = src; });
     img.onload = null;
     this.#changed();
@@ -286,7 +288,7 @@ export class ImageCommands {
     const bar = document.createElement('div');
     bar.className = 'jm-imgbar';
     bar.hidden = true;
-    bar.addEventListener('mousedown', (e) => { if (e.target !== this.moveHandle) e.preventDefault(); });
+    bar.addEventListener('mousedown', (e) => { if (e.target !== this.moveHandle && e.target !== this.altInput) e.preventDefault(); });
 
     const mk = (label, title, onClick, cls = '') => {
       const b = document.createElement('button');
@@ -322,8 +324,42 @@ export class ImageCommands {
     this.mobileSep = sep();
     this.mobileGroup = [this.mobileSep, this.mobileThumb, this.mobileAdd, this.mobileReplace, this.mobileDel];
 
-    bar.append(this.moveSlot, ...Object.values(this.floatBtns), sep(), ...this.widthBtns, this.sizeLabel, sep(), replace, del, ...this.mobileGroup);
+    bar.append(this.moveSlot, ...Object.values(this.floatBtns), sep(), ...this.widthBtns, this.sizeLabel, sep(), this.#buildAltInput(), sep(), replace, del, ...this.mobileGroup);
     return bar;
+  }
+
+  /**
+   * 대체 글(alt) 입력칸: 글자마다 이미지에 쓰고, 입력을 마칠 때(Enter·포커스 이동·선택 해제) 한 번만 기록한다
+   * @returns {HTMLInputElement}
+   */
+  #buildAltInput() {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'jm-imgbar-alt';
+    input.placeholder = '대체 글';
+    input.title = '이미지를 설명하는 글 (화면 낭독기, 이미지가 보이지 않을 때)';
+    input.setAttribute('aria-label', '대체 글');
+    input.addEventListener('input', () => {
+      if (!this.img) return;
+      this.img.setAttribute('alt', input.value);
+      this.altDirty = true;
+    });
+    input.addEventListener('change', () => this.#flushAlt());
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== 'Escape') return;
+      e.preventDefault();
+      this.#flushAlt();
+      this.root.focus({ preventScroll: true });
+    });
+    this.altInput = input;
+    return input;
+  }
+
+  /** 입력 중인 대체 글을 되돌리기 한 단계로 기록 */
+  #flushAlt() {
+    if (!this.altDirty) return;
+    this.altDirty = false;
+    this.editor.commit();
   }
 
   /** 이동 핸들: 선택한 이미지의 문단(루트 직속 블록)을 BlockDrag 로 옮긴다. 표 셀 안 등 문단이 아니면 숨김 */
@@ -356,6 +392,7 @@ export class ImageCommands {
     const pct = parseInt(img.style.width, 10);
     this.widthBtns.forEach((b) => b.classList.toggle('is-on', +b.dataset.w === pct));
     this.sizeLabel.textContent = pct ? `${pct}%` : '원본';
+    this.altInput.value = img.getAttribute('alt') || '';
     const source = ImageCommands.mobileSource(img);
     this.mobileThumb.hidden = this.mobileReplace.hidden = this.mobileDel.hidden = !source;
     this.mobileAdd.hidden = !!source;

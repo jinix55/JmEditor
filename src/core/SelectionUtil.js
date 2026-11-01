@@ -14,7 +14,7 @@ const SUB_HEADING = /^H[4-6]$/;
 /** 태그를 바꿀 수 있는 블록 (제목·인용·목록 전환 대상) */
 export const TRANSFORMABLE_BLOCK = /^(P|H[1-6]|BLOCKQUOTE)$/;
 /** 블록 요소 태그 (구조 컨테이너인지 — 블록 자식이 있는지 — 판정용) */
-const BLOCK_TAG = /^(P|H[1-6]|UL|OL|LI|BLOCKQUOTE|TABLE|DIV|SECTION|ARTICLE|ASIDE|HEADER|FOOTER|NAV|DL|DT|DD|FIGURE|FIGCAPTION)$/;
+const BLOCK_TAG = /^(P|H[1-6]|UL|OL|LI|BLOCKQUOTE|TABLE|DIV|SECTION|ARTICLE|ASIDE|HEADER|FOOTER|NAV|DL|DT|DD|FIGURE|FIGCAPTION|HR)$/;
 
 export class SelectionUtil {
   /** @param {HTMLElement} root 에디터 contenteditable 루트 */

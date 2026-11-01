@@ -118,7 +118,7 @@ export class SliderCommands {
     let t = block.querySelector(':scope > p[data-role="title"]');
     if (!t) { t = document.createElement('p'); t.dataset.role = 'title'; block.insertBefore(t, block.firstChild); }
     t.setAttribute('contenteditable', 'true');
-    t.dataset.placeholder = '제목 (비워두면 표시되지 않음)';
+    t.dataset.placeholder = '제목 (비워두면 표시되지 않음) — 전환 간격은 위 도구에서 선택';
     t.addEventListener('mousedown', (e) => e.stopPropagation());
     t.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); t.blur(); } });
     t.addEventListener('blur', () => this.editor.commit());

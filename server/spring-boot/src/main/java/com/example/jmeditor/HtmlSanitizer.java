@@ -24,8 +24,11 @@ public class HtmlSanitizer {
     private static final java.util.Map<String, String> TAG_ALIAS = java.util.Map.of("b", "strong", "i", "em", "strike", "s", "font", "span");
 
     /** 기본 허용 태그 (구조 정책 전) — 플러그인 안에서 구조 전용 태그를 가려낼 때 */
-    private static final java.util.Set<String> BASE_TAGS = java.util.Set.of("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote",
+    private static final java.util.Set<String> BASE_TAGS = java.util.Set.of("hr", "p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote",
             "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe", "picture", "source");
+
+    /** 가로줄을 담을 수 없는 요소: 문단·제목·글자 서식 — 저장 HTML 을 다시 파싱하면 구조가 바뀌므로 hr 을 밖으로 꺼낸다 (클라이언트 HR_SPLIT_TAGS 와 같음) */
+    private static final java.util.Set<String> HR_SPLIT_TAGS = java.util.Set.of("p", "h1", "h2", "h3", "h4", "h5", "h6", "strong", "em", "u", "s", "span", "a", "small", "sub", "sup");
 
     /** 요소가 플러그인 블록(div[data-type=gallery 등]) 안이거나 그 자체인지 */
     private static boolean insidePlugin(Element el) {
@@ -85,7 +88,7 @@ public class HtmlSanitizer {
     /** 기본 허용 목록 (구조 정책 전) */
     private static Safelist baseSafelist() {
         return new Safelist()
-            .addTags("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote",
+            .addTags("hr", "p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote",
                      "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe",
                      "picture", "source")   // 모바일 이미지: 구성·srcset·media·type 검사는 후처리(cleanPicture)
             .addAttributes("a", "href", "target", "rel", "data-role", "data-style", "data-size",
@@ -240,7 +243,9 @@ public class HtmlSanitizer {
         // style 은 허용 속성·값 형식만 남김 (버튼 링크의 직접 색 --jm-btn 은 아래 cleanButton 에서 따로 처리)
         for (Element el : doc.select("[style]")) {
             if (el.tagName().equals("a")) continue;
-            String style = cleanStyle(el.attr("style"), el.normalName());
+            // 구조 모드가 아니거나 플러그인 안의 div 는 뒤에서 p 가 된다 — 클라이언트처럼 p 규칙으로 (들여쓰기)
+            boolean toP = el.normalName().equals("div") && (!policy.tags().contains("div") || insidePlugin(el));
+            String style = cleanStyle(el.attr("style"), toP ? "p" : el.normalName());
             if (style.isEmpty()) el.removeAttr("style"); else el.attr("style", style);
         }
         // 속성이 하나도 남지 않은 span 은 의미 없으므로 언래핑
@@ -374,6 +379,7 @@ public class HtmlSanitizer {
         for (Element p : doc.select("p[data-role]")) {
             if (p.parent() == null || !TITLED_BLOCKS.contains(p.parent().attr("data-type"))) p.removeAttr("data-role");
         }
+        settleHrs(doc.body());
         // 같은 id 는 문서 순서상 첫 번째만 (대소문자가 다르면 다른 id — 클라이언트 Sanitizer.dedupeIds 와 같게)
         java.util.Set<String> seenIds = new java.util.HashSet<>();
         for (Element el : doc.select("[id]")) if (!seenIds.add(el.attr("id"))) el.removeAttr("id");
@@ -382,6 +388,30 @@ public class HtmlSanitizer {
         // 줄 맞춤(pretty print) 없이 — 켜 두면 dt·dd·div·caption 처럼 글만 있는 블록 안에 줄바꿈·들여쓰기가 들어가 글자가 바뀐다
         doc.outputSettings().prettyPrint(false);
         return doc.body().html();
+    }
+
+    /**
+     * 가로줄 자리 잡기 (클라이언트 #settleHrs 와 같은 규칙): 속성을 모두 지우고, 플러그인 블록 안이면 버리고,
+     * 문단·제목·글자 서식 안이면 그 요소를 hr 앞뒤로 나눠 밖으로 꺼낸다 (비게 된 쪽은 지움). 뒤의 hr 부터 처리해 옮기는 노드가 hr 사이 구간뿐이다
+     * @param root 본문
+     */
+    private static void settleHrs(Element root) {
+        java.util.List<Element> hrs = new java.util.ArrayList<>(root.select("hr"));
+        java.util.Collections.reverse(hrs);
+        for (Element hr : hrs) {
+            if (insidePlugin(hr)) { hr.remove(); continue; }
+            hr.clearAttributes();
+            while (hr.parent() != null && HR_SPLIT_TAGS.contains(hr.parent().normalName())) {
+                Element before = hr.parent();
+                Element after = before.shallowClone();
+                java.util.List<org.jsoup.nodes.Node> tail = new java.util.ArrayList<>(before.childNodes().subList(hr.siblingIndex() + 1, before.childNodeSize()));
+                after.insertChildren(0, tail);
+                before.after(hr);
+                hr.after(after);
+                if (after.childNodeSize() == 0) after.remove();
+                if (before.childNodeSize() == 0) before.remove();
+            }
+        }
     }
 
     /** 닫는 태그가 없으면 뒤 글을 통째로 삼키는 태그 */

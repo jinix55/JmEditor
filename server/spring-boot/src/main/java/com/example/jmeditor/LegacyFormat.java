@@ -65,6 +65,12 @@ final class LegacyFormat {
     /** width·height pt 변환, background 변환, 옛 속성을 적용하는 표 요소 */
     private static final Set<String> TABLE_TAGS = Set.of("table", "tr", "td", "th", "col");
     /** 굵게 판정 값 */
+    /** 들여쓰기 값: px·pt·mm·cm (음수는 text-indent 만, 지수 표기 불가) */
+    private static final Pattern INDENT_LENGTH = Pattern.compile("^(-?)(\\d{0,6}(?:\\.\\d{1,6})?)(px|pt|mm|cm)$", Pattern.CASE_INSENSITIVE);
+    /** margin-left·text-indent 를 남기는 글 블록 */
+    private static final Set<String> INDENT_TAGS = Set.of("p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "blockquote");
+    /** 들여쓰기 절댓값 상한(px) */
+    private static final int INDENT_PX_MAX = 400;
     private static final Pattern BOLD_VALUE = Pattern.compile("^(bold|bolder|[7-9]00)$", Pattern.CASE_INSENSITIVE);
     /** 굵기 해제 값 (뒤에 오면 앞의 굵게를 덮음) */
     private static final Pattern NOT_BOLD_VALUE = Pattern.compile("^(normal|lighter|[1-6]00)$", Pattern.CASE_INSENSITIVE);
@@ -162,6 +168,21 @@ final class LegacyFormat {
         return px >= 8 && px <= 200 ? px + "px" : null;
     }
 
+    /**
+     * margin-left·text-indent 정규화: px·pt·mm·cm → 정수 px, 범위 안만 (다시 조립하므로 값이 style 을 벗어날 수 없다)
+     * @param value 값
+     * @param negative 음수 허용 (text-indent 의 내어쓰기)
+     * @return 정규화한 값, 범위·단위 밖이면 null
+     */
+    private static String indentValue(String value, boolean negative) {
+        if (value.equals("0")) return "0px";
+        Matcher m = INDENT_LENGTH.matcher(value);
+        if (!m.matches() || m.group(2).isEmpty() || (!m.group(1).isEmpty() && !negative)) return null;
+        long px = Math.round(Double.parseDouble(m.group(2)) * PX_PER_UNIT.get(m.group(3).toLowerCase(Locale.ROOT)));
+        if (px > INDENT_PX_MAX) return null;
+        return (m.group(1).isEmpty() ? px : -px) + "px";
+    }
+
     /** letter-spacing 정규화: px·pt → px(소수 둘째 자리, -10~20), em(-1~2). 0 은 기본값이라 지움. 그 밖은 null */
     private static String letterSpacingValue(String value) {
         Matcher m = LETTER_SPACING.matcher(value);
@@ -247,8 +268,16 @@ final class LegacyFormat {
             String color = TABLE_TAGS.contains(tag) || tag.equals("span") ? backgroundColor(value) : null;
             return color == null ? null : new String[]{"background-color", color};
         }
-        if (name.equals("margin-left") || name.equals("margin-right")) { // 표 가운데 정렬(align=center)의 값만
+        if (name.equals("margin-left") || name.equals("margin-right")) { // 표 가운데 정렬(align=center)의 값, 글 블록의 왼쪽 들여쓰기
+            if (name.equals("margin-left") && INDENT_TAGS.contains(tag)) {
+                String v = indentValue(value, false);
+                return v == null ? null : new String[]{name, v};
+            }
             return tag.equals("table") && AUTO.matcher(value).matches() ? new String[]{name, "auto"} : null;
+        }
+        if (name.equals("text-indent")) { // 첫 줄 들여쓰기 (음수는 내어쓰기) — HWP·워드
+            String v = INDENT_TAGS.contains(tag) ? indentValue(value, true) : null;
+            return v == null ? null : new String[]{name, v};
         }
         if (name.equals("border-collapse")) {
             return tag.equals("table") && BORDER_COLLAPSE.matcher(value).matches() ? new String[]{name, value.toLowerCase(Locale.ROOT)} : null;

@@ -47,6 +47,12 @@ const VALIGN_ITEMS = [['top', '위', VALIGN_TOP_ICON], ['middle', '중간', VALI
 const UL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none"/><path d="M10 6h10M10 12h10M10 18h10"/></svg>';
 const OL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><text x="2.5" y="8" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">1</text><text x="2.5" y="14" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">2</text><text x="2.5" y="20" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">3</text></svg>';
 
+/** 가로줄 / 들여쓰기 / 내어쓰기 / 서식 지우기 아이콘 (자체 제작 SVG) */
+const HR_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 12h18"/><path d="M7 6h10M7 18h10" stroke-opacity=".4"/></svg>';
+const INDENT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18M12 10h9M12 14h9M3 19h18"/><path d="m4 9 3 3-3 3"/></svg>';
+const OUTDENT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18M12 10h9M12 14h9M3 19h18"/><path d="M7 9l-3 3 3 3"/></svg>';
+const CLEAR_FORMAT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5h13M12 5 9 19M6 19h6"/><path d="m16 15 5 5M21 15l-5 5"/></svg>';
+
 /** 켜고 끄는 서식 버튼 (aria-pressed 대상, 모드 버튼은 group 으로 따로 판단) */
 const TOGGLE_CMDS = new Set(['bold', 'italic', 'underline', 'strike', 'ul', 'ol']);
 
@@ -96,6 +102,7 @@ const BUTTONS = [
   ['fontSize', '크기', () => false, false, { tip: '글자 크기', select: FONT_SIZES.map((n) => [`${n}px`, `${n}px`]), inherited: (editor, node) => inheritedFontSize(node, editor.root), sorted: true }],
   // 글꼴: 목록은 에디터 설정(font.families)에서
   ['fontFamily', '글꼴', () => false, false, { tip: '글꼴', select: (editor) => editor.fontFamilies.map((n) => [n, n]), inherited: (editor, node) => inheritedFontName(node, editor.root, editor.fontFamilies), unknownLabel: '브라우저 글꼴' }],
+  ['clearFormat', '서식 지우기', () => false, false, { tip: '서식 지우기', icon: CLEAR_FORMAT_ICON, iconOnly: true }],
   null, // 구분선
   // 제목: 셀렉트 (제목 1~6 / 본문). 값 선택 시 exec('heading', 'p'|'h1'~'h6')
   ['heading', '제목', () => false, false, { tip: '제목 단계', select: [['h1', '제목 1'], ['h2', '제목 2'], ['h3', '제목 3'], ['h4', '제목 4'], ['h5', '제목 5'], ['h6', '제목 6']], selectDefault: ['p', '본문'], defaultLast: true, itemClass: (v) => `jm-heading-item jm-heading-item-${v}` }],
@@ -104,6 +111,8 @@ const BUTTONS = [
   // 정렬: 드롭다운 두 개 (가로 / 세로). 버튼 아이콘은 현재 상태를 보여주고, 누르면 목록
   ['alignMenu', '가로 정렬', () => false, false, { tip: '가로 정렬', icon: ALIGN_LEFT_ICON, iconOnly: true, dropdown: true }],
   ['valignMenu', '세로 정렬', () => false, false, { tip: '세로 정렬 (표 셀)', icon: VALIGN_TOP_ICON, iconOnly: true, dropdown: true, tableEnabled: true }],
+  ['outdent', '내어쓰기', () => false, false, { tip: '내어쓰기 (목록은 Shift+Tab)', icon: OUTDENT_ICON, iconOnly: true }],
+  ['indent', '들여쓰기', () => false, false, { tip: '들여쓰기 (목록은 Tab)', icon: INDENT_ICON, iconOnly: true }],
   null,
   // 목록: 스플릿 버튼 (본 버튼 = 토글, 오른쪽 꺾쇠 = 유형 메뉴)
   ['ul', '비순서 목록', (s) => s.list === 'ul', false, { tip: '비순서 목록', icon: UL_ICON, iconOnly: true, splitMain: true }],
@@ -115,6 +124,7 @@ const BUTTONS = [
   ['image', '이미지', () => false, false, { tip: '이미지', icon: IMAGE_ICON, iconOnly: true }],
   ['youtube', '유튜브', () => false, false, { icon: YOUTUBE_ICON, iconOnly: true }], // 아이콘만 표시 (라벨은 title)
   ['table', '표', (s) => s.table, false, { tip: '표 삽입', icon: TABLE_ICON, iconOnly: true }], // 행·열 편집은 표 레이어 우클릭 메뉴에서
+  ['hr', '가로줄', () => false, false, { tip: '가로줄', icon: HR_ICON, iconOnly: true }],
   null,
   ['undo', '실행 취소', () => false, false, { tip: '실행 취소 (Ctrl+Z)', icon: UNDO_ICON, iconOnly: true }],
   ['redo', '다시 실행', () => false, false, { tip: '다시 실행 (Ctrl+Y)', icon: REDO_ICON, iconOnly: true }],

@@ -119,6 +119,7 @@ jm-editor:
 |---|---|
 | p | style, data-role (갤러리·슬라이드 제목에서만 유지) |
 | h1~h6, li, ul, span | style |
+| hr | — (class·id·aria 도 지움. 문단·제목·글자 서식 안이면 나눠서 밖으로, 플러그인 블록 안은 제거) |
 | blockquote | style, data-style(box·quote 만 — 세로선은 기본값이라 속성 없음) |
 | ol | style, start |
 | br, strong, em, u, s, tbody, thead | — |
@@ -165,6 +166,8 @@ jm-editor:
 | border, border-top·right·bottom·left, border-\*-width·style·color (td·th) | 폭 0~20px·pt·mm·cm·thin·medium·thick, 스타일 none·solid·dashed·dotted·double, 색. 단축값은 토큰 3개 이하로 정규화 |
 | border-collapse (table) | collapse, separate |
 | margin-left, margin-right (table) | auto 만 |
+| margin-left (p·h1~h6·li·blockquote) | `px`·`pt`·`mm`·`cm` → 정수 `px`, 0~400. 음수·`%`·`em` 은 지움 |
+| text-indent (p·h1~h6·li·blockquote) | `px`·`pt`·`mm`·`cm` → 정수 `px`, -400~400 (음수는 내어쓰기). `%`·`em` 은 지움 |
 
 `font-size` 의 rem 은 px 로(1rem=16px), `line-height`·`letter-spacing` 은 값 검사 후 다시 조립해 남기고, 셀 테두리 폭은 소수 둘째 자리까지 실제 값을 유지합니다(`0.50pt` → `0.67px`). 허용 검사 전에 `LegacyFormat` 이 옛 형식을 바꿉니다: `font` → `span style`, 표 `bgcolor`·`align`·`valign`·`width`·`height` 속성 → `style`, `font-weight` 굵게 → 내용을 `strong` 으로, 블록을 감싼 `font`·`span` → 안쪽 글자에 내려줌, `table border=0` → `data-border`, 구조 모드를 끈 `caption` → 표 앞 `p`. 파싱 전 `object`·`applet`·`marquee` 여는 태그는 합계 2000개까지만 남깁니다. 선언 값은 256자까지이며 따옴표·괄호 안의 `;`·`:` 는 구분자로 보지 않습니다. 클라이언트 `core/legacy-format.js` 와 같은 사례 파일(`test/fixtures/legacy/cases.txt`)로 확인합니다.
 | list-style-type | disc, circle, square, decimal, decimal-leading-zero, lower-alpha, upper-alpha, lower-roman, upper-roman, hangul, hangul-consonant, none |

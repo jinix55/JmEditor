@@ -44,6 +44,12 @@ const ALIGN_BLOCK_TAGS = new Set(['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'
 const PENDING_KEYS = { color: 'color', 'font-size': 'font-size', 'font-family': 'font-family', 'background-color': 'background-color', background: 'background-color', 'line-height': 'line-height', 'letter-spacing': 'letter-spacing' };
 /** 굵게 판정 값 */
 const BOLD_VALUE = /^(bold|bolder|[7-9]00)$/i;
+/** 들여쓰기 값: px·pt·mm·cm (음수는 text-indent 만, 지수 표기 불가) */
+const INDENT_LENGTH = /^(-?)(\d{0,6}(?:\.\d{1,6})?)(px|pt|mm|cm)$/i;
+/** margin-left·text-indent 를 남기는 글 블록 */
+const INDENT_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote']);
+/** 들여쓰기 절댓값 상한(px) */
+const INDENT_PX_MAX = 400;
 /** 굵기 해제 값 */
 const NOT_BOLD_VALUE = /^(normal|lighter|[1-6]00)$/i;
 /** 내용을 바로 감쌀 수 없어 굵기를 자식에게 넘기는 요소 */
@@ -158,6 +164,21 @@ function lineHeightValue(value) {
 }
 
 /**
+ * margin-left·text-indent 정규화: px·pt·mm·cm → 정수 px, 범위 안만 (다시 조립하므로 값이 style 을 벗어날 수 없다)
+ * @param {string} value
+ * @param {boolean} negative 음수 허용 (text-indent 의 내어쓰기)
+ * @returns {string|null} 범위·단위 밖이면 null
+ */
+function indentValue(value, negative) {
+  if (value === '0') return '0px';
+  const m = value.match(INDENT_LENGTH);
+  if (!m || !m[2] || (m[1] && !negative)) return null;
+  const px = Math.round(Number(m[2]) * PX_PER_UNIT[m[3].toLowerCase()]);
+  if (px > INDENT_PX_MAX) return null;
+  return `${m[1] && px ? -px : px}px`;
+}
+
+/**
  * letter-spacing 정규화: px·pt → px(소수 둘째 자리, -10~20), em(-1~2). 0 은 기본값이라 지움
  * @param {string} value
  * @returns {string|null} 그 밖은 null
@@ -238,8 +259,13 @@ export function cleanLegacyDecl(name, value, tag, families) {
     const color = LEGACY_TABLE_TAGS.has(tag) || tag === 'span' ? backgroundColor(value) : null;
     return color ? ['background-color', color] : null;
   }
-  if (name === 'margin-left' || name === 'margin-right') { // 표 가운데 정렬(align=center)의 값만
+  if (name === 'margin-left' || name === 'margin-right') { // 표 가운데 정렬(align=center)의 값, 글 블록의 왼쪽 들여쓰기
+    if (name === 'margin-left' && INDENT_TAGS.has(tag)) { const v = indentValue(value, false); return v ? [name, v] : null; }
     return tag === 'table' && /^auto$/i.test(value) ? [name, 'auto'] : null;
+  }
+  if (name === 'text-indent') { // 첫 줄 들여쓰기 (음수는 내어쓰기) — HWP·워드
+    const v = INDENT_TAGS.has(tag) ? indentValue(value, true) : null;
+    return v ? [name, v] : null;
   }
   if (name === 'border-collapse') {
     return tag === 'table' && /^(collapse|separate)$/i.test(value) ? [name, value.toLowerCase()] : null;

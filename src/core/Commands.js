@@ -4,12 +4,19 @@
  * - 모든 명령은 에디터 루트 안에서만 동작하며, 실행 후 editor.commit() 으로 히스토리 기록·변경 알림을 한다.
  */
 import { SelectionUtil, TRANSFORMABLE_BLOCK } from './SelectionUtil.js';
-import { Sanitizer } from './Sanitizer.js';
+import { Sanitizer, HIDDEN_ID_ATTR } from './Sanitizer.js';
 import { notify } from '../plugins/gallery/gallery-upload.js';
 import { fontFamilyName } from './font-policy.js';
 
 /** 플러그인 블록 레이어 (플러그인 모듈이 이 모듈을 쓰므로 이름을 직접 적는다) */
 const COVERABLE_BLOCK_SELECTOR = ['table', 'gallery', 'embed', 'buttons', 'slider', 'layout', 'map'].map((n) => `.jm-${n}-layer`).join(', ');
+/** 서식 지우기로 벗기는 글자 서식 태그 */
+const CLEARED_TAGS = /^(STRONG|EM|U|S|SUB|SUP)$/;
+/** 서식 지우기로 지우는 span 의 style */
+const CLEARED_STYLES = ['color', 'background-color', 'font-size', 'font-family', 'letter-spacing', 'line-height'];
+/** 들여쓰기 한 단계·상한 (px) */
+const INDENT_STEP = 40;
+const INDENT_MAX = 200;
 
 const ZWSP = '​'; // 빈 인라인 태그에 커서를 두기 위한 zero-width space
 
@@ -371,6 +378,168 @@ export class Commands {
     };
   }
 
+  // ───────────── 서식 지우기 ─────────────
+
+  /**
+   * 글자 서식 지우기: strong·em·u·s·sub·sup 를 벗기고 span 의 글자 style 을 지운다 (class 등이 남은 span 은 유지).
+   * 링크·이미지·표·제목 태그와 블록의 style 은 그대로. 표 칸 범위 선택이면 그 칸들, 접힌 커서면 커서 블록 전체, 아니면 선택 범위
+   */
+  clearFormat() {
+    const cells = this.#selectedCells();
+    if (cells.length) {
+      cells.forEach((c) => {
+        const all = document.createRange();
+        all.selectNodeContents(c);
+        this.#textPieces(all).forEach((t) => this.#clearPiece(t));
+      });
+      this.editor.commit();
+      return;
+    }
+    const range = this.sel.getRange();
+    if (!range) return;
+    if (!range.collapsed) {
+      const pieces = this.#textPieces(range);
+      if (!pieces.length) return;
+      pieces.forEach((t) => this.#clearPiece(t));
+      this.#selectPieces(pieces);
+      this.editor.commit();
+      return;
+    }
+    const block = this.sel.getBlock();
+    if (!block) return;
+    const all = document.createRange();
+    all.selectNodeContents(block);
+    const pieces = this.#textPieces(all).filter((t) => this.sel.textBlockOf(t) === block); // 항목 안 중첩 목록 등 자식 블록의 글은 빼고
+    const caret = range.startContainer;
+    if (caret.nodeType === Node.TEXT_NODE && !pieces.includes(caret)) pieces.push(caret); // 커서용 빈 글자 안이면 그 서식에서도 나온다
+    const points = Commands.#rangePoints(range);
+    pieces.forEach((t) => this.#clearPiece(t));
+    this.#restorePoints(points);
+    this.editor.commit();
+  }
+
+  /**
+   * 텍스트 조각 하나를 글자 서식에서 꺼낸다 (서식 요소를 조각 앞뒤로 나눠 그 부분만). 링크는 나뉘지 않게 서식 밖으로 옮긴다
+   * @param {Text} t
+   */
+  #clearPiece(t) {
+    for (let el = this.#formatAncestor(t); el; el = this.#formatAncestor(t)) {
+      this.#hoistLink(t, el);
+      const mid = this.#isolate(t, el);
+      if (mid.tagName !== 'SPAN') { this.#unwrapEl(mid); continue; }
+      CLEARED_STYLES.forEach((p) => mid.style.removeProperty(p));
+      if (!mid.style.length) mid.removeAttribute('style');
+      if (!mid.attributes.length) this.#unwrapEl(mid);
+    }
+  }
+
+  /**
+   * 조각의 글 블록 안에서 가장 가까운 글자 서식 요소 (지울 style 이 없는 span 은 아님)
+   * @param {Text} node
+   * @returns {HTMLElement|null}
+   */
+  #formatAncestor(node) {
+    for (let n = node.parentNode; n && n !== this.root && !this.sel.isTextBlock(n) && !Commands.#isBlockEl(n); n = n.parentNode) {
+      if (CLEARED_TAGS.test(n.tagName)) return n;
+      if (n.tagName === 'SPAN' && CLEARED_STYLES.some((p) => n.style.getPropertyValue(p))) return n;
+    }
+    return null;
+  }
+
+  /** 표 칸 범위 선택이 있으면 그 칸들 */
+  #selectedCells() {
+    const s = this.editor.table?.selection;
+    return s ? Array.from(s.table.querySelectorAll('.is-cell-selected')) : [];
+  }
+
+  /**
+   * 범위 경계 기억 — 요소를 옮겨도 글 노드는 그대로라 그 노드 기준으로 되살린다 (옮기는 동안 살아 있는 Range 는 부모로 밀려남)
+   * @param {Range} range
+   * @returns {[Node, number, Node, number]}
+   */
+  static #rangePoints(range) {
+    return [range.startContainer, range.startOffset, range.endContainer, range.endOffset];
+  }
+
+  /**
+   * 기억한 경계로 선택 되살리기. 경계 노드가 문서에서 빠졌으면(항목이 문단으로 바뀐 경우 등) 지금 선택을 둔다
+   * @param {[Node, number, Node, number]} points
+   */
+  #restorePoints([sc, so, ec, eo]) {
+    if (!sc.isConnected || !ec.isConnected) return;
+    const size = (n) => (n.nodeType === Node.TEXT_NODE ? n.length : n.childNodes.length);
+    const r = document.createRange();
+    r.setStart(sc, Math.min(so, size(sc)));
+    r.setEnd(ec, Math.min(eo, size(ec)));
+    this.sel.setRange(r);
+  }
+
+  // ───────────── 들여쓰기 ─────────────
+
+  /**
+   * 들여쓰기·내어쓰기: 문단·제목·인용은 margin-left 를 40px 단위로(최대 200px, 0 이면 지움), 목록 항목은 중첩·해제 (맨 위 항목을 내어쓰면 문단).
+   * 범위 안 모든 블록에 적용하고 한 번만 기록한다. 표 칸 범위 선택이면 그 칸 안의 블록. 칸 직접 글·구조 블록(dt·dd 등)은 대상이 아니다
+   * @param {1|-1} delta 들여쓰기 1, 내어쓰기 -1
+   */
+  changeIndent(delta) {
+    const cells = this.#selectedCells();
+    const blocks = cells.length
+      ? cells.flatMap((c) => Array.from(c.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, li')).filter((b) => this.sel.isTextBlock(b)))
+      : this.#rangeBlocks();
+    if (!blocks.length) return;
+    const range = this.sel.getRange();
+    const points = range && Commands.#rangePoints(range);
+    blocks.filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !Commands.#isPluginText(b)).forEach((b) => Commands.#stepMargin(b, delta));
+    // 항목은 가장 바깥 것만 옮긴다 (선택된 하위 항목은 함께 따라감)
+    const items = blocks.filter((b) => b.tagName === 'LI');
+    const tops = items.filter((li) => !items.some((o) => o !== li && o.contains(li)));
+    if (delta > 0) tops.forEach((li) => this.#nestItem(li));
+    else tops.reverse().forEach((li) => this.#outdentItem(li)); // 뒤 항목부터: 앞 항목의 하위로 들어가지 않게
+    if (points) this.#restorePoints(points);
+    this.editor.commit();
+  }
+
+  /**
+   * 블록의 margin-left 를 한 단계 옮긴다. 단위에 맞지 않는 값은 그 방향의 다음 배수로, 상한을 넘겨 저장된 값은 들여쓰기로 줄이지 않는다
+   * @param {HTMLElement} block
+   * @param {1|-1} delta
+   */
+  static #stepMargin(block, delta) {
+    const cur = parseFloat(block.style.marginLeft) || 0;
+    const next = delta > 0
+      ? (cur >= INDENT_MAX ? cur : Math.min(INDENT_MAX, (Math.floor(cur / INDENT_STEP) + 1) * INDENT_STEP))
+      : Math.max(0, (Math.ceil(cur / INDENT_STEP) - 1) * INDENT_STEP);
+    if (next) block.style.marginLeft = `${next}px`;
+    else block.style.removeProperty('margin-left');
+    if (!block.getAttribute('style')?.trim()) block.removeAttribute('style');
+  }
+
+  /**
+   * 항목을 앞 항목의 하위 목록 끝으로 옮긴다. 앞 항목이 없으면 그대로
+   * @param {HTMLElement} li
+   */
+  #nestItem(li) {
+    const prev = li.previousElementSibling;
+    if (prev?.tagName !== 'LI') return;
+    let sub = prev.lastElementChild;
+    if (!/^(UL|OL)$/.test(sub?.tagName)) {
+      sub = li.parentNode.cloneNode(false);
+      sub.removeAttribute('start');
+      sub.removeAttribute(HIDDEN_ID_ATTR);
+      prev.appendChild(sub);
+    }
+    sub.appendChild(li);
+  }
+
+  /**
+   * 항목 내어쓰기: 중첩 항목은 상위 목록으로, 맨 위 항목은 문단으로 (구조 모드에서 블록 자식이 있는 항목은 그대로)
+   * @param {HTMLElement} li
+   */
+  #outdentItem(li) {
+    if (li.parentNode.parentNode?.tagName === 'LI') this.#liftItem(li);
+    else if (/^(UL|OL)$/.test(li.parentNode.tagName) && !(this.sel.structure && SelectionUtil.hasBlockChild(li, /^(P|UL|OL)$/))) this.#removeFromList(li);
+  }
+
   // ───────────── 블록 정렬 ─────────────
 
   /**
@@ -658,18 +827,27 @@ export class Commands {
    * @returns {boolean} 중첩 항목이 아니어서 하지 않았으면 false
    */
   outdentEmptyItem(li) {
+    if (li.parentNode.parentNode?.tagName !== 'LI') return false;
+    this.#liftItem(li);
+    this.sel.placeCursor(li, false);
+    this.editor.commit();
+    return true;
+  }
+
+  /**
+   * 중첩 항목을 상위 목록의 항목으로 올린다. 뒤따르던 항목은 올린 항목의 하위 목록으로 옮긴다
+   * @param {HTMLElement} li 부모 목록이 항목 안에 있는 항목
+   */
+  #liftItem(li) {
     const list = li.parentNode;
     const parentLi = list.parentNode;
-    if (parentLi?.tagName !== 'LI') return false;
     const rest = list.cloneNode(false);
     rest.removeAttribute('start');
+    rest.removeAttribute(HIDDEN_ID_ATTR);
     while (li.nextSibling) rest.appendChild(li.nextSibling);
     if (Commands.#hasItems(rest)) li.appendChild(rest);
     parentLi.after(li);
     if (!Commands.#hasItems(list)) list.remove();
-    this.sel.placeCursor(li, false);
-    this.editor.commit();
-    return true;
   }
 
   /** 목록에 공백 말고 남은 내용이 있는지 (태그 사이 줄바꿈 글자는 내용이 아님) */
@@ -746,6 +924,27 @@ export class Commands {
     this.#selectPieces(pieces);
     this.editor.commit();
     return true;
+  }
+
+  // ───────────── 가로줄 ─────────────
+
+  /**
+   * 가로줄 삽입: 커서 블록 뒤(목록·인용·표·구조 안이면 insertBlockHTML 과 같은 기준의 바깥 뒤)에 넣고 뒤 문단 맨 앞으로 커서를 옮긴다.
+   * 뒤가 문단이 아니면(문서 끝·블록 등) 빈 문단을 만든다
+   */
+  insertHr() {
+    const hr = document.createElement('hr');
+    const target = this.sel.blockInsertTarget();
+    if (target) target.parentNode.insertBefore(hr, target.nextSibling);
+    else this.root.appendChild(hr);
+    let next = hr.nextElementSibling;
+    if (next?.tagName !== 'P') {
+      next = document.createElement('p');
+      next.appendChild(document.createElement('br'));
+      hr.after(next);
+    }
+    this.sel.placeCursor(next, false);
+    this.editor.commit();
   }
 
   // ───────────── 이미지 / 임의 HTML 삽입 ─────────────
@@ -852,6 +1051,7 @@ export class Commands {
     const host = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE ? range.commonAncestorContainer : range.commonAncestorContainer.parentNode;
     host.querySelectorAll?.('br').forEach((br) => { if (range.intersectsNode(br) && this.sel.textBlockOf(br)) brs.push(br); });
     brs.forEach((br) => { touched.add(this.sel.textBlockOf(br)); br.remove(); });
+    host.querySelectorAll?.('hr').forEach((hr) => { if (range.intersectsNode(hr)) hr.remove(); }); // 범위 안의 가로줄도
     range.collapse(true);
     // 비게 된 글 블록은 커서를 둘 수 있게 <br>
     touched.forEach((blk) => {
@@ -1009,7 +1209,7 @@ export class Commands {
 
   /** 블록 요소(문단·제목·목록·인용·표·블록 레이어)인지 */
   static #isBlockEl(el) {
-    return /^(P|H[1-6]|UL|OL|BLOCKQUOTE|TABLE|DIV|SECTION|ARTICLE|ASIDE|HEADER|FOOTER|NAV|DL|DT|DD|FIGURE|FIGCAPTION)$/.test(el.tagName);
+    return /^(P|H[1-6]|UL|OL|BLOCKQUOTE|TABLE|DIV|SECTION|ARTICLE|ASIDE|HEADER|FOOTER|NAV|DL|DT|DD|FIGURE|FIGCAPTION|HR)$/.test(el.tagName);
   }
 
   /** 조각 최상위의 연속된 인라인·텍스트 노드를 p 로 묶는다 (블록과 섞여 들어올 때) */

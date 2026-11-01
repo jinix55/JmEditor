@@ -103,7 +103,7 @@ export class GalleryCommands {
       gallery.insertBefore(t, gallery.firstChild);
     }
     t.setAttribute('contenteditable', 'true');
-    t.dataset.placeholder = '제목 (비워두면 표시되지 않음)';
+    t.dataset.placeholder = '제목 (비워두면 표시되지 않음) — 사진은 드래그로 순서 변경, 선택 후 교체';
     // 제목에서 Enter → 줄바꿈 대신 제목 확정(포커스 해제), 입력 시 변경 기록
     t.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); t.blur(); } });
     t.addEventListener('input', () => this.editor.history.pushDebounced());

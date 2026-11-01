@@ -108,6 +108,7 @@ export class JmEditor {
    *                      |color|bgColor (value: 색상 문자열, null 이면 해제)
    *                      |fontSize (value: '14px' 등, null 이면 해제)
    *                      |fontFamily (value: 허용 목록의 글꼴 이름, null 이면 해제. 목록 밖이면 무시)
+   *                      |hr (가로줄 삽입)|indent|outdent (들여쓰기·내어쓰기, 목록은 중첩·해제)|clearFormat (글자 서식 지우기)
    *                      |alignLeft|alignCenter|alignRight (블록 가로 정렬)
    *                      |valignTop|valignMiddle|valignBottom (표 셀 세로 정렬)
    *                      |format (value: 삽입할 HTML — 서식/템플릿. 내부에서 sanitize 후 블록 단위 삽입)
@@ -165,6 +166,10 @@ export class JmEditor {
       valignTop: () => this.table.setVAlign('top'),
       valignMiddle: () => this.table.setVAlign('middle'),
       valignBottom: () => this.table.setVAlign('bottom'),
+      hr: () => c.insertHr(),
+      indent: () => c.changeIndent(1),
+      outdent: () => c.changeIndent(-1),
+      clearFormat: () => c.clearFormat(),
       undo: () => this.history.undo(),
       redo: () => this.history.redo(),
       // 표
@@ -290,7 +295,7 @@ export class JmEditor {
     }
     const range = at && this.root.contains(at.startContainer) ? at : null;
     if (range) this.sel.setRange(range);
-    this.exec('image', { src, alt: file.name, split: !!range });
+    this.exec('image', { src, alt: '', split: !!range }); // 대체 글은 이미지 도구 막대에서 (파일명은 설명이 아니라 넣지 않음)
   }
 
   /** 현재 서식 상태 (툴바 활성화용) */
@@ -517,6 +522,34 @@ export class JmEditor {
   }
 
   /**
+   * 접힌 커서 바로 앞(뒤)이 가로줄이면 그 hr — 삭제 키는 선만 지운다 (브라우저 기본은 양쪽 글을 합치거나 글을 지우기도 한다).
+   * 화면에 없는 글자와 줄 끝 자리표시 br 은 건너뛰고, 표 칸·블록 편집 영역 밖으로는 나가지 않는다
+   * @param {boolean} forward Delete 면 true
+   * @returns {HTMLHRElement|null}
+   */
+  #adjacentHr(forward) {
+    const range = this.sel.getRange();
+    if (!range?.collapsed) return null;
+    const unseen = new RegExp(`[${ZWSP} \\t\\r\\n]`, 'g');
+    const step = forward ? 'nextSibling' : 'previousSibling';
+    const { startContainer: c, startOffset: at } = range;
+    let parent = c;
+    let sib;
+    if (c.nodeType === Node.TEXT_NODE) {
+      if ((forward ? c.data.slice(at) : c.data.slice(0, at)).replace(unseen, '')) return null;
+      parent = c.parentNode;
+      sib = c[step];
+    } else sib = c.childNodes[forward ? at : at - 1];
+    for (;;) {
+      while (sib && ((sib.nodeType === Node.TEXT_NODE && !sib.data.replace(unseen, '')) || (forward && sib.nodeName === 'BR' && !sib.nextSibling))) sib = sib[step];
+      if (sib) return sib.nodeName === 'HR' ? sib : null;
+      if (parent === this.root || !parent || /^(TD|TH)$/.test(parent.tagName) || parent.hasAttribute('contenteditable')) return null;
+      sib = parent[step];
+      parent = parent.parentNode;
+    }
+  }
+
+  /**
    * 커서가 블록 레이어(표·유튜브·갤러리 등)와 맞닿은 가장자리에서 삭제 키를 누른 경우를 처리한다.
    * 브라우저 기본은 레이어 경계에서 문단 글 전체나 레이어 자체를 지운다. 레이어 삭제는 블록 도구로만 하고,
    * 빈 문단은 반대쪽에 글 블록이 있을 때만 지운다 (블록 사이의 커서 둘 자리는 남김).
@@ -524,6 +557,8 @@ export class JmEditor {
    * @returns {boolean} 처리했으면(기본 동작을 막아야 하면) true
    */
   #guardLayerEdge(forward) {
+    const hr = this.#adjacentHr(forward);
+    if (hr) { hr.remove(); this.commit(); return true; }
     const block = this.#blockAtEdge(forward);
     if (!block || block.closest('[contenteditable="false"]')) return false; // 표 칸·배치 글 칸 안은 그 영역의 동작대로
     if (!this.sel.adjacentLayer(block, forward)) return false;
@@ -710,8 +745,14 @@ export class JmEditor {
     if (e.key === 'Escape' && this.table.selection) { this.table.clearSelection(); return; }
     // 표 셀 안에서 Tab → 셀 이동
     if (e.key === 'Tab' && this.table.handleTab(e.shiftKey)) { e.preventDefault(); return; }
+    // 목록 항목에서 Tab → 중첩, Shift+Tab → 해제 (목록·표 밖은 브라우저 기본)
+    if (e.key === 'Tab' && !mod && !this.composing && this.sel.getBlock()?.tagName === 'LI') {
+      e.preventDefault();
+      this.commands.changeIndent(e.shiftKey ? -1 : 1);
+      return;
+    }
 
-    if ((e.key === 'Backspace' || e.key === 'Delete') && !this.composing && this.#guardLayerEdge(e.key === 'Delete')) {
+    if ((e.key === 'Backspace' || e.key === 'Delete') && !e.defaultPrevented && !this.composing && this.#guardLayerEdge(e.key === 'Delete')) {
       e.preventDefault();
       return;
     }
@@ -869,7 +910,7 @@ export class JmEditor {
     wrap.appendChild(bar);
     this.gapBar = bar;
 
-    const isLayer = (el) => el && el.nodeType === 1 && el.getAttribute('contenteditable') === 'false';
+    const isLayer = (el) => el && el.nodeType === 1 && (el.getAttribute('contenteditable') === 'false' || el.tagName === 'HR'); // 가로줄 옆에도 커서를 둘 수 없다
     const onMove = (e) => {
       if (this.gapBar.contains(e.target)) return;
       const blocks = Array.from(this.root.children);
@@ -977,11 +1018,14 @@ export class JmEditor {
    * @returns {string}
    */
   static #dropEmptyInlines(html) {
-    const empty = new RegExp(`<(strong|em|u|s|span|a)(?:\\s[^>]*)?>${ZWSP}+</\\1>`, 'g');
-    let out = html;
-    let prev;
-    do { prev = out; out = out.replace(empty, ZWSP); } while (out !== prev); // 중첩은 안쪽부터: 지운 자리에 ZWSP 를 남겨 바깥도 걸리게
-    return out;
+    // 직렬화된 글에 정규식을 쓰면 속성값 안의 글자를 태그로 착각해 속성 경계를 깰 수 있으므로 DOM 으로 처리한다
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    const onlyZwsp = new RegExp(`^${ZWSP}+$`);
+    Array.from(tpl.content.querySelectorAll('strong, em, u, s, span, a')).reverse().forEach((el) => { // 중첩은 안쪽부터: 지운 자리에 ZWSP 를 남겨 바깥도 걸리게
+      if (onlyZwsp.test(el.textContent) && !el.querySelector('img, br, hr, picture, iframe, table')) el.replaceWith(ZWSP);
+    });
+    return tpl.innerHTML;
   }
 
   /** 저장용 HTML 에서 보관 속성을 href 로 되돌린다. 허용되지 않는 주소(javascript: 등)는 href 없이 둔다 */
@@ -1043,7 +1087,7 @@ export class JmEditor {
    */
   #isRootBlock(n) {
     // 구조 모드에서는 허용된 구조 태그(section·div·dl 등)도 루트 블록으로 인정 (p 로 감싸면 구조가 깨짐)
-    return /^(P|H[1-6]|UL|OL|BLOCKQUOTE|TABLE)$/.test(n.tagName) || this.sel.isStructureTag(n) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type);
+    return /^(P|H[1-6]|UL|OL|BLOCKQUOTE|TABLE|HR)$/.test(n.tagName) || this.sel.isStructureTag(n) || n.classList.contains(TABLE_LAYER_CLASS) || n.classList.contains(GALLERY_LAYER_CLASS) || n.classList.contains(EMBED_LAYER_CLASS) || n.classList.contains(BUTTONS_LAYER_CLASS) || n.classList.contains(SLIDER_LAYER_CLASS) || n.classList.contains(LAYOUT_LAYER_CLASS) || n.classList.contains(MAP_LAYER_CLASS) || ['gallery', 'youtube', 'buttons', 'slider', 'layout', 'map'].includes(n.dataset?.type);
   }
 
   /** 히스토리 복원 */

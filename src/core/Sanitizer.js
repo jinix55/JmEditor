@@ -21,6 +21,7 @@ const ALLOWED = {
   table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style', 'span'],
   tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
   span: ['style'],
+  hr: [], // 가로줄: 속성 없음 (#cleanElement 에서 바로 만든다)
 };
 
 /** style 속성에서 허용하는 CSS 속성과 값 검사 (글꼴·글자 크기·테두리·background 는 먼저 cleanLegacyDecl 이 처리) */
@@ -91,6 +92,8 @@ const SAFE_HREF = /^(https?:\/\/|mailto:|tel:|#|\/(?![/\\]))/i;
 const PLUGIN_TYPES = ['gallery', 'slider', 'buttons', 'youtube', 'layout', 'map'];
 /** 플러그인 블록 선택자 (div[data-type=…]) — 안의 요소는 블록 형식·런타임 몫이라 id 숨김에서 건드리지 않는다 */
 const PLUGIN_BLOCK_SELECTOR = PLUGIN_TYPES.map((t) => `div[data-type="${t}"]`).join(', ');
+/** 가로줄을 담을 수 없는 요소: 문단·제목·글자 서식 — 저장 HTML 을 다시 파싱하면 구조가 바뀌므로 hr 을 밖으로 꺼낸다 */
+const HR_SPLIT_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 's', 'span', 'a', 'small', 'sub', 'sup']);
 /** 편집·미리보기 화면에서 본문 id 를 보관하는 속성 (getHTML 이 id 로 되돌림) */
 export const HIDDEN_ID_ATTR = 'data-jm-id';
 /** 구조 모드에서 새로 허용한 태그가 가질 수 있는 속성 (class 는 따로) */
@@ -189,8 +192,28 @@ export class Sanitizer {
     });
     const wrap = document.createElement('div');
     wrap.appendChild(frag);
+    Sanitizer.#settleHrs(wrap);
     Sanitizer.dedupeIds(wrap);
     return wrap.innerHTML;
+  }
+
+  /**
+   * 가로줄 자리 잡기: 플러그인 블록 안이면 버리고, 문단·제목·글자 서식 안이면 그 요소를 hr 앞뒤로 나눠 밖으로 꺼낸다 (비게 된 쪽은 지움).
+   * 뒤의 hr 부터 처리해 옮기는 노드가 hr 사이 구간뿐이라 선형이다. 서버 settleHrs 와 같은 규칙
+   * @param {HTMLElement} root
+   */
+  static #settleHrs(root) {
+    Array.from(root.querySelectorAll('hr')).reverse().forEach((hr) => {
+      if (hr.closest(PLUGIN_BLOCK_SELECTOR)) { hr.remove(); return; }
+      while (HR_SPLIT_TAGS.has(hr.parentElement.localName)) {
+        const before = hr.parentElement;
+        const after = before.cloneNode(false);
+        while (hr.nextSibling) after.appendChild(hr.nextSibling);
+        before.after(hr, after);
+        if (!after.firstChild) after.remove();
+        if (!before.firstChild) before.remove();
+      }
+    });
   }
 
   /**
@@ -655,6 +678,9 @@ export class Sanitizer {
 
     // 모바일 이미지(picture): 구성·source 검사는 #cleanPicture (기본·구조 모드 모두)
     if (tag === 'picture') return Sanitizer.#cleanPicture(node);
+
+    // 가로줄은 속성을 두지 않는다 (구조 모드의 class·id·aria 도)
+    if (tag === 'hr') return document.createElement('hr');
 
     // 구조 모드 아이콘(<i class="ico …"></i>)은 em 으로 바꾸지 않는다
     if (tag === 'i') { const icon = Sanitizer.#iconI(node); if (icon) return icon; }

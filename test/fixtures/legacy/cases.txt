@@ -344,3 +344,43 @@
 > <img src="https://a.com/x.png">
 < <noscript><p>b</p></noscript>
 > <p>b</p>
+
+# ── 가로줄: 속성 없이 남고, 문단·제목·글자 서식 안이면 나눠서 밖으로 (플러그인 블록 안은 버림)
+< <p>a</p><hr><p>b</p>
+> <p>a</p><hr><p>b</p>
+< <hr class="x" id="y" style="color:red" size="2" noshade align="center" onclick="x()">
+> <hr>
+< <strong><hr></strong>
+> <hr>
+< <strong>a<hr>b</strong>
+> <strong>a</strong><hr><strong>b</strong>
+< <span style="color:red">a<hr>b</span>
+> <span style="color: red">a</span><hr><span style="color: red">b</span>
+< <h2>a<hr>b</h2>
+> <h2>a</h2><hr><h2>b</h2>
+< <ul><li>a<hr>b</li></ul><blockquote>c<hr></blockquote><table><tr><td>d<hr>e</td></tr></table>
+> <ul><li>a<hr>b</li></ul><blockquote>c<hr></blockquote><table><tbody><tr><td>d<hr>e</td></tr></tbody></table>
+< <div data-type="buttons" data-align="left"><a href="#x" data-role="button" data-style="primary">a<hr>b</a></div>
+> <div data-type="buttons" data-align="left"><a href="#x" data-role="button" data-style="primary">ab</a></div>
+
+# ── 들여쓰기: p·제목·li·blockquote 의 margin-left(0~400px)·text-indent(-400~400px)
+< <p style="margin-left:40px;text-indent:-20px">a</p>
+> <p style="margin-left: 40px; text-indent: -20px">a</p>
+< <p style="margin-left:36.0pt;text-indent:-18.0pt">a</p>
+> <p style="margin-left: 48px; text-indent: -24px">a</p>
+< <h3 style="margin-left:10mm">a</h3>
+> <h3 style="margin-left: 38px">a</h3>
+< <ul><li style="margin-left:1cm;text-indent:10px">a</li></ul>
+> <ul><li style="margin-left: 38px; text-indent: 10px">a</li></ul>
+< <blockquote style="MARGIN-LEFT:40PX;text-indent:8.4px">a</blockquote>
+> <blockquote style="margin-left: 40px; text-indent: 8px">a</blockquote>
+< <p style="margin-left:400px;text-indent:-400px">a</p>
+> <p style="margin-left: 400px; text-indent: -400px">a</p>
+< <p style="margin-left:0;text-indent:0cm">a</p>
+> <p style="margin-left: 0px; text-indent: 0px">a</p>
+< <p style="margin-left:-10px">a</p><p style="margin-left:5%">b</p><p style="margin-left:401px">c</p><p style="text-indent:401px">d</p><p style="text-indent:-401px">e</p><p style="text-indent:2em">f</p><p style="margin-left:1e2px">g</p>
+> <p>a</p><p>b</p><p>c</p><p>d</p><p>e</p><p>f</p><p>g</p>
+< <span style="margin-left:40px;text-indent:10px">a</span><table style="margin-left:40px;text-indent:1px"><tr><td style="margin-left:40px;text-indent:1px">b</td></tr></table>
+> a<table><tbody><tr><td>b</td></tr></tbody></table>
+< <p style="mso-margin-left-alt:40px;mso-char-indent-count:2;margin-right:10px">a</p>
+> <p>a</p>

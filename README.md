@@ -8,8 +8,11 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 
 - 굵게 / 기울임 / 밑줄 / 취소선, 글자 크기(10~48px), 글꼴(설정 목록), 글자색 / 배경색 (견본 + HSV 팔레트 + HEX 입력 + 스포이드)
 - 제목(본문·제목 1~3 셀렉트), 인용(세로선·박스·따옴표 — 인용 버튼 목록에서 선택·해제), 가로 정렬(왼쪽/가운데/오른쪽)·세로 정렬(표 셀) 드롭다운, 순서 / 비순서 목록(● ○ ■, 1. 01. a. A. i. I. 가.), 링크, 버튼 그룹 블록(서식 — 이름·주소 입력으로 추가, 모양(채움·외곽선·연한색)·색(테마 7색 또는 직접 선택 — 고른 색 하나로 테두리·오버·연한 배경·글자색 자동)·크기·아이콘 16종(글자 앞/뒤), 그립 드래그로 순서, 정렬)
+- 가로줄(`<hr>`) — 툴바 버튼으로 커서 블록 뒤에 넣고 다음 문단으로 커서 이동. Backspace·Delete 는 선만 지웁니다
+- 들여쓰기·내어쓰기 — 문단·제목·인용은 왼쪽 여백 40px 단위(최대 200px), 목록은 중첩·해제(Tab·Shift+Tab)
+- 서식 지우기 — 선택 범위(커서면 그 블록)의 굵게·기울임·밑줄·취소선·위/아래 첨자·글자색·배경색·크기·글꼴·자간·줄 간격을 지웁니다. 링크·이미지·표·제목은 그대로
 - 이미지 삽입 (버튼, 드래그 앤 드롭, 붙여넣기)
-- 글 감싸기 — 본문 이미지를 클릭하면 도구 막대가 뜹니다. 왼쪽·오른쪽 감싸기(이미지 옆으로 글이 흐르고 아래로 이어짐), 폭 30·40·50·100% 또는 모서리 손잡이로 본문 폭 대비 % 조절, 교체·삭제, ⠿ 로 다른 문단 앞뒤로 이동. 휴대폰 폭(640px 이하)에서는 감싸기를 풀고 꽉 차게
+- 글 감싸기 — 본문 이미지를 클릭하면 도구 막대가 뜹니다. 왼쪽·오른쪽 감싸기(이미지 옆으로 글이 흐르고 아래로 이어짐), 폭 30·40·50·100% 또는 모서리 손잡이로 본문 폭 대비 % 조절, 교체·삭제, 대체 글(alt) 입력, ⠿ 로 다른 문단 앞뒤로 이동. 휴대폰 폭(640px 이하)에서는 감싸기를 풀고 꽉 차게
 - 이미지 + 글 배치 블록(서식) — 이미지 | 글(2칸), 이미지 1장 + 글(4분할: 이미지 옆 작은 칸 + 반대쪽 줄 전체), 대각선 이미지 2장 + 글, 이미지 2장 나란히 + 각각 글. 헤더 아이콘으로 이미지 위치를 바꾸면 글은 같은 역할 칸으로 따라가고, 가운데 경계를 끌어 좌우 폭(20~80%) 조절. 이미지 칸은 클릭·파일 놓기로 넣고 교체·삭제. 휴대폰 폭에서는 세로로 쌓임
 - 이미지 슬라이드 — 이미지가 자동으로 넘어가는 블록(서식). 간격(수동/2~8초)·비율·인디케이터(점/숫자/막대/없음, 하단 좌/중/우)·폭·정렬, 썸네일로 선택·순서 변경. 뷰어에는 `slider-runtime.js` 필요
 - 유튜브 — 주소를 넣으면 16:9 영상 블록이 들어갑니다. 폭(100 / 75 / 50%)과 정렬 선택, ⠿ 핸들로 이동
@@ -206,7 +209,7 @@ api: {
 
 ## 저장되는 HTML
 
-허용 태그는 p, br, strong, em, u, s, h1~h6, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`(모양 `data-style`, 테마 색 `data-color`, 직접 색 `style="--jm-btn: #rrggbb"`+`data-tone`, 아이콘 `data-icon`·`data-icon-pos` — 테마 실제 색은 `:root { --jm-btn-green: … }` 처럼 사이트에서 바꿀 수 있음), 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]`, 카카오 지도용 `div[data-type="map"]`(속성 `data-timestamp`·`data-key`·`data-height`·`data-title` 만, 안의 내용은 버림) 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100), `loading`(lazy·eager)만 더 남고, 모바일 이미지용 `picture > source + img` 도 남습니다(아래 「퍼블리싱 구조 보존」 참고). 인용은 `blockquote` 기본(세로선)에 `data-style="box"`(박스)·`data-style="quote"`(글 처음·끝에 따옴표)가 있습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 만 남고 값 형식도 검사합니다.
+허용 태그는 p, br, hr(속성 없음), strong, em, u, s, h1~h6, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`(모양 `data-style`, 테마 색 `data-color`, 직접 색 `style="--jm-btn: #rrggbb"`+`data-tone`, 아이콘 `data-icon`·`data-icon-pos` — 테마 실제 색은 `:root { --jm-btn-green: … }` 처럼 사이트에서 바꿀 수 있음), 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]`, 카카오 지도용 `div[data-type="map"]`(속성 `data-timestamp`·`data-key`·`data-height`·`data-title` 만, 안의 내용은 버림) 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100), `loading`(lazy·eager)만 더 남고, 모바일 이미지용 `picture > source + img` 도 남습니다(아래 「퍼블리싱 구조 보존」 참고). 인용은 `blockquote` 기본(세로선)에 `data-style="box"`(박스)·`data-style="quote"`(글 처음·끝에 따옴표)가 있습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 과 p·h1~h6·li·blockquote 의 `margin-left`·`text-indent` 만 남고 값 형식도 검사합니다.
 
 표는 이렇게 저장됩니다. 열 너비는 `colgroup`, 행 높이는 `tr`, 병합은 `colspan` / `rowspan`, 테두리 숨김은 `data-border="0"` 입니다.
 
@@ -267,6 +270,9 @@ initSliders(document.querySelector('.jm-content'));
 | `line-height` | 단위 없는 수 0.5~5, 50~500%, px·pt → px(8~200px). `normal` 등 그 밖은 지움 |
 | `letter-spacing` | px·pt → px(소수 둘째 자리, -10~20px), em(-1~2em). `normal`·`0` 등 그 밖은 지움 |
 | `font-family` | 허용 목록의 첫 이름만 `font-family: "맑은 고딕"` 으로. 없으면 지움 |
+| `hr` | 속성 없이 유지. 문단·제목·글자 서식 안이면 그 요소를 나눠 밖으로 꺼냄 (`<strong>a<hr>b</strong>` → `<strong>a</strong><hr><strong>b</strong>`). 플러그인 블록 안은 지움 |
+| p·h1~h6·li·blockquote 의 `margin-left` | px·pt·mm·cm → 정수 px, 0~400px 만. 음수·`%`·`em`·`auto` 는 지움 |
+| p·h1~h6·li·blockquote 의 `text-indent` | px·pt·mm·cm → 정수 px, -400~400px 만 (음수는 내어쓰기). `%`·`em` 은 지움 |
 | `mso-*` 등 그 밖의 속성 | 지움 |
 
 엑셀·파워포인트는 표·글과 함께 그림 미리보기도 클립보드에 넣으므로, `text/html`·`text/plain` 이 있으면 그림은 무시하고 파일만 있을 때 이미지로 넣습니다. 오피스 문서를 붙여 넣으면 문서 머리 `<style>` 의 class 규칙(`.xl65{…}`)을 표 칸·`font` 의 `style` 로 옮겨 테두리·배경·정렬을 살립니다 (붙여넣기 전용, 칸에 직접 쓴 값 우선, 값 검사는 정제가 그대로 함). `td{…}` 같은 태그 규칙과 표 밖 문단 규칙은 옮기지 않습니다.
@@ -381,6 +387,8 @@ window.JmEditorConfig = {
 | 삭제 (이미지) | picture 통째로 삭제 |
 
 **링크**: href 가 `#`·`tel:`·`mailto:` 로 시작하면 `target`·`rel` 을 붙이지 않고(들어온 target 도 지움), 그 밖(`http(s)://`, `/…`)은 `target="_blank" rel="noopener noreferrer"` 가 붙습니다. 버튼 링크도 같습니다.
+
+**대체 글**: 이미지 도구 막대의 「대체 글」 칸에서 `alt` 를 고칩니다(`picture` 의 img 포함). **달라진 점** — 파일로 넣거나 교체한 본문 이미지의 `alt` 에 파일명을 넣지 않고 빈 값으로 둡니다. 갤러리·슬라이드·배치 블록 이미지는 지금처럼 파일명입니다.
 
 **이미지 주소**: `src`·`srcset` 은 `http(s)://`, `/` 로 시작하는 내부 경로, 이미지 `data:` 만 남습니다. 프로토콜 상대 주소(`//cdn…`)·상대 경로(`a.png`)는 지워지니 `https://` 를 붙여 주세요.
 
