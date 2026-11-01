@@ -7,7 +7,7 @@
  *   const editor = new JmEditor(el, { onChange: html => ..., uploadImage: file => Promise<url> });
  *   editor.exec('bold');  editor.getHTML();  editor.setHTML(html);  editor.destroy();
  */
-import { SelectionUtil } from './SelectionUtil.js';
+import { SelectionUtil, hasInlineContent } from './SelectionUtil.js';
 import { Commands } from './Commands.js';
 import { TableCommands, TABLE_LAYER_CLASS } from '../plugins/table/TableCommands.js';
 import { ContextMenu } from '../ui/ContextMenu.js';
@@ -20,6 +20,7 @@ import { MapCommands, MAP_LAYER_CLASS } from '../plugins/map/MapCommands.js';
 import { isRoughmapCode } from '../plugins/map/map-runtime.js';
 import { ImageCommands } from '../plugins/image/ImageCommands.js';
 import { History } from './History.js';
+import { FindReplace } from './FindReplace.js';
 import { BlockDrag } from './BlockDrag.js';
 import { Sanitizer, HIDDEN_ID_ATTR } from './Sanitizer.js';
 import { makeStructurePolicy, INLINE_STRUCTURE_TAGS } from './structure-policy.js';
@@ -57,6 +58,7 @@ export class JmEditor {
    * @param {string} [options.ariaLabel] 편집 영역 aria-label (없으면 placeholder, 그것도 없으면 '본문 편집')
    * @param {object} [options.structure] 퍼블 구조 보존 정책 (window.JmEditorConfig.structure 보다 우선, core/structure-policy.js)
    * @param {{families?: string[]}} [options.font] 글꼴 허용 목록 (window.JmEditorConfig.font 보다 우선, core/font-policy.js)
+   * @param {(replace: boolean) => void} [options.onFindShortcut] 편집 영역의 Ctrl/Cmd+F(false)·H(true) 처리. 없으면 브라우저 기본
    * @param {(x: number, y: number, cb: (color: string|null) => void) => void} [options.pickColor]
    *        색상 선택 UI 를 띄우는 콜백 (표 셀/행 배경색 메뉴에서 사용). 래퍼가 주입한다.
    */
@@ -92,6 +94,7 @@ export class JmEditor {
     this.map = new MapCommands(this);       // 카카오 지도(퍼가기) 블록
     this.image = new ImageCommands(this, resolveConfig('image', options.image));   // 본문 이미지 글 감싸기·크기 조절
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
+    this.find = new FindReplace(this); // 찾기·바꾸기
 
     this.#ensureBlock();
     this.#bind();
@@ -108,6 +111,7 @@ export class JmEditor {
    *                      |color|bgColor (value: 색상 문자열, null 이면 해제)
    *                      |fontSize (value: '14px' 등, null 이면 해제)
    *                      |fontFamily (value: 허용 목록의 글꼴 이름, null 이면 해제. 목록 밖이면 무시)
+   *                      |lineHeight (value: '1.5' 등, null 이면 해제. p·h1~h6·li·blockquote·표 칸 등 글 블록에 적용)|sub|sup (위·아래 첨자, 서로 배타)
    *                      |hr (가로줄 삽입)|indent|outdent (들여쓰기·내어쓰기, 목록은 중첩·해제)|clearFormat (글자 서식 지우기)
    *                      |alignLeft|alignCenter|alignRight (블록 가로 정렬)
    *                      |valignTop|valignMiddle|valignBottom (표 셀 세로 정렬)
@@ -119,8 +123,9 @@ export class JmEditor {
    *                      |map (value: 카카오맵 퍼가기 코드 — 없으면 빈 지도 블록. 코드가 틀리면 false)
    *                      |layout (value: 'side'|'one'|'diagonal'|'pair' 또는 {preset, variant} — 이미지+글 배치 블록 삽입)
    * @param {*} [value] link 의 url, image 의 {src, alt}, table 의 {rows, cols, header}
+   * @param {{newWindow?: boolean}} [opts] link 의 새 창 여부 (생략하면 주소 종류에 따른 기본 규칙)
    */
-  exec(name, value) {
+  exec(name, value, opts) {
     this.root.focus();
     this.sel.restore();
     const c = this.commands;
@@ -129,6 +134,9 @@ export class JmEditor {
       italic: () => c.toggleInline('em'),
       underline: () => c.toggleInline('u'),
       strike: () => c.toggleInline('s'),
+      sub: () => c.toggleScript('sub'),
+      sup: () => c.toggleScript('sup'),
+      lineHeight: () => c.setLineHeight(value ?? null),
       h1: () => c.setBlock('h1'),
       h2: () => c.setBlock('h2'),
       h3: () => c.setBlock('h3'),
@@ -142,7 +150,7 @@ export class JmEditor {
       quote: () => (value === undefined ? c.setBlock('blockquote') : c.setQuote(value)),
       ul: () => c.toggleList('ul', value),
       ol: () => c.toggleList('ol', value),
-      link: () => c.setLink(value),
+      link: () => c.setLink(value, opts),
       unlink: () => c.setLink(null),
       image: () => c.insertImage(value?.src, value?.alt, value?.split),
       format: () => c.insertBlockHTML(Sanitizer.clean(value || '', this.structure, this.fontFamilies)),
@@ -245,12 +253,12 @@ export class JmEditor {
   }
 
   /**
-   * 표만 있는 문서면 뒤에 빈 문단을 둔다 (표 레이어는 편집 불가라 터치에서 커서를 둘 곳이 없음).
+   * 표만 있는 문서이거나 맨 끝이 가로줄이면 뒤에 빈 문단을 둔다 (표 레이어는 편집 불가라 터치에서, 가로줄 뒤는 어디서나 커서를 둘 곳이 없음).
    * 표시(data-jm-auto)를 달아 비어 있으면 저장에 넣지 않는다 — 불러오기만 해도 내용이 바뀌지 않게
    */
   #ensureCaretAfterTables() {
     const kids = Array.from(this.root.children);
-    if (!kids.length || !kids.every((el) => el.classList.contains(TABLE_LAYER_CLASS))) return;
+    if (!kids.length || !(kids.at(-1).tagName === 'HR' || kids.every((el) => el.classList.contains(TABLE_LAYER_CLASS)))) return;
     const p = document.createElement('p');
     p.setAttribute(AUTO_ATTR, '1');
     p.appendChild(document.createElement('br'));
@@ -298,6 +306,38 @@ export class JmEditor {
     this.exec('image', { src, alt: '', split: !!range }); // 대체 글은 이미지 도구 막대에서 (파일명은 설명이 아니라 넣지 않음)
   }
 
+  /**
+   * 글자 수: 공백 포함, ZWSP·블록 사이 줄바꿈·플러그인 헤더 글자 제외, 표·제목 포함 (저장 HTML 기준, 이모지 하나는 1)
+   * @returns {number}
+   */
+  getTextLength() {
+    return JmEditor.countText(this.getHTML());
+  }
+
+  /**
+   * HTML 의 글자 수. 소스의 줄바꿈과 블록 사이에만 있는 공백은 화면 글자가 아니라 세지 않는다
+   * @param {string} html 저장 HTML 또는 정제한 소스
+   * @returns {number}
+   */
+  static countText(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    const inGaps = /^(UL|OL|TABLE|THEAD|TBODY|TFOOT|TR|COLGROUP|DL)$/;
+    const isBlock = (n) => n?.nodeType === Node.ELEMENT_NODE && SelectionUtil.isBlockTag(n);
+    let total = 0;
+    const walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_TEXT);
+    for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+      const text = t.data.replace(/[\u200B\r\n]/g, '');
+      if (!text) continue;
+      const parent = t.parentNode;
+      // 공백뿐인 글이 블록 사이나 목록·표 구조에 있으면 내용이 아니다
+      const atEdge = isBlock(parent) && (!t.previousSibling || !t.nextSibling); // 블록 안 가장자리의 소스 공백
+      if (!text.trim() && (parent === tpl.content || inGaps.test(parent.nodeName) || atEdge || isBlock(t.previousSibling) || isBlock(t.nextSibling))) continue;
+      total += Array.from(text).length; // 코드 포인트 단위 (이모지 하나는 1)
+    }
+    return total;
+  }
+
   /** 현재 서식 상태 (툴바 활성화용) */
   getState() {
     return { ...this.commands.getState(), ...this.table.getState() };
@@ -322,6 +362,7 @@ export class JmEditor {
     this.#neutralizeLinks();
     this.#neutralizeIds();
     this.#ensureBlock();
+    if (this.root.lastElementChild?.tagName === 'HR') this.#ensureCaretAfterTables(); // 끝 문단을 지워 가로줄이 맨 끝이 된 경우
     this.history.push();
     this.#emitChange();
     this.options.onSelectionChange?.();
@@ -331,6 +372,7 @@ export class JmEditor {
   destroy() {
     this.#unbind?.();
     this.history.cancel();
+    this.find.destroy();
     this.root.removeAttribute('contenteditable');
     this.root.removeAttribute('role');
     this.root.removeAttribute('aria-multiline');
@@ -714,6 +756,8 @@ export class JmEditor {
     if (mod) {
       if (e.target.closest?.('input, textarea, select')) return; // 블록 헤더 입력란: 실행 취소·전체 선택 등은 브라우저 기본 (문서 명령으로 가지 않게)
       const key = e.key.toLowerCase();
+      // 찾기·바꾸기: 입력줄을 띄우는 쪽(툴바)이 있을 때만 브라우저 기능을 가로챈다
+      if ((key === 'f' || key === 'h') && !e.shiftKey && !e.altKey && this.options.onFindShortcut) { e.preventDefault(); this.options.onFindShortcut(key === 'h'); return; }
       const map = { b: 'bold', i: 'italic', u: 'underline', z: e.shiftKey ? 'redo' : 'undo', y: 'redo' };
       if (map[key]) { e.preventDefault(); this.exec(map[key]); return; }
       // 전체 선택: 블록 안 편집 영역(배치 글 칸·표 셀·제목 등)이면 그 영역만 (브라우저는 바깥 에디터 전체를 선택해 블록까지 지워짐)
@@ -1013,7 +1057,7 @@ export class JmEditor {
 
   /**
    * 편집 HTML 에서 커서 자리용 ZWSP 만 든 인라인 서식 태그를 지운다 (굵게 토글 후 입력 없이 이동하면 남는 태그).
-   * 일부러 비어 있는 태그(아이콘 i 가 바뀐 em 등)는 ZWSP 가 없으므로 그대로 둔다
+   * 일부러 비어 있는 태그(아이콘 i 가 바뀐 em 등)는 ZWSP 가 없으므로 그대로 두고, 아이콘처럼 내용 요소가 든 태그도 둔다 (자손이 빈 글자 서식뿐일 때만 지움)
    * @param {string} html ZWSP 를 빼기 전 HTML
    * @returns {string}
    */
@@ -1022,8 +1066,8 @@ export class JmEditor {
     const tpl = document.createElement('template');
     tpl.innerHTML = html;
     const onlyZwsp = new RegExp(`^${ZWSP}+$`);
-    Array.from(tpl.content.querySelectorAll('strong, em, u, s, span, a')).reverse().forEach((el) => { // 중첩은 안쪽부터: 지운 자리에 ZWSP 를 남겨 바깥도 걸리게
-      if (onlyZwsp.test(el.textContent) && !el.querySelector('img, br, hr, picture, iframe, table')) el.replaceWith(ZWSP);
+    Array.from(tpl.content.querySelectorAll('strong, em, u, s, sub, sup, span, a')).reverse().forEach((el) => { // 중첩은 안쪽부터: 지운 자리에 ZWSP 를 남겨 바깥도 걸리게
+      if (onlyZwsp.test(el.textContent) && !hasInlineContent(el)) el.replaceWith(ZWSP);
     });
     return tpl.innerHTML;
   }
@@ -1042,7 +1086,7 @@ export class JmEditor {
 
   /**
    * 루트가 비었거나 루트 직속에 텍스트/인라인만 있으면 p 로 감싼다 (노드마다 문단, 공백 글은 지움 — 예전 동작).
-   * 구조 모드에서 이어진 비블록 구간에 small·sub·sup(INLINE_STRUCTURE_TAGS)가 있으면 그 구간을 한 문단으로 묶는다
+   * 이어진 비블록 구간에 small·sub·sup(INLINE_STRUCTURE_TAGS)가 있으면 그 구간을 한 문단으로 묶는다
    * (「<sup>1</sup> 각주」가 두 문단으로 갈라지지 않게). 묶을 때 구간 앞뒤 공백 글만 지우고 안의 공백은 둔다.
    */
   #ensureBlock() {
@@ -1069,7 +1113,7 @@ export class JmEditor {
       nodes.forEach((x) => p.appendChild(x));
     };
     runs.forEach((run) => {
-      if (this.structure && run.some(hasInlineStructure)) {
+      if (run.some(hasInlineStructure)) {
         let a = 0;
         let b = run.length;
         while (a < b && blank(run[a])) run[a++].remove();
@@ -1193,6 +1237,7 @@ export class JmEditor {
 
   #emitChange() {
     this.#updateEmpty();
+    this.find.refresh(); // 찾기 중이면 일치를 다시 센다
     this.options.onChange?.(this.getHTML());
   }
 

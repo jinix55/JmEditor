@@ -7,10 +7,14 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 ## 기능
 
 - 굵게 / 기울임 / 밑줄 / 취소선, 글자 크기(10~48px), 글꼴(설정 목록), 글자색 / 배경색 (견본 + HSV 팔레트 + HEX 입력 + 스포이드)
-- 제목(본문·제목 1~3 셀렉트), 인용(세로선·박스·따옴표 — 인용 버튼 목록에서 선택·해제), 가로 정렬(왼쪽/가운데/오른쪽)·세로 정렬(표 셀) 드롭다운, 순서 / 비순서 목록(● ○ ■, 1. 01. a. A. i. I. 가.), 링크, 버튼 그룹 블록(서식 — 이름·주소 입력으로 추가, 모양(채움·외곽선·연한색)·색(테마 7색 또는 직접 선택 — 고른 색 하나로 테두리·오버·연한 배경·글자색 자동)·크기·아이콘 16종(글자 앞/뒤), 그립 드래그로 순서, 정렬)
+- 제목(본문·제목 1~3 셀렉트), 인용(세로선·박스·따옴표 — 인용 버튼 목록에서 선택·해제), 가로 정렬(왼쪽/가운데/오른쪽)·세로 정렬(표 셀) 드롭다운, 순서 / 비순서 목록(● ○ ■, 1. 01. a. A. i. I. 가.), 링크(입력줄의 「새 창」 체크 — 기본은 외부 주소·/ 경로 켬, #·tel:·mailto: 는 새 창 없음), 버튼 그룹 블록(서식 — 이름·주소 입력으로 추가, 모양(채움·외곽선·연한색)·색(테마 7색 또는 직접 선택 — 고른 색 하나로 테두리·오버·연한 배경·글자색 자동)·크기·아이콘 16종(글자 앞/뒤), 그립 드래그로 순서, 정렬)
 - 가로줄(`<hr>`) — 툴바 버튼으로 커서 블록 뒤에 넣고 다음 문단으로 커서 이동. Backspace·Delete 는 선만 지웁니다
-- 들여쓰기·내어쓰기 — 문단·제목·인용은 왼쪽 여백 40px 단위(최대 200px), 목록은 중첩·해제(Tab·Shift+Tab)
-- 서식 지우기 — 선택 범위(커서면 그 블록)의 굵게·기울임·밑줄·취소선·위/아래 첨자·글자색·배경색·크기·글꼴·자간·줄 간격을 지웁니다. 링크·이미지·표·제목은 그대로
+- 위·아래 첨자 — 툴바 버튼(서로 배타), 커서면 이후 입력에 적용
+- 줄 간격 — 툴바 선택(1·1.2·1.5·1.8·2, 지정 안 했을 때의 실제 값 표시), 선택한 p·제목·li·인용(직접 글이 있는 표 칸, 구조 모드의 글만 있는 div 포함) 전체에, 블록 안 span 의 줄 간격은 지웁니다. 지정 안 했을 때의 값을 고르면 해제
+- 찾기·바꾸기 — 툴바 버튼, 편집 영역에서 Ctrl/Cmd+F·H. 본문·표 칸·제목·갤러리/슬라이드 제목을 글자 그대로 찾고(대소문자 선택, 태그에 걸친 글자 포함) 바꾸면 첫 글자의 서식을 따릅니다. 모두 바꾸기는 되돌리기 한 번. 일치 표시는 1만 개까지이고(「N개 이상」) 모두 바꾸기는 전부 바꿉니다. 빈 말로 바꿔 내용이 전혀 없어진 버튼은 그 항목을 지웁니다. 강조는 CSS Custom Highlight API 라 저장 HTML 에 흔적이 없고, 미지원 브라우저는 현재 일치만 선택 표시. HTML·미리보기 모드에서는 꺼집니다
+- 글자 수 — 옵션 `charCount` ([편집 화면](#편집-화면))
+- 들여쓰기·내어쓰기 — (표 칸에서는 버튼이 꺼지고 칸 안 목록에서만 켜집니다) 문단·제목·인용은 왼쪽 여백 40px 단위(최대 200px), 목록은 중첩·해제(Tab·Shift+Tab)
+- 서식 지우기 — 선택 범위(커서면 그 블록)의 굵게·기울임·밑줄·취소선·위/아래 첨자·글자색·배경색·크기·글꼴·자간과 글자 단위(span) 줄 간격을 지웁니다. 블록의 줄 간격·정렬·들여쓰기와 링크·이미지·표·제목은 그대로
 - 이미지 삽입 (버튼, 드래그 앤 드롭, 붙여넣기)
 - 글 감싸기 — 본문 이미지를 클릭하면 도구 막대가 뜹니다. 왼쪽·오른쪽 감싸기(이미지 옆으로 글이 흐르고 아래로 이어짐), 폭 30·40·50·100% 또는 모서리 손잡이로 본문 폭 대비 % 조절, 교체·삭제, 대체 글(alt) 입력, ⠿ 로 다른 문단 앞뒤로 이동. 휴대폰 폭(640px 이하)에서는 감싸기를 풀고 꽉 차게
 - 이미지 + 글 배치 블록(서식) — 이미지 | 글(2칸), 이미지 1장 + 글(4분할: 이미지 옆 작은 칸 + 반대쪽 줄 전체), 대각선 이미지 2장 + 글, 이미지 2장 나란히 + 각각 글. 헤더 아이콘으로 이미지 위치를 바꾸면 글은 같은 역할 칸으로 따라가고, 가운데 경계를 끌어 좌우 폭(20~80%) 조절. 이미지 칸은 클릭·파일 놓기로 넣고 교체·삭제. 휴대폰 폭에서는 세로로 쌓임
@@ -75,6 +79,17 @@ ES Module 은 `…@v0.0.5/dist/jm-editor.esm.js` 를 import 합니다. 설정은
 | `onLoaded(record)` | 조회 완료 |
 | `onSaved(record)` | 저장 완료 |
 | `onError(error)` | 조회(`contentId` 자동 조회·`load()`) 실패. 없으면 `notify` 로 안내하고, `load()` 는 `undefined` 를 돌려줍니다 |
+
+글자 수 옵션:
+
+| 옵션 | 설명 |
+|---|---|
+| `charCount: true` | 편집 영역 아래 글자 수 표시 (기본 꺼짐) |
+| `charCount: { max: 1000 }` | 위 + 상한. 넘으면 경고 색만 바뀌고 입력은 막지 않습니다 |
+
+공백을 포함하고, ZWSP·블록 사이 줄바꿈·플러그인 헤더 글자는 뺍니다. 표·제목 글자는 포함합니다. 이모지 하나는 1자(코드 포인트)입니다. HTML 모드에서는 소스를 정제한 결과로 셉니다. 값은 `editor.getTextLength()` 로도 읽습니다.
+
+링크 새 창은 `editor.editor.exec('link', url, { newWindow: false })` 로도 고릅니다. 생략하면 주소 종류에 따른 기본 규칙입니다.
 
 `destroy()` 는 툴바와 함께 편집 영역도 제거하므로 내용이 필요하면 먼저 `getHTML()` 로 받으세요.
 
@@ -177,7 +192,7 @@ const editorRef = useRef(null);
 
 ### 소스로 쓰기 / 직접 빌드
 
-`src/` 를 그대로 서빙해 `src/ui/JmToolbarEditor.js` 를 import 해도 됩니다(JS 34개·CSS 1개). 배포본을 다시 만들려면 `npm install && npm run build` (esbuild).
+`src/` 를 그대로 서빙해 `src/ui/JmToolbarEditor.js` 를 import 해도 됩니다(JS 36개·CSS 1개). 배포본을 다시 만들려면 `npm install && npm run build` (esbuild).
 
 ## API 규약
 
@@ -209,7 +224,7 @@ api: {
 
 ## 저장되는 HTML
 
-허용 태그는 p, br, hr(속성 없음), strong, em, u, s, h1~h6, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`(모양 `data-style`, 테마 색 `data-color`, 직접 색 `style="--jm-btn: #rrggbb"`+`data-tone`, 아이콘 `data-icon`·`data-icon-pos` — 테마 실제 색은 `:root { --jm-btn-green: … }` 처럼 사이트에서 바꿀 수 있음), 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]`, 카카오 지도용 `div[data-type="map"]`(속성 `data-timestamp`·`data-key`·`data-height`·`data-title` 만, 안의 내용은 버림) 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100), `loading`(lazy·eager)만 더 남고, 모바일 이미지용 `picture > source + img` 도 남습니다(아래 「퍼블리싱 구조 보존」 참고). 인용은 `blockquote` 기본(세로선)에 `data-style="box"`(박스)·`data-style="quote"`(글 처음·끝에 따옴표)가 있습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 과 p·h1~h6·li·blockquote 의 `margin-left`·`text-indent` 만 남고 값 형식도 검사합니다.
+허용 태그는 p, br, hr(속성 없음), strong, em, u, s, sub, sup, h1~h6, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`(모양 `data-style`, 테마 색 `data-color`, 직접 색 `style="--jm-btn: #rrggbb"`+`data-tone`, 아이콘 `data-icon`·`data-icon-pos` — 테마 실제 색은 `:root { --jm-btn-green: … }` 처럼 사이트에서 바꿀 수 있음), 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]`, 카카오 지도용 `div[data-type="map"]`(속성 `data-timestamp`·`data-key`·`data-height`·`data-title` 만, 안의 내용은 버림) 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100), `loading`(lazy·eager)만 더 남고, 모바일 이미지용 `picture > source + img` 도 남습니다(아래 「퍼블리싱 구조 보존」 참고). 인용은 `blockquote` 기본(세로선)에 `data-style="box"`(박스)·`data-style="quote"`(글 처음·끝에 따옴표)가 있습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 과 p·h1~h6·li·blockquote 의 `margin-left`·`text-indent`, `line-height`(단위 없는 수 0.5~5, 50~500%, px 8~200) 만 남고 값 형식도 검사합니다. 링크의 `target` 은 `_self`(같은 창, rel 없음)만 그대로 두고 그 밖은 `_blank` + `rel="noopener noreferrer"`, `#`·`tel:`·`mailto:` 는 target·rel 을 지웁니다. 문단·제목·글자 서식 안의 hr 은 그 요소를 나눠 밖으로 꺼내는데, 나눌 조상이 8단계를 넘거나 한 입력에서 복제가 1만 개를 넘으면 hr 만 버립니다(글은 유지).
 
 표는 이렇게 저장됩니다. 열 너비는 `colgroup`, 행 높이는 `tr`, 병합은 `colspan` / `rowspan`, 테두리 숨김은 `data-border="0"` 입니다.
 

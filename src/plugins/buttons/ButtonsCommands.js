@@ -385,6 +385,20 @@ export class ButtonsCommands {
     this.editor.commit();
   }
 
+  /**
+   * 버튼 하나 지우기 (기록·커서 이동 없음 — 찾기·바꾸기가 묶어서 기록한다). 마지막 버튼이면 블록도 빈 문단으로 바꾼다 (deleteSelected 와 같은 규칙)
+   * @param {HTMLAnchorElement} a
+   */
+  removeButton(a) {
+    const block = a.closest('div[data-type="buttons"]');
+    (a.closest('.jm-btn-item') || a).remove();
+    if (!block) return;
+    if (block.querySelector('a')) { this.#refreshHeader(block); return; }
+    const p = document.createElement('p');
+    p.appendChild(document.createElement('br'));
+    (block.closest(`.${BUTTONS_LAYER_CLASS}`) || block).replaceWith(p);
+  }
+
   #deleteBlock(block) {
     const layer = block.closest(`.${BUTTONS_LAYER_CLASS}`) || block;
     const p = document.createElement('p');

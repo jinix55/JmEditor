@@ -142,7 +142,7 @@ export class ImageCommands {
   }
 
   /**
-   * 이미지 교체: 업로드(또는 base64) 후 같은 자리·같은 감싸기·폭 유지
+   * 이미지 교체: 업로드(또는 base64) 후 같은 자리·같은 감싸기·폭·대체 글 유지
    * @param {HTMLImageElement} img
    * @param {File} file
    */
@@ -152,7 +152,6 @@ export class ImageCommands {
     if (!src) return;
     img.removeAttribute('width');
     img.removeAttribute('height');
-    img.alt = ''; // 이미지가 바뀌면 옛 설명은 맞지 않는다
     await new Promise((resolve) => { img.onload = () => { stampSize(img, true); resolve(); }; img.onerror = resolve; img.src = src; });
     img.onload = null;
     this.#changed();

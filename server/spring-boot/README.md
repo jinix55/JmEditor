@@ -119,7 +119,8 @@ jm-editor:
 |---|---|
 | p | style, data-role (갤러리·슬라이드 제목에서만 유지) |
 | h1~h6, li, ul, span | style |
-| hr | — (class·id·aria 도 지움. 문단·제목·글자 서식 안이면 나눠서 밖으로, 플러그인 블록 안은 제거) |
+| hr | — (class·id·aria 도 지움. 문단·제목·글자 서식 안이면 나눠서 밖으로, 플러그인 블록 안은 제거. 나눌 조상이 8단계 초과이거나 입력 하나의 복제가 1만 개를 넘으면 hr 만 버림, 글은 유지) |
+| sub, sup | style (구조 모드와 상관없이 허용, 플러그인 블록 안에서도 남음) |
 | blockquote | style, data-style(box·quote 만 — 세로선은 기본값이라 속성 없음) |
 | ol | style, start |
 | br, strong, em, u, s, tbody, thead | — |
@@ -166,6 +167,7 @@ jm-editor:
 | border, border-top·right·bottom·left, border-\*-width·style·color (td·th) | 폭 0~20px·pt·mm·cm·thin·medium·thick, 스타일 none·solid·dashed·dotted·double, 색. 단축값은 토큰 3개 이하로 정규화 |
 | border-collapse (table) | collapse, separate |
 | margin-left, margin-right (table) | auto 만 |
+| a target | `_self` 만 존중(rel 지움). 그 밖은 `_blank` + `rel="noopener noreferrer"`, `#`·`tel:`·`mailto:` 는 둘 다 지움 |
 | margin-left (p·h1~h6·li·blockquote) | `px`·`pt`·`mm`·`cm` → 정수 `px`, 0~400. 음수·`%`·`em` 은 지움 |
 | text-indent (p·h1~h6·li·blockquote) | `px`·`pt`·`mm`·`cm` → 정수 `px`, -400~400 (음수는 내어쓰기). `%`·`em` 은 지움 |
 

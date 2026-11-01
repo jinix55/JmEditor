@@ -16,6 +16,19 @@ export const TRANSFORMABLE_BLOCK = /^(P|H[1-6]|BLOCKQUOTE)$/;
 /** 블록 요소 태그 (구조 컨테이너인지 — 블록 자식이 있는지 — 판정용) */
 const BLOCK_TAG = /^(P|H[1-6]|UL|OL|LI|BLOCKQUOTE|TABLE|DIV|SECTION|ARTICLE|ASIDE|HEADER|FOOTER|NAV|DL|DT|DD|FIGURE|FIGCAPTION|HR)$/;
 
+/** 비어 있으면 없는 것으로 치는 글자 서식 태그 */
+const BLANK_INLINE_TAG = /^(STRONG|EM|U|S|SUB|SUP|SPAN|A)$/;
+
+/**
+ * 글자나 내용 요소가 있는지: ZWSP 말고 글이 있거나, 자손 중 빈 글자 서식(strong·em·u·s·sub·sup·a·class·id 없는 span)이 아닌 요소(이미지·줄바꿈·아이콘 i 등)가 있으면 true
+ * @param {Element|DocumentFragment} node 자손만 본다 (node 자신은 판정하지 않음)
+ * @returns {boolean}
+ */
+export function hasInlineContent(node) {
+  if (node.textContent.replace(/\u200B/g, '') !== '') return true;
+  return Array.from(node.querySelectorAll('*')).some((el) => !BLANK_INLINE_TAG.test(el.tagName) || (el.tagName === 'SPAN' && (el.hasAttribute('class') || el.hasAttribute('id'))));
+}
+
 export class SelectionUtil {
   /** @param {HTMLElement} root 에디터 contenteditable 루트 */
   constructor(root) {
@@ -34,6 +47,14 @@ export class SelectionUtil {
     if (!this.structure || el?.nodeType !== Node.ELEMENT_NODE) return false;
     const tag = el.tagName.toLowerCase();
     return this.structure.tags.has(tag) && !INLINE_STRUCTURE_TAGS.includes(tag);
+  }
+
+  /**
+   * 블록 요소 태그인지
+   * @param {Element} el
+   */
+  static isBlockTag(el) {
+    return BLOCK_TAG.test(el.tagName);
   }
 
   /**

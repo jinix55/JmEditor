@@ -22,6 +22,7 @@ const ALLOWED = {
   tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
   span: ['style'],
   hr: [], // 가로줄: 속성 없음 (#cleanElement 에서 바로 만든다)
+  sub: ['style'], sup: ['style'], // 위·아래 첨자: 구조 모드와 상관없이 허용 (구조 모드에서 쓰던 style 도 그대로)
 };
 
 /** style 속성에서 허용하는 CSS 속성과 값 검사 (글꼴·글자 크기·테두리·background 는 먼저 cleanLegacyDecl 이 처리) */
@@ -94,6 +95,9 @@ const PLUGIN_TYPES = ['gallery', 'slider', 'buttons', 'youtube', 'layout', 'map'
 const PLUGIN_BLOCK_SELECTOR = PLUGIN_TYPES.map((t) => `div[data-type="${t}"]`).join(', ');
 /** 가로줄을 담을 수 없는 요소: 문단·제목·글자 서식 — 저장 HTML 을 다시 파싱하면 구조가 바뀌므로 hr 을 밖으로 꺼낸다 */
 const HR_SPLIT_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 's', 'span', 'a', 'small', 'sub', 'sup']);
+/** 가로줄 분할 상한 (깊은 중첩 + hr 다수로 요소를 불리는 입력 차단): 나눌 수 있는 조상 단계, 입력 하나에서 만드는 복제 수 (서버 HR_SPLIT_DEPTH_MAX·HR_SPLIT_CLONES_MAX 와 같음) */
+const HR_SPLIT_DEPTH_MAX = 8;
+const HR_SPLIT_CLONES_MAX = 10000;
 /** 편집·미리보기 화면에서 본문 id 를 보관하는 속성 (getHTML 이 id 로 되돌림) */
 export const HIDDEN_ID_ATTR = 'data-jm-id';
 /** 구조 모드에서 새로 허용한 태그가 가질 수 있는 속성 (class 는 따로) */
@@ -199,12 +203,18 @@ export class Sanitizer {
 
   /**
    * 가로줄 자리 잡기: 플러그인 블록 안이면 버리고, 문단·제목·글자 서식 안이면 그 요소를 hr 앞뒤로 나눠 밖으로 꺼낸다 (비게 된 쪽은 지움).
-   * 뒤의 hr 부터 처리해 옮기는 노드가 hr 사이 구간뿐이라 선형이다. 서버 settleHrs 와 같은 규칙
+   * 뒤의 hr 부터 처리해 옮기는 노드가 hr 사이 구간뿐이라 선형이다. 서버 settleHrs 와 같은 규칙.
+   * 나눌 조상이 HR_SPLIT_DEPTH_MAX 단계를 넘거나 복제 총량(HR_SPLIT_CLONES_MAX)이 모자라면 hr 만 버린다 (글은 그대로, 결과에 중첩 hr 이 없어 멱등)
    * @param {HTMLElement} root
    */
   static #settleHrs(root) {
+    let clones = HR_SPLIT_CLONES_MAX;
     Array.from(root.querySelectorAll('hr')).reverse().forEach((hr) => {
       if (hr.closest(PLUGIN_BLOCK_SELECTOR)) { hr.remove(); return; }
+      let depth = 0;
+      for (let p = hr.parentElement; depth <= HR_SPLIT_DEPTH_MAX && HR_SPLIT_TAGS.has(p.localName); p = p.parentElement) depth++;
+      if (depth > HR_SPLIT_DEPTH_MAX || depth > clones) { hr.remove(); return; }
+      clones -= depth;
       while (HR_SPLIT_TAGS.has(hr.parentElement.localName)) {
         const before = hr.parentElement;
         const after = before.cloneNode(false);
@@ -476,14 +486,28 @@ export class Sanitizer {
   }
 
   /**
-   * 링크 종류에 맞게 target·rel 을 맞춘다: #·tel:·mailto: 는 두 속성을 없애고, 나머지는 새 창 + noopener
+   * 링크 종류에 맞게 target·rel 을 맞춘다: #·tel:·mailto: 는 두 속성을 없애고, target="_self" 는 같은 창으로 존중(rel 없음),
+   * 나머지는 새 창 + noopener (_top·이름 등 다른 target 도). 서버 applyLinkTarget 과 같은 규칙
    * (편집 중에는 주소가 data-jm-href 에 있어 href 를 인자로 받는다)
    * @param {HTMLAnchorElement} a
    * @param {string} href 링크 주소
    */
   static applyLinkTarget(a, href) {
     if (Sanitizer.isInPageHref(href)) { a.removeAttribute('target'); a.removeAttribute('rel'); }
+    else if (String(a.getAttribute('target') ?? '').trim().toLowerCase() === '_self') { a.setAttribute('target', '_self'); a.removeAttribute('rel'); }
     else { a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer'); }
+  }
+
+  /**
+   * 사용자가 고른 새 창 여부를 링크에 적용한다. 고르지 않았으면(undefined) 지금 target 을 applyLinkTarget 규칙대로 둔다
+   * @param {HTMLAnchorElement} a
+   * @param {string} href 링크 주소
+   * @param {boolean} [newWindow] true 새 창, false 같은 창
+   */
+  static setLinkWindow(a, href, newWindow) {
+    if (newWindow === true) a.removeAttribute('target');
+    else if (newWindow === false) a.setAttribute('target', '_self');
+    Sanitizer.applyLinkTarget(a, href);
   }
 
   /**

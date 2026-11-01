@@ -436,8 +436,10 @@ function wrapRuns(el, { bold, done, pending, host, withBlock, stack }) {
         if (inner) inner.appendChild(strong); else outer = strong;
         inner = strong;
       }
-      el.insertBefore(outer, before);
-      run.forEach((n) => inner.appendChild(n));
+      if (outer) { // 내려줄 서식이 없으면(스타일 없는 span·font) 감싸지 않는다
+        el.insertBefore(outer, before);
+        run.forEach((n) => inner.appendChild(n));
+      }
     } else if (host) run.forEach((n) => { if (n.nodeType === Node.TEXT_NODE) n.remove(); });
     run.forEach((n) => { if (n.nodeType === Node.ELEMENT_NODE) stack.push([n, false, done || bold, null]); });
     run = [];

@@ -24,11 +24,14 @@ public class HtmlSanitizer {
     private static final java.util.Map<String, String> TAG_ALIAS = java.util.Map.of("b", "strong", "i", "em", "strike", "s", "font", "span");
 
     /** 기본 허용 태그 (구조 정책 전) — 플러그인 안에서 구조 전용 태그를 가려낼 때 */
-    private static final java.util.Set<String> BASE_TAGS = java.util.Set.of("hr", "p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote",
+    private static final java.util.Set<String> BASE_TAGS = java.util.Set.of("hr", "sub", "sup", "p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote",
             "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe", "picture", "source");
 
     /** 가로줄을 담을 수 없는 요소: 문단·제목·글자 서식 — 저장 HTML 을 다시 파싱하면 구조가 바뀌므로 hr 을 밖으로 꺼낸다 (클라이언트 HR_SPLIT_TAGS 와 같음) */
     private static final java.util.Set<String> HR_SPLIT_TAGS = java.util.Set.of("p", "h1", "h2", "h3", "h4", "h5", "h6", "strong", "em", "u", "s", "span", "a", "small", "sub", "sup");
+
+    /** 가로줄 분할 상한 (깊은 중첩 + hr 다수로 요소를 불리는 입력 차단): 나눌 수 있는 조상 단계, 입력 하나에서 만드는 복제 수 (클라이언트와 같음) */
+    private static final int HR_SPLIT_DEPTH_MAX = 8, HR_SPLIT_CLONES_MAX = 10000;
 
     /** 요소가 플러그인 블록(div[data-type=gallery 등]) 안이거나 그 자체인지 */
     private static boolean insidePlugin(Element el) {
@@ -88,7 +91,7 @@ public class HtmlSanitizer {
     /** 기본 허용 목록 (구조 정책 전) */
     private static Safelist baseSafelist() {
         return new Safelist()
-            .addTags("hr", "p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote",
+            .addTags("hr", "sub", "sup", "p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote",
                      "a", "img", "table", "tbody", "thead", "colgroup", "col", "tr", "td", "th", "span", "div", "iframe",
                      "picture", "source")   // 모바일 이미지: 구성·srcset·media·type 검사는 후처리(cleanPicture)
             .addAttributes("a", "href", "target", "rel", "data-role", "data-style", "data-size",
@@ -106,6 +109,7 @@ public class HtmlSanitizer {
             .addAttributes("td", "style", "colspan", "rowspan")
             .addAttributes("th", "style", "colspan", "rowspan")
             .addAttributes("span", "style")
+            .addAttributes("sub", "style").addAttributes("sup", "style")   // 위·아래 첨자: 구조 모드와 상관없이 허용
             .addAttributes("div", "style", "data-type", "data-cols", "data-auto", "data-layout", "data-align", "data-width", "data-interval", "data-ratio", "data-indicator", "data-indicator-pos",
                            "data-preset", "data-variant", "data-split", "data-cell",    // 이미지+글 배치 블록
                            "data-provider", "data-timestamp", "data-key", "data-height", "data-title") // 카카오 지도 블록
@@ -392,14 +396,20 @@ public class HtmlSanitizer {
 
     /**
      * 가로줄 자리 잡기 (클라이언트 #settleHrs 와 같은 규칙): 속성을 모두 지우고, 플러그인 블록 안이면 버리고,
-     * 문단·제목·글자 서식 안이면 그 요소를 hr 앞뒤로 나눠 밖으로 꺼낸다 (비게 된 쪽은 지움). 뒤의 hr 부터 처리해 옮기는 노드가 hr 사이 구간뿐이다
+     * 문단·제목·글자 서식 안이면 그 요소를 hr 앞뒤로 나눠 밖으로 꺼낸다 (비게 된 쪽은 지움). 뒤의 hr 부터 처리해 옮기는 노드가 hr 사이 구간뿐이다.
+     * 나눌 조상이 {@value #HR_SPLIT_DEPTH_MAX} 단계를 넘거나 복제 총량이 모자라면 hr 만 버린다 (글은 그대로, 결과에 중첩 hr 이 없어 멱등)
      * @param root 본문
      */
     private static void settleHrs(Element root) {
         java.util.List<Element> hrs = new java.util.ArrayList<>(root.select("hr"));
         java.util.Collections.reverse(hrs);
+        int clones = HR_SPLIT_CLONES_MAX;
         for (Element hr : hrs) {
             if (insidePlugin(hr)) { hr.remove(); continue; }
+            int depth = 0;
+            for (Element p = hr.parent(); depth <= HR_SPLIT_DEPTH_MAX && p != null && HR_SPLIT_TAGS.contains(p.normalName()); p = p.parent()) depth++;
+            if (depth > HR_SPLIT_DEPTH_MAX || depth > clones) { hr.remove(); continue; }
+            clones -= depth;
             hr.clearAttributes();
             while (hr.parent() != null && HR_SPLIT_TAGS.contains(hr.parent().normalName())) {
                 Element before = hr.parent();
@@ -596,13 +606,16 @@ public class HtmlSanitizer {
 
     /**
      * 링크 종류에 맞게 target·rel 을 맞춘다 (클라이언트 Sanitizer.applyLinkTarget 과 같게):
-     * 주소가 #·tel:·mailto: (대소문자 무시)로 시작하면 두 속성을 없애고, 그 밖에는 새 창 + noopener 로 둔다.
+     * 주소가 #·tel:·mailto: (대소문자 무시)로 시작하면 두 속성을 없애고, target="_self" 는 같은 창으로 존중(rel 없음), 그 밖에는 새 창 + noopener 로 둔다.
      * href 가 없는 a 도 새 창 쪽으로 둔다(클라이언트도 href 없으면 같은 규칙). 앞뒤 공백은 JS trim 과 같게 자른다(NBSP 포함).
      */
     private static void applyLinkTarget(Element a) {
         String href = StructurePolicy.jsTrim(a.attr("href")).toLowerCase(java.util.Locale.ROOT); // JS trim 과 같게 (앞 NBSP 도 자름)
         if (href.startsWith("#") || href.startsWith("tel:") || href.startsWith("mailto:")) {
             a.removeAttr("target");
+            a.removeAttr("rel");
+        } else if (StructurePolicy.jsTrim(a.attr("target")).toLowerCase(java.util.Locale.ROOT).equals("_self")) {
+            a.attr("target", "_self");
             a.removeAttr("rel");
         } else {
             a.attr("rel", "noopener noreferrer");

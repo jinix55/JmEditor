@@ -198,8 +198,8 @@ test.describe('루트 인라인 묶기는 small·sub·sup 가 있는 구간만 (
       .toEqual({ viaCommit: '<p>앞 <sub>2</sub> 뒤</p><section class="s"><p>x</p></section><p>꼬리</p>', viaSet: '<p>앞 <sub>2</sub> 뒤</p><section class="s"><p>x</p></section><p>꼬리</p>' });
   });
 
-  test('구조 끔: <sup>1</sup> 각주 는 이번 작업 전과 같음 (setHTML 은 sup 를 벗김, commit 은 노드마다 문단)', async ({ page }) => {
+  test('구조 끔: sub·sup 가 기본 허용이라 <sup>1</sup> 각주 도 commit·setHTML 모두 한 문단', async ({ page }) => {
     await open(page, '?structure=0');
-    expect(await both(page, '<sup>1</sup> 각주')).toEqual({ viaCommit: '<p><sup>1</sup></p><p> 각주</p>', viaSet: '<p>1 각주</p>' });
+    expect(await both(page, '<sup>1</sup> 각주')).toEqual({ viaCommit: '<p><sup>1</sup> 각주</p>', viaSet: '<p><sup>1</sup> 각주</p>' });
   });
 });

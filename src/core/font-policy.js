@@ -126,3 +126,28 @@ export function inheritedFontName(node, root, families) {
   const name = usedFontName(inheritFrom(node, root, 'font-family'));
   return name && (fontFamilyName(name, families) ?? name);
 }
+
+/** 소수 둘째 자리까지 줄인 줄 간격 표기 */
+const ratioText = (n) => String(Math.round(n * 100) / 100);
+
+/**
+ * 인라인 지정이 없을 때의 줄 간격 (글자 크기 대비 배수, 사이트 CSS 반영)
+ * @param {Node|null|undefined} node
+ * @param {Element} root
+ * @returns {string} 예: '1.6'. line-height: normal 이면 한 줄 높이를 재서 돌려준다
+ */
+export function inheritedLineHeight(node, root) {
+  const cs = getComputedStyle(inheritFrom(node, root, 'line-height'));
+  const size = parseFloat(cs.fontSize);
+  const px = parseFloat(cs.lineHeight);
+  if (px && size) return ratioText(px / size);
+  const probe = document.createElement('div'); // normal: 글꼴마다 달라 재 본다 (본문 밖에 잠깐 두므로 저장·이력에 남지 않음)
+  probe.style.cssText = 'position:absolute;visibility:hidden;line-height:normal';
+  probe.style.font = cs.font;
+  probe.style.lineHeight = 'normal';
+  probe.textContent = 'x';
+  document.body.appendChild(probe);
+  const h = probe.getBoundingClientRect().height;
+  probe.remove();
+  return h && size ? ratioText(h / size) : '';
+}

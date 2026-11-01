@@ -345,6 +345,23 @@ div[data-type="gallery"] p[data-role="title"] { flex: 0 0 100%; margin: 0 0 2px;
 .jm-inputbar-label { font-size: 12px; color: var(--jm-text-soft); white-space: nowrap; }
 .jm-inputbar-input { flex: 1; min-width: 0; padding: 5px 8px; border: 1px solid var(--jm-border); border-radius: 4px; font: 13px ui-monospace, Menlo, monospace; }
 
+.jm-inputbar-check { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--jm-text-soft); white-space: nowrap; cursor: pointer; }
+.jm-inputbar-check[hidden] { display: none; }
+/* 찾기·바꾸기 입력줄 (좁으면 여러 줄), 강조는 DOM 없이 ::highlight */
+.jm-findbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--jm-border); background: var(--jm-head); }
+.jm-findbar[hidden] { display: none; }
+.jm-find-input { flex: 1 1 120px; min-width: 0; padding: 5px 8px; border: 1px solid var(--jm-border); border-radius: 4px; font: 13px ui-monospace, Menlo, monospace; }
+.jm-find-count { min-width: 32px; font-size: 12px; color: var(--jm-text-soft); text-align: center; white-space: nowrap; }
+::highlight(jm-find) { background-color: #fde68a; color: #1f2421; }
+::highlight(jm-find-current) { background-color: #fb923c; color: #1f2421; }
+/* 글자 수 (편집 영역 아래) */
+.jm-charcount { padding: 4px 10px; border-top: 1px solid var(--jm-border); font-size: 12px; color: var(--jm-text-soft); text-align: right; }
+.jm-charcount.is-over { color: var(--jm-danger, #d92d20); font-weight: 600; }
+/* 줄 간격 버튼 앞 아이콘 (값을 나타내는 숫자와 구분) */
+.jm-btn[data-cmd="lineHeight"]::before { content: ""; flex: none; width: 14px; height: 14px; margin-right: 3px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 6h10M11 12h10M11 18h10M5 5v14M2.5 7.5 5 5l2.5 2.5M2.5 16.5 5 19l2.5-2.5'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 6h10M11 12h10M11 18h10M5 5v14M2.5 7.5 5 5l2.5 2.5M2.5 16.5 5 19l2.5-2.5'/%3E%3C/svg%3E") center / contain no-repeat; }
+
 /* 유튜브 블록 (저장 HTML 에도 필요 — 뷰어에도 포함) */
 div[data-type="youtube"] { position: relative; margin: 0 0 8px; }
 div[data-type="youtube"][data-width="100"] { width: 100%; }
@@ -734,10 +751,11 @@ kbd{font:11px var(--mono);border:1px solid var(--jm-border);border-radius:3px;pa
 <div class="jm-container" id="wrap">
   <div class="jm-toolbar jm-toolbar-top" id="toolbarTop"></div>
   <div class="jm-toolbar" id="toolbar"></div>
-  <div class="linkbar" id="linkbar"><span id="linkLabel" class="hint" style="white-space:nowrap">링크 URL</span><input id="linkUrl" placeholder="https://" aria-label="입력"><button class="jm-btn" id="linkOk" type="button">적용</button><button class="jm-btn" id="linkCancel" type="button">취소</button></div>
+  <div class="linkbar" id="linkbar"><span id="linkLabel" class="hint" style="white-space:nowrap">링크 URL</span><input id="linkUrl" placeholder="https://" aria-label="입력"><label class="jm-inputbar-check" id="linkNewWinLabel" hidden><input type="checkbox" id="linkNewWin">새 창</label><button class="jm-btn" id="linkOk" type="button">적용</button><button class="jm-btn" id="linkCancel" type="button">취소</button></div>
   <div id="editor"></div>
   <textarea id="source" class="jm-source" hidden spellcheck="false"></textarea>
   <div id="preview" class="jm-preview-pane jm-content" hidden></div>
+  <div class="jm-charcount" id="charCount"></div>
   <input type="file" id="file" accept="image/*" hidden>
 </div>
 <section class="out">
@@ -1016,6 +1034,31 @@ function inheritedFontSize(node, root) {
 function inheritedFontName(node, root, families) {
   const name = usedFontName(inheritFrom(node, root, 'font-family'));
   return name && (fontFamilyName(name, families) ?? name);
+}
+
+/** 소수 둘째 자리까지 줄인 줄 간격 표기 */
+const ratioText = (n) => String(Math.round(n * 100) / 100);
+
+/**
+ * 인라인 지정이 없을 때의 줄 간격 (글자 크기 대비 배수, 사이트 CSS 반영)
+ * @param {Node|null|undefined} node
+ * @param {Element} root
+ * @returns {string} 예: '1.6'. line-height: normal 이면 한 줄 높이를 재서 돌려준다
+ */
+function inheritedLineHeight(node, root) {
+  const cs = getComputedStyle(inheritFrom(node, root, 'line-height'));
+  const size = parseFloat(cs.fontSize);
+  const px = parseFloat(cs.lineHeight);
+  if (px && size) return ratioText(px / size);
+  const probe = document.createElement('div'); // normal: 글꼴마다 달라 재 본다 (본문 밖에 잠깐 두므로 저장·이력에 남지 않음)
+  probe.style.cssText = 'position:absolute;visibility:hidden;line-height:normal';
+  probe.style.font = cs.font;
+  probe.style.lineHeight = 'normal';
+  probe.textContent = 'x';
+  document.body.appendChild(probe);
+  const h = probe.getBoundingClientRect().height;
+  probe.remove();
+  return h && size ? ratioText(h / size) : '';
 }
 
 /**
@@ -1455,8 +1498,10 @@ function wrapRuns(el, { bold, done, pending, host, withBlock, stack }) {
         if (inner) inner.appendChild(strong); else outer = strong;
         inner = strong;
       }
-      el.insertBefore(outer, before);
-      run.forEach((n) => inner.appendChild(n));
+      if (outer) { // 내려줄 서식이 없으면(스타일 없는 span·font) 감싸지 않는다
+        el.insertBefore(outer, before);
+        run.forEach((n) => inner.appendChild(n));
+      }
     } else if (host) run.forEach((n) => { if (n.nodeType === Node.TEXT_NODE) n.remove(); });
     run.forEach((n) => { if (n.nodeType === Node.ELEMENT_NODE) stack.push([n, false, done || bold, null]); });
     run = [];
@@ -1496,6 +1541,7 @@ const ALLOWED = {
   tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
   span: ['style'],
   hr: [], // 가로줄: 속성 없음 (#cleanElement 에서 바로 만든다)
+  sub: ['style'], sup: ['style'], // 위·아래 첨자: 구조 모드와 상관없이 허용 (구조 모드에서 쓰던 style 도 그대로)
 };
 
 /** style 속성에서 허용하는 CSS 속성과 값 검사 (글꼴·글자 크기·테두리·background 는 먼저 cleanLegacyDecl 이 처리) */
@@ -1614,6 +1660,9 @@ const PLUGIN_TYPES = ['gallery', 'slider', 'buttons', 'youtube', 'layout', 'map'
 const PLUGIN_BLOCK_SELECTOR = PLUGIN_TYPES.map((t) => `div[data-type="${t}"]`).join(', ');
 /** 가로줄을 담을 수 없는 요소: 문단·제목·글자 서식 — 저장 HTML 을 다시 파싱하면 구조가 바뀌므로 hr 을 밖으로 꺼낸다 */
 const HR_SPLIT_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 'u', 's', 'span', 'a', 'small', 'sub', 'sup']);
+/** 가로줄 분할 상한 (깊은 중첩 + hr 다수로 요소를 불리는 입력 차단): 나눌 수 있는 조상 단계, 입력 하나에서 만드는 복제 수 (서버 HR_SPLIT_DEPTH_MAX·HR_SPLIT_CLONES_MAX 와 같음) */
+const HR_SPLIT_DEPTH_MAX = 8;
+const HR_SPLIT_CLONES_MAX = 10000;
 /** 편집·미리보기 화면에서 본문 id 를 보관하는 속성 (getHTML 이 id 로 되돌림) */
 const HIDDEN_ID_ATTR = 'data-jm-id';
 /** 구조 모드에서 새로 허용한 태그가 가질 수 있는 속성 (class 는 따로) */
@@ -1673,12 +1722,18 @@ class Sanitizer {
 
   /**
    * 가로줄 자리 잡기: 플러그인 블록 안이면 버리고, 문단·제목·글자 서식 안이면 그 요소를 hr 앞뒤로 나눠 밖으로 꺼낸다 (비게 된 쪽은 지움).
-   * 뒤의 hr 부터 처리해 옮기는 노드가 hr 사이 구간뿐이라 선형이다. 서버 settleHrs 와 같은 규칙
+   * 뒤의 hr 부터 처리해 옮기는 노드가 hr 사이 구간뿐이라 선형이다. 서버 settleHrs 와 같은 규칙.
+   * 나눌 조상이 HR_SPLIT_DEPTH_MAX 단계를 넘거나 복제 총량(HR_SPLIT_CLONES_MAX)이 모자라면 hr 만 버린다 (글은 그대로, 결과에 중첩 hr 이 없어 멱등)
    * @param {HTMLElement} root
    */
   static #settleHrs(root) {
+    let clones = HR_SPLIT_CLONES_MAX;
     Array.from(root.querySelectorAll('hr')).reverse().forEach((hr) => {
       if (hr.closest(PLUGIN_BLOCK_SELECTOR)) { hr.remove(); return; }
+      let depth = 0;
+      for (let p = hr.parentElement; depth <= HR_SPLIT_DEPTH_MAX && HR_SPLIT_TAGS.has(p.localName); p = p.parentElement) depth++;
+      if (depth > HR_SPLIT_DEPTH_MAX || depth > clones) { hr.remove(); return; }
+      clones -= depth;
       while (HR_SPLIT_TAGS.has(hr.parentElement.localName)) {
         const before = hr.parentElement;
         const after = before.cloneNode(false);
@@ -1950,14 +2005,28 @@ class Sanitizer {
   }
 
   /**
-   * 링크 종류에 맞게 target·rel 을 맞춘다: #·tel:·mailto: 는 두 속성을 없애고, 나머지는 새 창 + noopener
+   * 링크 종류에 맞게 target·rel 을 맞춘다: #·tel:·mailto: 는 두 속성을 없애고, target="_self" 는 같은 창으로 존중(rel 없음),
+   * 나머지는 새 창 + noopener (_top·이름 등 다른 target 도). 서버 applyLinkTarget 과 같은 규칙
    * (편집 중에는 주소가 data-jm-href 에 있어 href 를 인자로 받는다)
    * @param {HTMLAnchorElement} a
    * @param {string} href 링크 주소
    */
   static applyLinkTarget(a, href) {
     if (Sanitizer.isInPageHref(href)) { a.removeAttribute('target'); a.removeAttribute('rel'); }
+    else if (String(a.getAttribute('target') ?? '').trim().toLowerCase() === '_self') { a.setAttribute('target', '_self'); a.removeAttribute('rel'); }
     else { a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener noreferrer'); }
+  }
+
+  /**
+   * 사용자가 고른 새 창 여부를 링크에 적용한다. 고르지 않았으면(undefined) 지금 target 을 applyLinkTarget 규칙대로 둔다
+   * @param {HTMLAnchorElement} a
+   * @param {string} href 링크 주소
+   * @param {boolean} [newWindow] true 새 창, false 같은 창
+   */
+  static setLinkWindow(a, href, newWindow) {
+    if (newWindow === true) a.removeAttribute('target');
+    else if (newWindow === false) a.setAttribute('target', '_self');
+    Sanitizer.applyLinkTarget(a, href);
   }
 
   /**
@@ -2413,6 +2482,19 @@ const TRANSFORMABLE_BLOCK = /^(P|H[1-6]|BLOCKQUOTE)$/;
 /** 블록 요소 태그 (구조 컨테이너인지 — 블록 자식이 있는지 — 판정용) */
 const BLOCK_TAG = /^(P|H[1-6]|UL|OL|LI|BLOCKQUOTE|TABLE|DIV|SECTION|ARTICLE|ASIDE|HEADER|FOOTER|NAV|DL|DT|DD|FIGURE|FIGCAPTION|HR)$/;
 
+/** 비어 있으면 없는 것으로 치는 글자 서식 태그 */
+const BLANK_INLINE_TAG = /^(STRONG|EM|U|S|SUB|SUP|SPAN|A)$/;
+
+/**
+ * 글자나 내용 요소가 있는지: ZWSP 말고 글이 있거나, 자손 중 빈 글자 서식(strong·em·u·s·sub·sup·a·class·id 없는 span)이 아닌 요소(이미지·줄바꿈·아이콘 i 등)가 있으면 true
+ * @param {Element|DocumentFragment} node 자손만 본다 (node 자신은 판정하지 않음)
+ * @returns {boolean}
+ */
+function hasInlineContent(node) {
+  if (node.textContent.replace(/\u200B/g, '') !== '') return true;
+  return Array.from(node.querySelectorAll('*')).some((el) => !BLANK_INLINE_TAG.test(el.tagName) || (el.tagName === 'SPAN' && (el.hasAttribute('class') || el.hasAttribute('id'))));
+}
+
 class SelectionUtil {
   /** @param {HTMLElement} root 에디터 contenteditable 루트 */
   constructor(root) {
@@ -2431,6 +2513,14 @@ class SelectionUtil {
     if (!this.structure || el?.nodeType !== Node.ELEMENT_NODE) return false;
     const tag = el.tagName.toLowerCase();
     return this.structure.tags.has(tag) && !INLINE_STRUCTURE_TAGS.includes(tag);
+  }
+
+  /**
+   * 블록 요소 태그인지
+   * @param {Element} el
+   */
+  static isBlockTag(el) {
+    return BLOCK_TAG.test(el.tagName);
   }
 
   /**
@@ -2907,6 +2997,30 @@ class Commands {
     this.editor.commit();
   }
 
+  /**
+   * 위·아래 첨자 토글. 서로 배타: 하나를 켜면 다른 쪽은 해제된다. 커서면 이후 입력에, 범위면 그 글자에
+   * @param {'sub'|'sup'} tag
+   */
+  toggleScript(tag) {
+    const other = tag === 'sub' ? 'SUP' : 'SUB';
+    const range = this.sel.getRange();
+    if (!range) return;
+    if (range.collapsed) {
+      if (this.#findAncestor(range.startContainer, other)) this.#toggleInlineCollapsed(other.toLowerCase(), range);
+      this.#toggleInlineCollapsed(tag, this.sel.getRange());
+    } else {
+      const pieces = this.#textPieces(range);
+      if (!pieces.length) return;
+      pieces.forEach((t) => {
+        const anc = this.#findAncestor(t, other);
+        if (anc) { this.#hoistLink(t, anc); this.#unwrapEl(this.#isolate(t, anc)); }
+      });
+      this.#selectPieces(pieces);
+      this.#toggleInlineRange(tag, this.sel.getRange());
+    }
+    this.editor.commit();
+  }
+
   /** 커서만 있을 때의 인라인 토글 */
   #toggleInlineCollapsed(tag, range) {
     const inside = this.sel.closest(tag);
@@ -3034,7 +3148,7 @@ class Commands {
    * @returns {HTMLElement} node 를 담은 anc
    */
   #isolate(node, anc) {
-    const hasContent = (frag) => frag.textContent.replace(new RegExp(ZWSP, 'g'), '') !== '' || !!frag.querySelector?.('img, br');
+    const hasContent = hasInlineContent;
     const pre = document.createRange();
     pre.setStart(anc, 0); pre.setEndBefore(node);
     if (!pre.collapsed) {
@@ -3399,6 +3513,39 @@ class Commands {
     else if (/^(UL|OL)$/.test(li.parentNode.tagName) && !(this.sel.structure && SelectionUtil.hasBlockChild(li, /^(P|UL|OL)$/))) this.#removeFromList(li);
   }
 
+  // ───────────── 줄 간격 ─────────────
+
+  /**
+   * 범위 안 글 블록(p·h1~h6·li·blockquote, 직접 글이 있는 표 칸, 구조 모드의 글만 있는 div 등)의 줄 간격. 표 칸 범위 선택이면 그 칸 안의 블록과 직접 글이 있는 칸.
+   * 블록 안 span 의 줄 간격은 지운다 (블록 값을 가리지 않게). 플러그인 제목은 대상이 아니다
+   * @param {string|null} value 정제 규칙을 통과하는 line-height 값. null·빈 값이면 해제
+   * @returns {boolean|undefined} 쓸 수 없는 값이면 false
+   */
+  setLineHeight(value) {
+    const clean = value ? /^line-height: ([^;]+)$/.exec(Sanitizer.cleanStyle(`line-height: ${value}`, 'p'))?.[1] : null;
+    if (value && !clean) return false;
+    const cells = this.#selectedCells();
+    const cellBlocks = (c) => {
+      const inner = Array.from(c.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, li'));
+      return inner.length && !SelectionUtil.hasDirectText(c) ? inner : [c, ...inner];
+    };
+    const blocks = (cells.length ? cells.flatMap(cellBlocks) : this.#rangeBlocks()).filter((b) => !Commands.#isPluginText(b));
+    if (!blocks.length) return undefined;
+    /** 줄 간격 지우기 (style 이 비면 속성도) */
+    const drop = (el) => { el.style.removeProperty('line-height'); if (!el.getAttribute('style')?.trim()) el.removeAttribute('style'); };
+    blocks.forEach((b) => {
+      b.querySelectorAll(':scope > p').forEach(drop); // li·인용 직속 문단의 값은 블록 값을 가린다
+      b.querySelectorAll('span').forEach((sp) => {
+        if (!sp.style.lineHeight || this.sel.textBlockOf(sp) !== b) return;
+        drop(sp);
+        if (!sp.attributes.length) this.#unwrapEl(sp);
+      });
+      if (clean) b.style.lineHeight = clean; else drop(b);
+    });
+    this.editor.commit();
+    return true;
+  }
+
   // ───────────── 블록 정렬 ─────────────
 
   /**
@@ -3752,8 +3899,9 @@ class Commands {
    * 링크 적용/해제
    * - 커서가 링크 안이면 해제, 선택 영역이 있으면 a 태그로 감쌈
    * @param {string|null} url null 이면 해제
+   * @param {{newWindow?: boolean}} [opts] 새 창 여부. 생략하면 기존 규칙(새 링크는 외부 주소·경로면 새 창, 기존 링크는 지금 값 유지). #·tel:·mailto: 는 항상 target 없음
    */
-  setLink(url) {
+  setLink(url, opts = {}) {
     const range = this.sel.getRange();
     if (!range) return undefined;
     // 주소 검증: javascript: 등은 거부(false 반환 → 툴바가 안내), 도메인만 쓰면 https:// 를 붙임
@@ -3762,7 +3910,7 @@ class Commands {
     const existing = this.sel.closest('a');
 
     if (existing) {
-      if (href) { this.editor.constructor.setHref(existing, href); Sanitizer.applyLinkTarget(existing, href); } // 기존 링크: 주소만 수정(새 창 규칙도 다시 맞춤)
+      if (href) { this.editor.constructor.setHref(existing, href); Sanitizer.setLinkWindow(existing, href, opts?.newWindow); } // 기존 링크: 주소 수정(새 창 규칙도 다시 맞춤)
       else this.#unwrapEl(existing);                                // 해제
       this.editor.commit();
       return true;
@@ -3775,7 +3923,7 @@ class Commands {
     pieces.forEach((t) => {
       const a = document.createElement('a');
       this.editor.constructor.setHref(a, href);
-      Sanitizer.applyLinkTarget(a, href); // #·tel:·mailto: 는 새 창 아님
+      Sanitizer.setLinkWindow(a, href, opts?.newWindow); // #·tel:·mailto: 는 새 창 아님
       t.parentNode.insertBefore(a, t);
       a.appendChild(t);
       this.#mergeSiblings(a); // 같은 주소로 이어진 조각(글자·이미지)은 하나의 링크로
@@ -4110,6 +4258,15 @@ class Commands {
     this.editor.commit();
   }
 
+  /**
+   * 블록(또는 그 직속 문단이 속한 li·인용)에 지정한 줄 간격
+   * @param {HTMLElement} block
+   * @returns {string|null}
+   */
+  #lineHeightAt(block) {
+    return this.sel.closest('p')?.style.lineHeight || block.style.lineHeight || null;
+  }
+
   /** 현재 커서 위치의 서식 상태(툴바 활성화 표시용) */
   getState() {
     const block = this.sel.getBlock();
@@ -4119,6 +4276,9 @@ class Commands {
       em: this.sel.isInside('em'),
       u: this.sel.isInside('u'),
       s: this.sel.isInside('s'),
+      sub: this.sel.isInside('sub'),
+      sup: this.sel.isInside('sup'),
+      lineHeight: block ? this.#lineHeightAt(block) : null,
       a: this.sel.isInside('a'),
       ...this.getStyleState(),
       block: block ? block.tagName.toLowerCase() : null,
@@ -5986,7 +6146,7 @@ class GalleryCommands {
       ? await this.editor.options.uploadImage(resized)
       : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(resized); });
     const img = document.createElement('img');
-    img.alt = file.name;
+    img.alt = ''; // 대체 글은 비워 둔다 (파일명은 설명이 아니다)
     // 원본 크기를 width/height 속성에 기록한 뒤 붙임 (저장 HTML 에 비율 포함)
     await new Promise((resolve) => { img.onload = () => { stampSize(img, true); resolve(); }; img.onerror = resolve; img.src = src; });
     this.bytesBySrc.set(src, resized.size);
@@ -6634,6 +6794,20 @@ class ButtonsCommands {
     this.editor.commit();
   }
 
+  /**
+   * 버튼 하나 지우기 (기록·커서 이동 없음 — 찾기·바꾸기가 묶어서 기록한다). 마지막 버튼이면 블록도 빈 문단으로 바꾼다 (deleteSelected 와 같은 규칙)
+   * @param {HTMLAnchorElement} a
+   */
+  removeButton(a) {
+    const block = a.closest('div[data-type="buttons"]');
+    (a.closest('.jm-btn-item') || a).remove();
+    if (!block) return;
+    if (block.querySelector('a')) { this.#refreshHeader(block); return; }
+    const p = document.createElement('p');
+    p.appendChild(document.createElement('br'));
+    (block.closest(`.${BUTTONS_LAYER_CLASS}`) || block).replaceWith(p);
+  }
+
   #deleteBlock(block) {
     const layer = block.closest(`.${BUTTONS_LAYER_CLASS}`) || block;
     const p = document.createElement('p');
@@ -7033,7 +7207,7 @@ class SliderCommands {
         break;
       }
       const img = document.createElement('img');
-      img.alt = file.name;
+      img.alt = ''; // 대체 글은 비워 둔다 (파일명은 설명이 아니다)
       await new Promise((resolve) => { img.onload = () => { stampSize(img); resolve(); }; img.onerror = resolve; img.src = src; });
       block.appendChild(img);
     }
@@ -7229,7 +7403,7 @@ class ImageCommands {
   }
 
   /**
-   * 이미지 교체: 업로드(또는 base64) 후 같은 자리·같은 감싸기·폭 유지
+   * 이미지 교체: 업로드(또는 base64) 후 같은 자리·같은 감싸기·폭·대체 글 유지
    * @param {HTMLImageElement} img
    * @param {File} file
    */
@@ -7239,7 +7413,6 @@ class ImageCommands {
     if (!src) return;
     img.removeAttribute('width');
     img.removeAttribute('height');
-    img.alt = ''; // 이미지가 바뀌면 옛 설명은 맞지 않는다
     await new Promise((resolve) => { img.onload = () => { stampSize(img, true); resolve(); }; img.onerror = resolve; img.src = src; });
     img.onload = null;
     this.#changed();
@@ -7973,7 +8146,7 @@ class LayoutCommands {
         ? await this.editor.options.uploadImage(resized)
         : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(resized); });
       const img = document.createElement('img');
-      img.alt = file.name;
+      img.alt = ''; // 대체 글은 비워 둔다 (파일명은 설명이 아니다)
       await new Promise((resolve) => { img.onload = () => { stampSize(img, true); resolve(); }; img.onerror = resolve; img.src = src; });
       img.onload = null;
       cell.replaceChildren(img);
@@ -8424,6 +8597,489 @@ class MapCommands {
 }
 
 /**
+ * FindReplace
+ * - 찾기·바꾸기 논리 (입력줄 UI 는 ui/FindBar.js). 사용자 입력을 정규식으로 쓰지 않고 글자 그대로 비교한다.
+ * - 범위: 편집 가능한 글(본문·표 칸·제목·갤러리/슬라이드 제목). 플러그인 헤더처럼 편집 불가인 글자와 입력란은 제외.
+ * - 한 글 블록 안에서만 찾고(줄바꿈·이미지에서 끊김), 태그에 걸친 글자도 찾는다. 바꾸면 첫 글자의 서식을 따른다.
+ * - 강조는 CSS Custom Highlight API 라 DOM·저장 HTML 에 흔적이 없다. 미지원 브라우저는 현재 일치만 선택 표시.
+ */
+
+
+/** 표시·강조할 일치 수 상한 (넘으면 'N개 이상'). 모두 바꾸기는 상한과 상관없이 전부 바꾼다 */
+const MATCH_MAX = 10000;
+/** 강조 이름 (jm-editor.css 의 ::highlight 와 같음) */
+const HIGHLIGHT_ALL = 'jm-find';
+const HIGHLIGHT_CURRENT = 'jm-find-current';
+/** 에디터별 지금 강조 범위 — 강조 이름은 문서 전체에 하나라 여러 에디터의 범위를 합쳐 건다 */
+const activeHighlights = new Map();
+
+/** @returns {boolean} CSS Custom Highlight API 지원 여부 */
+function highlightSupported() {
+  return typeof CSS !== 'undefined' && !!CSS.highlights && typeof Highlight === 'function';
+}
+
+/** 모든 에디터의 강조 범위를 문서에 다시 건다 */
+function applyHighlights() {
+  if (!highlightSupported()) return;
+  const all = new Highlight(); // add 반복: 전개 인자는 개수 한도가 있다
+  const cur = new Highlight();
+  cur.priority = 1;
+  activeHighlights.forEach((h) => { h.all.forEach((r) => all.add(r)); if (h.current) cur.add(h.current); });
+  if (all.size) CSS.highlights.set(HIGHLIGHT_ALL, all); else CSS.highlights.delete(HIGHLIGHT_ALL);
+  if (cur.size) CSS.highlights.set(HIGHLIGHT_CURRENT, cur); else CSS.highlights.delete(HIGHLIGHT_CURRENT);
+}
+
+/**
+ * 비교용 글자 하나 접기: 길이를 바꾸지 않아 위치가 어긋나지 않는다 (nbsp 는 공백으로, 대소문자 무시면 소문자로)
+ * @param {string} text
+ * @param {boolean} caseSensitive
+ * @returns {string} text 와 길이가 같은 문자열
+ */
+function foldText(text, caseSensitive) {
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    let c = text[i];
+    if (c === ' ') c = ' ';
+    else if (!caseSensitive) { const low = c.toLowerCase(); if (low.length === 1) c = low; }
+    out += c;
+  }
+  return out;
+}
+
+class FindReplace {
+  /** @param {import('./JmEditor.js').JmEditor} editor */
+  constructor(editor) {
+    this.editor = editor;
+    this.query = '';
+    this.caseSensitive = false;
+    /** @type {Array<{parts: Array<{node: Text, start: number, end: number}>, range: Range}>} 일치 (문서 순서) */
+    this.matches = [];
+    /** 일치가 상한(MATCH_MAX)을 넘어 잘렸는지 */
+    this.capped = false;
+    /** 현재 일치 번호 (없으면 -1) */
+    this.index = -1;
+    /** 바꾸는 동안에는 변경 알림으로 다시 찾지 않는다 */
+    this.busy = false;
+    /** 일치 수가 바뀌면 부르는 콜백 (입력줄 표시) */
+    this.onChange = null;
+  }
+
+  /** 일치 수 */
+  get count() { return this.matches.length; }
+
+  /**
+   * 찾기 시작. 커서 뒤 첫 일치를 현재로 한다 (뒤에 없으면 처음)
+   * @param {string} query 찾을 말 (글자 그대로)
+   * @param {{caseSensitive?: boolean}} [opts]
+   * @returns {number} 일치 수
+   */
+  search(query, opts = {}) {
+    this.query = String(query ?? '').replace(/​/g, '');
+    this.caseSensitive = !!opts.caseSensitive;
+    this.#collect();
+    this.index = this.#firstAtOrAfter(this.editor.sel.saved);
+    this.#show();
+    return this.count;
+  }
+
+  /** 다음 일치로 (끝이면 처음으로) */
+  next() { return this.#step(1); }
+
+  /** 이전 일치로 (처음이면 끝으로) */
+  prev() { return this.#step(-1); }
+
+  /**
+   * 현재 일치를 바꾸고 그 뒤 일치로 간다
+   * @param {string} text 바꿀 말 (글자로만 넣는다)
+   * @returns {boolean} 바꿨으면 true
+   */
+  replace(text) {
+    const m = this.matches[this.index];
+    if (!m) return false;
+    this.#edit(() => this.#replaceMatch(m, String(text ?? '')));
+    return true;
+  }
+
+  /**
+   * 일치를 모두 바꾼다 (되돌리기 1단계). 바꾼 글은 다시 찾지 않는다
+   * @param {string} text 바꿀 말 (글자로만 넣는다)
+   * @returns {number} 바꾼 수
+   */
+  replaceAll(text) {
+    if (!this.count) return 0;
+    let n = 0;
+    this.#edit(() => {
+      n = this.#replaceEvery(String(text ?? ''));
+      return null;
+    });
+    return n;
+  }
+
+  /** 내용이 바뀌었을 때 다시 찾기 (현재 위치는 가능한 한 유지). 찾는 중이 아니면 아무것도 하지 않는다 */
+  refresh() {
+    if (!this.query || this.busy) return;
+    try {
+      const at = this.matches[this.index]?.range;
+      const anchor = at?.startContainer.isConnected ? at.cloneRange() : null;
+      this.#collect();
+      this.index = this.#firstAtOrAfter(anchor);
+      this.#show(false);
+    } catch (err) { // 찾기 표시가 실패해도 편집·변경 알림을 막지 않는다
+      console.error(err);
+      this.clear();
+    }
+  }
+
+  /** 찾기 끝: 강조·일치를 지운다 */
+  clear() {
+    this.query = '';
+    this.matches = [];
+    this.capped = false;
+    this.index = -1;
+    activeHighlights.delete(this);
+    applyHighlights();
+    this.onChange?.();
+  }
+
+  /** 정리 */
+  destroy() {
+    this.onChange = null;
+    this.clear();
+  }
+
+  /**
+   * 편집을 한 단계로 묶는다: 앞선 입력을 먼저 기록하고, 고친 뒤 기록하고, 다시 찾는다
+   * @param {() => (Range|null)} fn 고치기. 다음 일치를 찾을 기준 범위를 돌려준다
+   */
+  #edit(fn) {
+    this.busy = true;
+    try {
+      this.editor.history.push();
+      const after = fn();
+      this.#collect();
+      this.index = this.#firstAtOrAfter(after);
+      this.editor.commit();
+    } finally { this.busy = false; }
+    this.#show(false);
+  }
+
+  /** 앞뒤로 움직이기 */
+  #step(delta) {
+    if (!this.count) { this.#show(); return false; }
+    this.index = (this.index + delta + this.count) % this.count;
+    this.#show(true, true);
+    return true;
+  }
+
+  /**
+   * 기준 범위 시작과 같거나 뒤인 첫 일치 번호
+   * @param {Range|null|undefined} at
+   * @returns {number} 일치가 없으면 -1, 뒤에 없으면 0
+   */
+  #firstAtOrAfter(at) {
+    if (!this.count) return -1;
+    if (!at || !this.editor.root.contains(at.startContainer)) return 0;
+    const found = this.matches.findIndex((m) => m.range.compareBoundaryPoints(Range.START_TO_START, at) >= 0);
+    return found < 0 ? 0 : found;
+  }
+
+  /**
+   * 글을 글 블록 단위 줄로 모은다. 편집 불가인 글자는 건너뛰고, 줄바꿈·이미지·블록 경계에서 끊는다
+   * @returns {Array<{text: string, parts: Array<{node: Text, from: number, offsets: number[]|null}>}>}
+   */
+  #runs() {
+    const { root, sel } = this.editor;
+    const runs = [];
+    let cur = null;
+    let line = null;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (n.nodeType === Node.ELEMENT_NODE) {
+        if (/^(BR|IMG|HR|PICTURE|IFRAME|TABLE)$/.test(n.tagName)) cur = null;
+        continue;
+      }
+      const parent = n.parentElement;
+      if (!parent?.isContentEditable) { cur = null; continue; }
+      const owner = sel.textBlockOf(n);
+      if (!owner && !/[^\s​]/.test(n.data)) continue; // 블록 사이 공백
+      const itemP = parent.closest('li > p'); // 목록 항목 직속 문단은 항목을 글 블록으로 치지만 줄은 따로다
+      const key = itemP && itemP.parentElement === owner ? itemP : owner;
+      if (key !== line) { cur = null; line = key; }
+      if (!cur) runs.push(cur = { text: '', parts: [] });
+      const hasZwsp = n.data.includes('​');
+      const offsets = hasZwsp ? [] : null;
+      const from = cur.text.length;
+      if (hasZwsp) {
+        let kept = '';
+        for (let i = 0; i < n.length; i++) if (n.data[i] !== '​') { kept += n.data[i]; offsets.push(i); }
+        offsets.push(n.length);
+        cur.text += kept;
+      } else cur.text += n.data;
+      cur.parts.push({ node: n, from, offsets });
+    }
+    return runs;
+  }
+
+  /** 일치 목록 다시 만들기 (표시용, 상한까지) */
+  #collect() {
+    this.matches = [];
+    this.capped = false;
+    this.#eachMatch((parts) => {
+      if (this.matches.length >= MATCH_MAX) { this.capped = true; return false; }
+      this.matches.push(FindReplace.#toMatch(parts));
+      return true;
+    });
+  }
+
+  /**
+   * 모든 일치의 글 노드 조각을 문서 순서로 넘긴다
+   * @param {(parts: Array<{node: Text, start: number, end: number}>) => boolean} fn false 를 돌려주면 멈춘다
+   */
+  #eachMatch(fn) {
+    if (!this.query) return;
+    const q = foldText(this.query, this.caseSensitive);
+    for (const run of this.#runs()) {
+      const hay = foldText(run.text, this.caseSensitive);
+      let from = 0; // 일치는 앞에서 뒤로 가므로 조각을 처음부터 다시 훑지 않는다
+      for (let at = hay.indexOf(q); at >= 0; at = hay.indexOf(q, at + q.length)) {
+        const end = at + q.length;
+        while (from + 1 < run.parts.length && run.parts[from + 1].from <= at) from++;
+        const parts = [];
+        for (let i = from; i < run.parts.length && run.parts[i].from < end; i++) {
+          const p = run.parts[i];
+          const stop = i + 1 < run.parts.length ? run.parts[i + 1].from : run.text.length;
+          const a = Math.max(at, p.from);
+          const b = Math.min(end, stop);
+          if (a >= b) continue;
+          const pos = (k) => (p.offsets ? p.offsets[k - p.from] : k - p.from);
+          parts.push({ node: p.node, start: pos(a), end: pos(b - 1) + 1 });
+        }
+        if (fn(parts) === false) return;
+      }
+    }
+  }
+
+  /**
+   * 일치를 전부 바꾼다. 뒤에서부터 고쳐 앞 일치 위치가 밀리지 않고, 한 글 노드 안의 일치는 한 번에 고친다 (일치마다 고치면 긴 글에서 이차 시간)
+   * @param {string} text
+   * @returns {number} 바꾼 수
+   */
+  #replaceEvery(text) {
+    const all = [];
+    this.#eachMatch((parts) => { all.push(parts); return true; });
+    this.matches = []; // 살아 있는 범위를 들고 고치지 않는다 (뒤에서 다시 찾는다)
+    let node = null;
+    let tail = '';
+    let upto = 0;
+    const flush = () => {
+      if (!node) return;
+      node.data = node.data.slice(0, upto) + tail;
+      if (!text) this.#afterDelete(node);
+      node = null;
+    };
+    for (let i = all.length - 1; i >= 0; i--) {
+      const parts = all[i];
+      if (parts.length > 1) { flush(); this.#replaceMatch({ parts }, text); continue; }
+      const p = parts[0];
+      if (p.node !== node) { flush(); node = p.node; upto = node.length; tail = ''; }
+      tail = text + node.data.slice(p.end, upto) + tail;
+      upto = p.start;
+    }
+    flush();
+    return all.length;
+  }
+
+  /**
+   * 조각으로 일치 객체를 만든다
+   * @param {Array<{node: Text, start: number, end: number}>} parts
+   */
+  static #toMatch(parts) {
+    const range = document.createRange();
+    range.setStart(parts[0].node, parts[0].start);
+    range.setEnd(parts[parts.length - 1].node, parts[parts.length - 1].end);
+    return { parts, range };
+  }
+
+  /**
+   * 일치 하나 바꾸기: 첫 조각 자리에 글자로 넣고(그 서식을 따름) 나머지 조각을 지운다. 비게 된 인라인은 걷어 낸다
+   * @param {{parts: Array<{node: Text, start: number, end: number}>}} m
+   * @param {string} text
+   * @returns {Range} 바꾼 글 바로 뒤 (접힌 범위)
+   */
+  #replaceMatch(m, text) {
+    const [first, ...rest] = m.parts;
+    rest.reverse().forEach((p) => {
+      p.node.deleteData(p.start, p.end - p.start);
+      this.#afterDelete(p.node);
+    });
+    first.node.replaceData(first.start, first.end - first.start, text);
+    const after = document.createRange();
+    after.setStart(first.node, first.start + text.length);
+    after.collapse(true);
+    if (!text) {
+      const left = this.#afterDelete(first.node);
+      if (left !== first.node && left?.isConnected) after.setStart(left, 0);
+      after.collapse(true);
+    }
+    return after;
+  }
+
+  /**
+   * 글을 지운 뒤 정리: 글 노드가 비었으면 걷어 내고, 내용이 전혀 없어진 버튼은 항목째 지우고, 비게 된 글 블록에는 커서 자리를 둔다
+   * @param {Text} node
+   * @returns {Node|null} 남은 노드
+   */
+  #afterDelete(node) {
+    const block = this.editor.sel.textBlockOf(node);
+    const button = node.parentElement?.closest('a[data-role="button"]');
+    const left = this.#dropIfEmpty(node);
+    if (button && !hasInlineContent(button)) { this.editor.buttons.removeButton(button); return null; }
+    if (block?.isConnected && !hasInlineContent(block)) block.appendChild(document.createElement('br'));
+    return left;
+  }
+
+  /**
+   * 빈 글 노드를 지우고 글 블록까지 올라가며 비게 된 글자 서식 요소도 지운다 (버튼 링크처럼 블록이 정한 요소는 남긴다)
+   * @param {Text} node
+   * @returns {Node} 남은 노드 (안 지웠으면 node, 지웠으면 남은 부모)
+   */
+  #dropIfEmpty(node) {
+    if (node.data.replace(/​/g, '')) return node;
+    const { sel, root } = this.editor;
+    let parent = node.parentNode;
+    node.remove();
+    while (parent !== root && !sel.isTextBlock(parent) && !parent.hasAttribute('data-role') && /^(STRONG|EM|U|S|SUB|SUP|SPAN|A|SMALL)$/.test(parent.tagName) && !hasInlineContent(parent)) {
+      const up = parent.parentNode;
+      parent.remove();
+      parent = up;
+    }
+    return parent;
+  }
+
+  /**
+   * 강조·현재 일치 표시
+   * @param {boolean} [scroll=true] 현재 일치를 화면에 보이게
+   * @param {boolean} [select=false] Highlight 미지원 때 현재 일치를 선택 표시 (입력 중에는 입력란 포커스를 뺏지 않도록 이전·다음 때만)
+   */
+  #show(scroll = true, select = false) {
+    const cur = this.matches[this.index];
+    if (highlightSupported()) {
+      if (this.count) activeHighlights.set(this, { all: this.matches.map((m) => m.range), current: cur?.range || null });
+      else activeHighlights.delete(this);
+      applyHighlights();
+    } else if (cur && select) {
+      this.editor.sel.setRange(cur.range.cloneRange());
+    }
+    if (cur && scroll) cur.parts[0].node.parentElement?.scrollIntoView?.({ block: 'nearest' });
+    this.onChange?.();
+  }
+}
+
+/**
+ * FindBar — 찾기·바꾸기 입력줄 (툴바 아래). 동작은 코어의 FindReplace 가 맡고, 이 클래스는 입력·표시만 한다.
+ * 버튼은 mousedown 에서 포커스를 옮기지 않아 입력란 포커스와 저장된 커서가 유지된다.
+ */
+class FindBar {
+  /**
+   * @param {import('../core/JmEditor.js').JmEditor} editor
+   */
+  constructor(editor) {
+    this.editor = editor;
+    this.el = document.createElement('div');
+    this.el.className = 'jm-findbar';
+    this.el.hidden = true;
+    this.el.innerHTML = '<input type="text" class="jm-find-input jm-find-query" placeholder="찾을 말" aria-label="찾을 말">'
+      + '<span class="jm-find-count" aria-live="polite"></span>'
+      + '<input type="text" class="jm-find-input jm-find-replace" placeholder="바꿀 말" aria-label="바꿀 말">'
+      + '<label class="jm-inputbar-check"><input type="checkbox" class="jm-find-case">대소문자</label>'
+      + '<button type="button" class="jm-btn jm-find-prev">이전</button>'
+      + '<button type="button" class="jm-btn jm-find-next">다음</button>'
+      + '<button type="button" class="jm-btn jm-find-one">바꾸기</button>'
+      + '<button type="button" class="jm-btn jm-find-all">모두 바꾸기</button>'
+      + '<button type="button" class="jm-btn jm-find-close" aria-label="닫기">닫기</button>';
+    const q = (c) => this.el.querySelector(c);
+    this.query = q('.jm-find-query');
+    this.replaceInput = q('.jm-find-replace');
+    this.caseBox = q('.jm-find-case');
+    this.countEl = q('.jm-find-count');
+    this.el.querySelectorAll('button, label').forEach((b) => b.addEventListener('mousedown', (e) => e.preventDefault()));
+    q('.jm-find-prev').addEventListener('click', () => editor.find.prev());
+    q('.jm-find-next').addEventListener('click', () => editor.find.next());
+    q('.jm-find-one').addEventListener('click', () => editor.find.replace(this.replaceInput.value));
+    q('.jm-find-all').addEventListener('click', () => editor.find.replaceAll(this.replaceInput.value));
+    q('.jm-find-close').addEventListener('click', () => this.close());
+    this.query.addEventListener('input', () => this.#search());
+    this.caseBox.addEventListener('change', () => this.#search());
+    this.el.addEventListener('keydown', (e) => this.#onKey(e));
+    editor.find.onChange = () => this.#render();
+  }
+
+  /** 열려 있는지 */
+  get isOpen() { return !this.el.hidden; }
+
+  /**
+   * 입력줄 열기. 한 줄 안의 글자를 선택해 두었으면 찾을 말로 채운다
+   * @param {boolean} [toReplace=false] 바꿀 말 입력란에 포커스 (Ctrl+H)
+   */
+  open(toReplace = false) {
+    const { sel } = this.editor;
+    if (!this.isOpen) sel.save();
+    const picked = this.isOpen ? '' : (sel.getRange()?.toString() ?? '').replace(/​/g, '');
+    if (picked && !/[\r\n]/.test(picked)) this.query.value = picked;
+    this.el.hidden = false;
+    this.#search();
+    const target = toReplace ? this.replaceInput : this.query;
+    target.focus();
+    target.select();
+  }
+
+  /**
+   * 입력줄 닫기: 강조를 지우고 커서를 돌려준다
+   * @param {boolean} [restore=true] false 면 편집 영역으로 돌아가지 않는다 (HTML·미리보기로 전환할 때)
+   */
+  close(restore = true) {
+    if (!this.isOpen) return;
+    this.el.hidden = true;
+    this.editor.find.clear();
+    if (!restore) return;
+    const { sel, root } = this.editor;
+    root.focus();
+    if (sel.saved?.startContainer.isConnected) sel.restore();
+  }
+
+  /** 정리 */
+  destroy() {
+    this.el.remove();
+  }
+
+  /** 입력값으로 다시 찾기 */
+  #search() {
+    this.editor.find.search(this.query.value, { caseSensitive: this.caseBox.checked });
+  }
+
+  /** 입력줄 키: Enter 다음(Shift 이전)·바꿀 말에서 Enter 바꾸기·Esc 닫기·Ctrl/Cmd+F 찾을 말 칸 선택 */
+  #onKey(e) {
+    if (e.isComposing) return;
+    if (e.key === 'Escape') { e.preventDefault(); this.close(); return; }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') { e.preventDefault(); this.query.focus(); this.query.select(); return; }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const { find } = this.editor;
+    const from = document.activeElement;
+    if (from === this.replaceInput) find.replace(this.replaceInput.value);
+    else if (e.shiftKey) find.prev();
+    else find.next();
+    from?.focus?.(); // 미지원 브라우저의 선택 표시가 포커스를 가져가도 입력을 이어 간다
+  }
+
+  /** 일치 수 표시 */
+  #render() {
+    const { find } = this.editor;
+    this.countEl.textContent = find.query ? `${find.index + 1}/${find.count}${find.capped ? '개 이상' : ''}` : '';
+  }
+}
+
+/**
  * JmEditor (코어)
  * - 프레임워크 독립. contenteditable 요소 하나를 받아 편집 기능을 붙인다.
  * - 툴바/업로드 UI 는 포함하지 않는다 → Thymeleaf(바닐라)나 React 래퍼가 이 클래스를 감싼다.
@@ -8461,6 +9117,7 @@ class JmEditor {
    * @param {string} [options.ariaLabel] 편집 영역 aria-label (없으면 placeholder, 그것도 없으면 '본문 편집')
    * @param {object} [options.structure] 퍼블 구조 보존 정책 (window.JmEditorConfig.structure 보다 우선, core/structure-policy.js)
    * @param {{families?: string[]}} [options.font] 글꼴 허용 목록 (window.JmEditorConfig.font 보다 우선, core/font-policy.js)
+   * @param {(replace: boolean) => void} [options.onFindShortcut] 편집 영역의 Ctrl/Cmd+F(false)·H(true) 처리. 없으면 브라우저 기본
    * @param {(x: number, y: number, cb: (color: string|null) => void) => void} [options.pickColor]
    *        색상 선택 UI 를 띄우는 콜백 (표 셀/행 배경색 메뉴에서 사용). 래퍼가 주입한다.
    */
@@ -8496,6 +9153,7 @@ class JmEditor {
     this.map = new MapCommands(this);       // 카카오 지도(퍼가기) 블록
     this.image = new ImageCommands(this, resolveConfig('image', options.image));   // 본문 이미지 글 감싸기·크기 조절
     this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
+    this.find = new FindReplace(this); // 찾기·바꾸기
 
     this.#ensureBlock();
     this.#bind();
@@ -8521,9 +9179,11 @@ class JmEditor {
    *                      |slider (value: {interval, ratio} — 이미지 슬라이드 블록 삽입)
    *                      |map (value: 카카오맵 퍼가기 코드 — 없으면 빈 지도 블록. 코드가 틀리면 false)
    *                      |layout (value: 'side'|'one'|'diagonal'|'pair' 또는 {preset, variant} — 이미지+글 배치 블록 삽입)
+   *                      |lineHeight (value: '1.5' 등, null 이면 해제. p·h1~h6·li·blockquote·표 칸 등 글 블록에 적용)|sub|sup (위·아래 첨자, 서로 배타)
    * @param {*} [value] link 의 url, image 의 {src, alt}, table 의 {rows, cols, header}
+   * @param {{newWindow?: boolean}} [opts] link 의 새 창 여부 (생략하면 주소 종류에 따른 기본 규칙)
    */
-  exec(name, value) {
+  exec(name, value, opts) {
     this.root.focus();
     this.sel.restore();
     const c = this.commands;
@@ -8532,6 +9192,9 @@ class JmEditor {
       italic: () => c.toggleInline('em'),
       underline: () => c.toggleInline('u'),
       strike: () => c.toggleInline('s'),
+      sub: () => c.toggleScript('sub'),
+      sup: () => c.toggleScript('sup'),
+      lineHeight: () => c.setLineHeight(value ?? null),
       h1: () => c.setBlock('h1'),
       h2: () => c.setBlock('h2'),
       h3: () => c.setBlock('h3'),
@@ -8545,7 +9208,7 @@ class JmEditor {
       quote: () => (value === undefined ? c.setBlock('blockquote') : c.setQuote(value)),
       ul: () => c.toggleList('ul', value),
       ol: () => c.toggleList('ol', value),
-      link: () => c.setLink(value),
+      link: () => c.setLink(value, opts),
       unlink: () => c.setLink(null),
       image: () => c.insertImage(value?.src, value?.alt, value?.split),
       format: () => c.insertBlockHTML(Sanitizer.clean(value || '', this.structure, this.fontFamilies)),
@@ -8648,12 +9311,12 @@ class JmEditor {
   }
 
   /**
-   * 표만 있는 문서면 뒤에 빈 문단을 둔다 (표 레이어는 편집 불가라 터치에서 커서를 둘 곳이 없음).
+   * 표만 있는 문서이거나 맨 끝이 가로줄이면 뒤에 빈 문단을 둔다 (표 레이어는 편집 불가라 터치에서, 가로줄 뒤는 어디서나 커서를 둘 곳이 없음).
    * 표시(data-jm-auto)를 달아 비어 있으면 저장에 넣지 않는다 — 불러오기만 해도 내용이 바뀌지 않게
    */
   #ensureCaretAfterTables() {
     const kids = Array.from(this.root.children);
-    if (!kids.length || !kids.every((el) => el.classList.contains(TABLE_LAYER_CLASS))) return;
+    if (!kids.length || !(kids.at(-1).tagName === 'HR' || kids.every((el) => el.classList.contains(TABLE_LAYER_CLASS)))) return;
     const p = document.createElement('p');
     p.setAttribute(AUTO_ATTR, '1');
     p.appendChild(document.createElement('br'));
@@ -8701,6 +9364,38 @@ class JmEditor {
     this.exec('image', { src, alt: '', split: !!range }); // 대체 글은 이미지 도구 막대에서 (파일명은 설명이 아니라 넣지 않음)
   }
 
+  /**
+   * 글자 수: 공백 포함, ZWSP·블록 사이 줄바꿈·플러그인 헤더 글자 제외, 표·제목 포함 (저장 HTML 기준, 이모지 하나는 1)
+   * @returns {number}
+   */
+  getTextLength() {
+    return JmEditor.countText(this.getHTML());
+  }
+
+  /**
+   * HTML 의 글자 수. 소스의 줄바꿈과 블록 사이에만 있는 공백은 화면 글자가 아니라 세지 않는다
+   * @param {string} html 저장 HTML 또는 정제한 소스
+   * @returns {number}
+   */
+  static countText(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    const inGaps = /^(UL|OL|TABLE|THEAD|TBODY|TFOOT|TR|COLGROUP|DL)$/;
+    const isBlock = (n) => n?.nodeType === Node.ELEMENT_NODE && SelectionUtil.isBlockTag(n);
+    let total = 0;
+    const walker = document.createTreeWalker(tpl.content, NodeFilter.SHOW_TEXT);
+    for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+      const text = t.data.replace(/[\u200B\r\n]/g, '');
+      if (!text) continue;
+      const parent = t.parentNode;
+      // 공백뿐인 글이 블록 사이나 목록·표 구조에 있으면 내용이 아니다
+      const atEdge = isBlock(parent) && (!t.previousSibling || !t.nextSibling); // 블록 안 가장자리의 소스 공백
+      if (!text.trim() && (parent === tpl.content || inGaps.test(parent.nodeName) || atEdge || isBlock(t.previousSibling) || isBlock(t.nextSibling))) continue;
+      total += Array.from(text).length; // 코드 포인트 단위 (이모지 하나는 1)
+    }
+    return total;
+  }
+
   /** 현재 서식 상태 (툴바 활성화용) */
   getState() {
     return { ...this.commands.getState(), ...this.table.getState() };
@@ -8725,6 +9420,7 @@ class JmEditor {
     this.#neutralizeLinks();
     this.#neutralizeIds();
     this.#ensureBlock();
+    if (this.root.lastElementChild?.tagName === 'HR') this.#ensureCaretAfterTables(); // 끝 문단을 지워 가로줄이 맨 끝이 된 경우
     this.history.push();
     this.#emitChange();
     this.options.onSelectionChange?.();
@@ -8734,6 +9430,7 @@ class JmEditor {
   destroy() {
     this.#unbind?.();
     this.history.cancel();
+    this.find.destroy();
     this.root.removeAttribute('contenteditable');
     this.root.removeAttribute('role');
     this.root.removeAttribute('aria-multiline');
@@ -9117,6 +9814,8 @@ class JmEditor {
     if (mod) {
       if (e.target.closest?.('input, textarea, select')) return; // 블록 헤더 입력란: 실행 취소·전체 선택 등은 브라우저 기본 (문서 명령으로 가지 않게)
       const key = e.key.toLowerCase();
+      // 찾기·바꾸기: 입력줄을 띄우는 쪽(툴바)이 있을 때만 브라우저 기능을 가로챈다
+      if ((key === 'f' || key === 'h') && !e.shiftKey && !e.altKey && this.options.onFindShortcut) { e.preventDefault(); this.options.onFindShortcut(key === 'h'); return; }
       const map = { b: 'bold', i: 'italic', u: 'underline', z: e.shiftKey ? 'redo' : 'undo', y: 'redo' };
       if (map[key]) { e.preventDefault(); this.exec(map[key]); return; }
       // 전체 선택: 블록 안 편집 영역(배치 글 칸·표 셀·제목 등)이면 그 영역만 (브라우저는 바깥 에디터 전체를 선택해 블록까지 지워짐)
@@ -9416,7 +10115,7 @@ class JmEditor {
 
   /**
    * 편집 HTML 에서 커서 자리용 ZWSP 만 든 인라인 서식 태그를 지운다 (굵게 토글 후 입력 없이 이동하면 남는 태그).
-   * 일부러 비어 있는 태그(아이콘 i 가 바뀐 em 등)는 ZWSP 가 없으므로 그대로 둔다
+   * 일부러 비어 있는 태그(아이콘 i 가 바뀐 em 등)는 ZWSP 가 없으므로 그대로 두고, 아이콘처럼 내용 요소가 든 태그도 둔다 (자손이 빈 글자 서식뿐일 때만 지움)
    * @param {string} html ZWSP 를 빼기 전 HTML
    * @returns {string}
    */
@@ -9425,8 +10124,8 @@ class JmEditor {
     const tpl = document.createElement('template');
     tpl.innerHTML = html;
     const onlyZwsp = new RegExp(`^${ZWSP}+$`);
-    Array.from(tpl.content.querySelectorAll('strong, em, u, s, span, a')).reverse().forEach((el) => { // 중첩은 안쪽부터: 지운 자리에 ZWSP 를 남겨 바깥도 걸리게
-      if (onlyZwsp.test(el.textContent) && !el.querySelector('img, br, hr, picture, iframe, table')) el.replaceWith(ZWSP);
+    Array.from(tpl.content.querySelectorAll('strong, em, u, s, sub, sup, span, a')).reverse().forEach((el) => { // 중첩은 안쪽부터: 지운 자리에 ZWSP 를 남겨 바깥도 걸리게
+      if (onlyZwsp.test(el.textContent) && !hasInlineContent(el)) el.replaceWith(ZWSP);
     });
     return tpl.innerHTML;
   }
@@ -9445,7 +10144,7 @@ class JmEditor {
 
   /**
    * 루트가 비었거나 루트 직속에 텍스트/인라인만 있으면 p 로 감싼다 (노드마다 문단, 공백 글은 지움 — 예전 동작).
-   * 구조 모드에서 이어진 비블록 구간에 small·sub·sup(INLINE_STRUCTURE_TAGS)가 있으면 그 구간을 한 문단으로 묶는다
+   * 이어진 비블록 구간에 small·sub·sup(INLINE_STRUCTURE_TAGS)가 있으면 그 구간을 한 문단으로 묶는다
    * (「<sup>1</sup> 각주」가 두 문단으로 갈라지지 않게). 묶을 때 구간 앞뒤 공백 글만 지우고 안의 공백은 둔다.
    */
   #ensureBlock() {
@@ -9472,7 +10171,7 @@ class JmEditor {
       nodes.forEach((x) => p.appendChild(x));
     };
     runs.forEach((run) => {
-      if (this.structure && run.some(hasInlineStructure)) {
+      if (run.some(hasInlineStructure)) {
         let a = 0;
         let b = run.length;
         while (a < b && blank(run[a])) run[a++].remove();
@@ -9596,6 +10295,7 @@ class JmEditor {
 
   #emitChange() {
     this.#updateEmpty();
+    this.find.refresh(); // 찾기 중이면 일치를 다시 센다
     this.options.onChange?.(this.getHTML());
   }
 
@@ -10356,16 +11056,20 @@ const OUTDENT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none
 const CLEAR_FORMAT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5h13M12 5 9 19M6 19h6"/><path d="m16 15 5 5M21 15l-5 5"/></svg>';
 
 const FONT_SIZES=[10,11,12,13,14,15,16,18,20,24,28,32,36,48];
+const SUB_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 9 11M13 6l-9 11"/><path d="M16 15.5a2.2 2.2 0 1 1 3.8 1.5L16 21h4.5" stroke-width="1.6"/></svg>';
+const SUP_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 8 9 11M13 8l-9 11"/><path d="M16 5.5a2.2 2.2 0 1 1 3.8 1.5L16 11h4.5" stroke-width="1.6"/></svg>';
+const FIND_ICON='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>';
 const BUTTONS = [
   ['modeEditor','Editor',s=>mode==='editor',false,{icon:EDIT_ICON,group:'mode',segFirst:true,row:'top'}],
   ['modeHtml','HTML',s=>mode==='html',false,{icon:CODE_ICON,group:'mode',row:'top'}],
   ['modePreview','미리보기',s=>mode==='preview',false,{icon:PREVIEW_ICON,group:'mode',segLast:true,row:'top'}],
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
-  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),inherited:n=>inheritedFontSize(n,editor.root),sorted:true}],['fontFamily','글꼴',()=>false,false,{tip:'글꼴',select:()=>editor.fontFamilies.map(n=>[n,n]),inherited:n=>inheritedFontName(n,editor.root,editor.fontFamilies),unknownLabel:'브라우저 글꼴'}],['clearFormat','서식 지우기',()=>false,false,{tip:'서식 지우기',icon:CLEAR_FORMAT_ICON,iconOnly:true}],null,
+  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['sub','아래 첨자',s=>s.sub,false,{tip:'아래 첨자',icon:SUB_ICON,iconOnly:true}],['sup','위 첨자',s=>s.sup,false,{tip:'위 첨자',icon:SUP_ICON,iconOnly:true}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),inherited:n=>inheritedFontSize(n,editor.root),sorted:true}],['fontFamily','글꼴',()=>false,false,{tip:'글꼴',select:()=>editor.fontFamilies.map(n=>[n,n]),inherited:n=>inheritedFontName(n,editor.root,editor.fontFamilies),unknownLabel:'브라우저 글꼴'}],['clearFormat','서식 지우기',()=>false,false,{tip:'서식 지우기',icon:CLEAR_FORMAT_ICON,iconOnly:true}],null,
   ['heading','제목',()=>false,false,{tip:'제목 단계',select:[['h1','제목 1'],['h2','제목 2'],['h3','제목 3'],['h4','제목 4'],['h5','제목 5'],['h6','제목 6']],selectDefault:['p','본문'],defaultLast:true,itemClass:v=>'jm-heading-item jm-heading-item-'+v}],['quote','인용',s=>s.block==='blockquote',false,{tip:'인용 (스타일 선택)',icon:QUOTE_ICON,iconOnly:true,dropdown:true}],null,
-  ['alignMenu','가로 정렬',()=>false,false,{tip:'가로 정렬',icon:ALIGN_LEFT_ICON,iconOnly:true,dropdown:true}],['valignMenu','세로 정렬',()=>false,false,{tip:'세로 정렬 (표 셀)',icon:VALIGN_TOP_ICON,iconOnly:true,dropdown:true,tableEnabled:true}],['outdent','내어쓰기',()=>false,false,{tip:'내어쓰기 (목록은 Shift+Tab)',icon:OUTDENT_ICON,iconOnly:true}],['indent','들여쓰기',()=>false,false,{tip:'들여쓰기 (목록은 Tab)',icon:INDENT_ICON,iconOnly:true}],null,
+  ['alignMenu','가로 정렬',()=>false,false,{tip:'가로 정렬',icon:ALIGN_LEFT_ICON,iconOnly:true,dropdown:true}],['valignMenu','세로 정렬',()=>false,false,{tip:'세로 정렬 (표 셀)',icon:VALIGN_TOP_ICON,iconOnly:true,dropdown:true,tableEnabled:true}],['lineHeight','줄 간격',()=>false,false,{tip:'줄 간격',select:['1','1.2','1.5','1.8','2'].map(v=>[v,v]),inherited:node=>inheritedLineHeight(node,editor.root),sorted:true}],['outdent','내어쓰기',()=>false,false,{tip:'내어쓰기 (목록은 Shift+Tab)',icon:OUTDENT_ICON,iconOnly:true,noCell:true}],['indent','들여쓰기',()=>false,false,{tip:'들여쓰기 (목록은 Tab)',icon:INDENT_ICON,iconOnly:true,noCell:true}],null,
   ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true,splitMain:true}],['ulType','비순서 목록 유형',()=>false,false,{tip:'비순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true,splitMain:true}],['olType','순서 목록 유형',()=>false,false,{tip:'순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],null,
   ['link','링크',s=>s.a,false,{tip:'링크',icon:LINK_ICON,iconOnly:true}],['image','이미지',()=>false,false,{tip:'이미지',icon:IMAGE_ICON,iconOnly:true}],['youtube','유튜브',()=>false,false,{icon:YOUTUBE_ICON,iconOnly:true}],['table','표',s=>s.table,false,{tip:'표 삽입',icon:TABLE_ICON,iconOnly:true}],['hr','가로줄',()=>false,false,{tip:'가로줄',icon:HR_ICON,iconOnly:true}],null,
+  ['find','찾기·바꾸기',()=>false,false,{tip:'찾기·바꾸기 (Ctrl+F·Ctrl+H)',icon:FIND_ICON,iconOnly:true}],
   ['undo','실행 취소',()=>false,false,{tip:'실행 취소 (Ctrl+Z)',icon:UNDO_ICON,iconOnly:true}],['redo','다시 실행',()=>false,false,{tip:'다시 실행 (Ctrl+Y)',icon:REDO_ICON,iconOnly:true}]];
 const toolbar=document.getElementById('toolbar'), toolbarTop=document.getElementById('toolbarTop'), btns={};
 toolbarTop.setAttribute('role','toolbar');toolbarTop.setAttribute('aria-label','보기 전환');toolbar.setAttribute('role','toolbar');toolbar.setAttribute('aria-label','서식');
@@ -10386,13 +11090,21 @@ const gridPicker=new TableGridPicker({onPick:(rows,cols)=>editor.exec('table',{r
 const STRUCTURE_ON=new URLSearchParams(location.search).get('structure')!=='0';
 /* 퍼블 샘플 (test/fixtures/publisher/*.html 과 같은 내용) */
 const PUB_SAMPLES={"인사말": "<section class=\"sub-greeting\">\n  <div class=\"greeting-top\">\n    <h3 class=\"tit-h3\">인사말</h3>\n    <p class=\"desc\">함께 성장하는 내일을 만들어 가겠습니다.</p>\n  </div>\n  <div class=\"greeting-cont\">\n    <div class=\"img-area\"><img src=\"/img/sub/greeting.jpg\" alt=\"협회장 사진\" width=\"400\" height=\"500\"></div>\n    <div class=\"txt-area\">\n      <p class=\"lead\"><strong>안녕하십니까.</strong> 협회 홈페이지를 찾아 주신 여러분을 진심으로 환영합니다.</p>\n      <p>저희 협회는 회원 여러분과 함께 교육 데이터의 가치를 높이고, 누구나 배우고 나누는 환경을 만들기 위해 노력하고 있습니다.</p>\n      <p>앞으로도 투명하고 열린 운영으로 신뢰받는 협회가 되겠습니다.</p>\n      <p class=\"sign\">협회장 <span class=\"name\">홍길동</span></p>\n    </div>\n  </div>\n</section>\n", "연혁": "<div class=\"history-wrap\">\n  <div class=\"history-year\">\n    <h3 class=\"year\">2026</h3>\n    <dl class=\"history-list\">\n      <dt>03월</dt>\n      <dd>교육 데이터 표준 가이드 발간</dd>\n      <dt>01월</dt>\n      <dd>제5회 정기총회 개최</dd>\n    </dl>\n  </div>\n  <div class=\"history-year\">\n    <h3 class=\"year\">2025</h3>\n    <dl class=\"history-list\">\n      <dt>10월</dt>\n      <dd>회원사 <strong>100곳</strong> 돌파</dd>\n      <dt>06월</dt>\n      <dd>지역 교육센터 3곳 개소</dd>\n    </dl>\n  </div>\n</div>\n", "주요사업": "<section class=\"sub-business\">\n  <h3 class=\"tit-h3\">주요사업</h3>\n  <ul class=\"biz-list\">\n    <li class=\"biz-item\">\n      <div class=\"biz-icon\"><span class=\"ico ico-edu\"></span></div>\n      <strong class=\"biz-tit\">교육 지원</strong>\n      <p class=\"biz-txt\">현장 맞춤형 데이터 교육 과정을 운영합니다.</p>\n    </li>\n    <li class=\"biz-item\">\n      <div class=\"biz-icon\"><span class=\"ico ico-research\"></span></div>\n      <strong class=\"biz-tit\">연구·조사</strong>\n      <p class=\"biz-txt\">교육 데이터 활용 실태를 조사하고 정책을 제안합니다.</p>\n    </li>\n    <li class=\"biz-item\">\n      <div class=\"biz-icon\"><span class=\"ico ico-network\"></span></div>\n      <strong class=\"biz-tit\">네트워크</strong>\n      <p class=\"biz-txt\">회원사와 기관을 잇는 협력 네트워크를 만듭니다.</p>\n    </li>\n  </ul>\n  <div class=\"box-gray\">\n    <p class=\"txt-point\">사업 문의: <a href=\"tel:0312223333\">031-222-3333</a></p>\n  </div>\n</section>\n", "조직안내": "<section class=\"sub-org\">\n  <h3 class=\"tit-h3\">조직안내</h3>\n  <div class=\"org-chart\">\n    <div class=\"org-top\"><span class=\"org-box type-main\">협회장</span></div>\n    <ul class=\"org-depth2\">\n      <li><span class=\"org-box\">사무국</span></li>\n      <li><span class=\"org-box\">교육사업팀</span></li>\n      <li><span class=\"org-box\">연구지원팀</span></li>\n    </ul>\n  </div>\n  <div class=\"tbl-wrap\">\n    <table class=\"tbl-basic\">\n      <caption>부서별 업무 및 연락처</caption>\n      <colgroup><col style=\"width: 25%\"><col><col style=\"width: 25%\"></colgroup>\n      <thead>\n        <tr><th scope=\"col\">부서</th><th scope=\"col\">담당 업무</th><th scope=\"col\">연락처</th></tr>\n      </thead>\n      <tbody>\n        <tr><td>사무국</td><td class=\"txt-left\">총무·회계·회원 관리</td><td>031-222-3331</td></tr>\n        <tr><td>교육사업팀</td><td class=\"txt-left\">교육 과정 운영</td><td>031-222-3332</td></tr>\n      </tbody>\n    </table>\n  </div>\n</section>\n", "오시는 길·FAQ": "<section class=\"sub-location\">\n  <h3 class=\"tit-h3\">오시는 길</h3>\n  <div class=\"location-info\">\n    <dl class=\"info-row\">\n      <dt>주소</dt>\n      <dd>경기도 성남시 분당구 운중로 227</dd>\n    </dl>\n    <dl class=\"info-row\">\n      <dt>전화</dt>\n      <dd><a href=\"tel:0312223333\">031-222-3333</a></dd>\n    </dl>\n  </div>\n  <ul class=\"traffic-list\">\n    <li><span class=\"badge bus\">버스</span> 판교역 하차 후 도보 10분</li>\n    <li><span class=\"badge subway\">지하철</span> 신분당선 판교역 1번 출구</li>\n  </ul>\n</section>\n<section class=\"sub-faq\">\n  <h3 class=\"tit-h3\">자주 묻는 질문</h3>\n  <dl class=\"faq-list\">\n    <dt class=\"q\">회원 가입은 어떻게 하나요?</dt>\n    <dd class=\"a\"><p>홈페이지 상단의 회원가입 메뉴에서 신청할 수 있습니다.</p></dd>\n    <dt class=\"q\">교육 신청 기간은 언제인가요?</dt>\n    <dd class=\"a\"><p>매 분기 시작 2주 전부터 신청을 받습니다.</p><ul class=\"list-dot\"><li>1분기: 12월 중순</li><li>2분기: 3월 중순</li></ul></dd>\n  </dl>\n</section>\n","모바일 이미지": "<section id=\"mobile-guide\" class=\"sub-mobile\" aria-labelledby=\"mobile-guide-tit\">\n  <h3 id=\"mobile-guide-tit\" class=\"tit-h3\">모바일 이미지 안내</h3>\n  <nav class=\"tabs\" aria-label=\"안내 탭\">\n    <a class=\"tab is-active\" href=\"#mobile-guide-pic\">이미지</a>\n    <a class=\"tab\" href=\"#mobile-guide-link\">링크</a>\n    <a class=\"tab\" href=\"tel:02-000-0000\">전화</a>\n  </nav>\n  <div id=\"mobile-guide-pic\">\n    <h4 class=\"tit-h4\"><i class=\"ico ph ph-image\"></i>화면 폭에 따라 바뀌는 이미지</h4>\n    <p>이미지를 클릭하면 나오는 도구 막대에서 「모바일 추가·교체·삭제」를 쓸 수 있습니다. 좁은 화면(767px 이하)에서는 모바일 이미지가 보입니다.</p>\n    <picture class=\"pic-main\"><source media=\"(max-width: 767px)\" srcset=\"/img/sub/greeting.jpg\"><img src=\"/img/sub/greeting.jpg\" alt=\"모바일 이미지 예시\" loading=\"lazy\"></picture>\n  </div>\n  <div id=\"mobile-guide-link\">\n    <h4 class=\"tit-h4\">링크 규칙</h4>\n    <p><a href=\"#mobile-guide\">처음으로</a>(같은 페이지), <a href=\"mailto:info@example.com\">메일</a>, <a href=\"https://example.com\">외부 주소</a>. 외부 주소만 새 창으로 열립니다.</p>\n  </div>\n</section>\n"};
+/* 글자 수 (편집 영역 아래) */
+const charCountEl=document.getElementById('charCount');
+function renderCount(n){charCountEl.textContent=n.toLocaleString()+'자';}
 const editor=new JmEditor(document.getElementById('editor'),{
   placeholder:'내용을 입력하세요',
   structure:{enabled:STRUCTURE_ON},
-  onChange:h=>{out.textContent=h; len.textContent=h.length+' chars';},
+  onChange:h=>{out.textContent=h; len.textContent=h.length+' chars'; renderCount(JmEditor.countText(h));},
+  onFindShortcut:replace=>{if(mode==='editor')openFind(replace);},
   onSelectionChange:refresh,
   pickColor:(x,y,cb)=>colorPicker.open(x,y,cb,{sampleMode:'background'}), // 표 셀/행 배경색 메뉴용
 });
+/* 찾기·바꾸기 입력줄 */
+const findBar=new FindBar(editor);
+linkbar.after(findBar.el);
+function openFind(replace){if(mode!=='editor')return;linkbar.classList.remove('open');findBar.open(replace);}
 /* ── 색 테마 패널: 라이브러리 테마 변수(--jm-*)를 :root 에 써서 바로 적용 (README 「색 테마」) ── */
 const THEME_PRESETS={
   '데모 초록':{'--bg':'#f6f7f4','--jm-bg':'#ffffff','--jm-text':'#1f2421','--jm-muted':'#6b716c','--jm-subtle':'#9aa19b','--jm-strong':'#2e3531','--jm-text-soft':'#47504a',
@@ -10455,7 +11167,7 @@ BUTTONS.forEach(def=>{
   b.type='button';b.className='jm-btn';b.title=opts.tip||cmd;b.dataset.cmd=cmd;
   if(opts.icon){b.classList.add('jm-btn-icon');b.innerHTML=opts.iconOnly?opts.icon:opts.icon+'<span>'+label+'</span>';if(opts.dropdown){b.classList.add('jm-btn-dropdown');b.innerHTML+=CHEVRON_ICON;}b.setAttribute('aria-label',label);}else b.textContent=label;
   b.title=opts.tip||(opts.icon?label:cmd);
-  if(['bold','italic','underline','strike','ul','ol'].includes(cmd)||opts.group)b.setAttribute('aria-pressed',String(!!(cmd==='modeEditor')));
+  if(['bold','italic','underline','strike','sub','sup','ul','ol'].includes(cmd)||opts.group)b.setAttribute('aria-pressed',String(!!(cmd==='modeEditor')));
   if(opts.right)b.classList.add('jm-btn-right');if(opts.splitMain)b.classList.add('jm-btn-split-main');if(opts.splitArrow)b.classList.add('jm-btn-split-arrow');if(opts.group)b.classList.add('jm-btn-seg');if(opts.segFirst)b.classList.add('jm-btn-seg-first');if(opts.segLast)b.classList.add('jm-btn-seg-last');
   if(tableOnly)b.hidden=true; // 표 안에서만 표시
   b.addEventListener('mousedown',e=>e.preventDefault()); // 선택 영역 유지
@@ -10475,12 +11187,13 @@ function selectItems(opts){return typeof opts.select==='function'?opts.select():
 function valueItems(opts,current,inh){const items=[...selectItems(opts)];[current,inh].forEach(v=>{if(v&&!items.some(([x])=>x===v))items[opts.sorted?'push':'unshift']([v,v]);});if(opts.sorted)items.sort((a,c)=>parseFloat(a[0])-parseFloat(c[0]));if(!inh&&opts.unknownLabel)items.unshift(['',opts.unknownLabel]);return items;}
 function setSelectValue(cmd,value){const b=btns[cmd];const opts=BUTTONS.find(d=>d?.[0]===cmd)?.[4];if(!b||!opts)return;if(opts.inherited){const shown=value||opts.inherited(editor.sel.getRange()?.startContainer)||'';b.dataset.value=shown;b.firstChild.textContent=shown||opts.unknownLabel||'';return;}const found=selectItems(opts).find(([x])=>x===value);const [v,tx]=found||opts.selectDefault;b.dataset.value=v;b.firstChild.textContent=tx;}
 function run(cmd){
+  if(cmd==='find'){openFind(false);return;}
   if(cmd==='link'){
     const a=editor.sel.closest('a');
     // 허용되지 않는 주소(javascript: 등)면 입력줄을 닫지 않고 안내
-    const apply=v=>{if(v&&editor.exec('link',v)===false){linkUrl.setCustomValidity('http(s)·mailto·tel 주소나 / 로 시작하는 경로만 쓸 수 있습니다');linkUrl.reportValidity();return false;}return true;};
-    if(a)openInput('링크 URL (비우면 해제)',JmEditor.getHref(a),v=>v?apply(v):(editor.exec('unlink'),true));
-    else openInput('링크 URL','https://',apply);return;
+    const apply=v=>{if(v&&editor.exec('link',v,{newWindow:linkNewWinBox.checked})===false){linkUrl.setCustomValidity('http(s)·mailto·tel 주소나 / 로 시작하는 경로만 쓸 수 있습니다');linkUrl.reportValidity();return false;}return true;};
+    if(a)openInput('링크 URL (비우면 해제)',JmEditor.getHref(a),v=>v?apply(v):(editor.exec('unlink'),true),a.getAttribute('target')==='_self'?false:null);
+    else openInput('링크 URL','https://',apply,null);return;
   }
   if(cmd==='youtube'){
     openInput('유튜브 주소','',v=>{if(!v)return true;if(!editor.exec('youtube',v)){linkUrl.setCustomValidity('유튜브 주소가 아닙니다');linkUrl.reportValidity();return false;}return true;});return;
@@ -10500,18 +11213,24 @@ function run(cmd){
 }
 /* 인라인 입력줄 (링크/유튜브 공용). handler 가 false 면 닫지 않음 */
 let inputHandler=null;
-function openInput(label,initial,handler){editor.sel.save();document.getElementById('linkLabel').textContent=label;linkUrl.value=initial;linkUrl.setCustomValidity('');inputHandler=handler;linkbar.classList.add('open');linkUrl.focus();linkUrl.select();}
-function closeInput(){linkbar.classList.remove('open');inputHandler=null;editor.root.focus();editor.sel.restore();}
+const linkNewWinLabel=document.getElementById('linkNewWinLabel'),linkNewWinBox=document.getElementById('linkNewWin');let linkWindowChoice=null;
+/** 새 창 체크박스를 지금 주소에 맞춘다: #·tel:·mailto: 는 꺼진 채 잠그고, 그 밖은 고른 값(없으면 켬) */
+function syncLinkWindow(){const inPage=Sanitizer.isInPageHref(linkUrl.value);linkNewWinBox.disabled=inPage;linkNewWinBox.checked=!inPage&&(linkWindowChoice??true);}
+linkNewWinLabel.addEventListener('mousedown',e=>e.preventDefault());
+linkNewWinBox.addEventListener('change',()=>{linkWindowChoice=linkNewWinBox.checked;});
+linkUrl.addEventListener('input',()=>{if(!linkNewWinLabel.hidden)syncLinkWindow();});
+function openInput(label,initial,handler,linkWindow){findBar.close(false);editor.sel.save();linkNewWinLabel.hidden=linkWindow===undefined;linkWindowChoice=linkWindow??null;document.getElementById('linkLabel').textContent=label;linkUrl.value=initial;linkUrl.setCustomValidity('');inputHandler=handler;linkbar.classList.add('open');if(!linkNewWinLabel.hidden)syncLinkWindow();linkUrl.focus();linkUrl.select();}
+function closeInput(){linkbar.classList.remove('open');linkNewWinLabel.hidden=true;inputHandler=null;editor.root.focus();editor.sel.restore();}
 document.getElementById('linkOk').addEventListener('mousedown',e=>e.preventDefault());
 document.getElementById('linkOk').addEventListener('click',()=>{linkUrl.setCustomValidity('');const v=linkUrl.value.trim();editor.root.focus();editor.sel.restore();if(inputHandler?.(v)!==false)closeInput();else linkUrl.focus();});
 document.getElementById('linkCancel').addEventListener('mousedown',e=>e.preventDefault());
 document.getElementById('linkCancel').addEventListener('click',closeInput);
 linkUrl.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('linkOk').click();if(e.key==='Escape')document.getElementById('linkCancel').click();});
 fileInput.addEventListener('change',()=>{editor.insertImageFile(fileInput.files[0]);fileInput.value='';});
-function refresh(){if(mode!=='editor')return;const s=editor.getState();BUTTONS.forEach(d=>{if(!d)return;btns[d[0]].classList.toggle('is-active',!!d[2](s));if(btns[d[0]].hasAttribute('aria-pressed'))btns[d[0]].setAttribute('aria-pressed',String(!!d[2](s)));if(d[3])btns[d[0]].hidden=!s.table;if(d[4]?.tableEnabled)btns[d[0]].disabled=!s.table;});
+function refresh(){if(mode!=='editor')return;const s=editor.getState();BUTTONS.forEach(d=>{if(!d)return;btns[d[0]].classList.toggle('is-active',!!d[2](s));if(btns[d[0]].hasAttribute('aria-pressed'))btns[d[0]].setAttribute('aria-pressed',String(!!d[2](s)));if(d[3])btns[d[0]].hidden=!s.table;if(d[4]?.tableEnabled)btns[d[0]].disabled=!s.table;if(d[4]?.noCell)btns[d[0]].disabled=s.table&&s.block!=='li';});
   const setIcon=(c,icon)=>{if(btns[c])btns[c].innerHTML=icon+CHEVRON_ICON;};
   setIcon('alignMenu',(ALIGN_ITEMS.find(([v])=>v===s.align)||ALIGN_ITEMS[0])[2]);setIcon('valignMenu',(VALIGN_ITEMS.find(([v])=>v===s.valign)||VALIGN_ITEMS[0])[2]);
-  setSelectValue('heading',s.block);setSelectValue('fontSize',s.fontSize);setSelectValue('fontFamily',s.fontFamily);
+  setSelectValue('heading',s.block);setSelectValue('fontSize',s.fontSize);setSelectValue('fontFamily',s.fontFamily);setSelectValue('lineHeight',s.lineHeight);
   btns.color.style.setProperty('--jm-swatch',s.color||'transparent');btns.bgColor.style.setProperty('--jm-swatch',s.bg||'transparent');}
 
 /* 모드 전환: editor / html / preview. html 모드에서 나갈 때 textarea 내용을 setHTML 로 반영 */
@@ -10520,6 +11239,7 @@ const previewEl=document.getElementById('preview');let stopPreview=null;let sour
 function setMode(m){
   if(m===mode)return;
   if(mode==='html'&&sourceEl.value!==sourceBase)editor.replaceContent(sourceEl.value); // 고쳤을 때만, 되돌리기 한 단계로
+  findBar.close(false); // 찾기는 편집 모드에서만
   mode=m;
   const area=document.getElementById('editor');
   area.hidden=m!=='editor';sourceEl.hidden=m!=='html';previewEl.hidden=m!=='preview';
@@ -10529,7 +11249,10 @@ function setMode(m){
   else area.focus();
   BUTTONS.forEach(d=>{if(!d)return;const [c,,act,,o={}]=d;if(o.group==='mode'){btns[c].classList.toggle('is-active',!!act());btns[c].setAttribute('aria-pressed',String(!!act()));}else btns[c].disabled=m!=='editor';});
   toolbar.hidden=m!=='editor';
+  renderCount(JmEditor.countText(m==='html'?Sanitizer.clean(sourceEl.value,editor.structure,editor.fontFamilies):editor.getHTML()));
 }
+let countTimer=null;
+sourceEl.addEventListener('input',()=>{clearTimeout(countTimer);countTimer=setTimeout(()=>renderCount(JmEditor.countText(Sanitizer.clean(sourceEl.value,editor.structure,editor.fontFamilies))),150);}); // HTML 모드: 소스를 정제한 결과 기준
 
 /* 초기 샘플 내용 */
 editor.setHTML(`<h2>공지사항 작성 샘플</h2>

@@ -5,7 +5,8 @@
  */
 import { JmEditor } from '../core/JmEditor.js';
 import { Sanitizer } from '../core/Sanitizer.js';
-import { inheritedFontSize, inheritedFontName } from '../core/font-policy.js';
+import { inheritedFontSize, inheritedFontName, inheritedLineHeight } from '../core/font-policy.js';
+import { FindBar } from './FindBar.js';
 import { TableGridPicker } from './TableGridPicker.js';
 import { ColorPicker } from './ColorPicker.js';
 import { FormatPicker, SAMPLE_FORMATS } from './FormatPicker.js';
@@ -53,8 +54,16 @@ const INDENT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none"
 const OUTDENT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18M12 10h9M12 14h9M3 19h18"/><path d="M7 9l-3 3 3 3"/></svg>';
 const CLEAR_FORMAT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5h13M12 5 9 19M6 19h6"/><path d="m16 15 5 5M21 15l-5 5"/></svg>';
 
+/** 위·아래 첨자 / 찾기 아이콘 (자체 제작 SVG) */
+const SUB_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 9 11M13 6l-9 11"/><path d="M16 15.5a2.2 2.2 0 1 1 3.8 1.5L16 21h4.5" stroke-width="1.6"/></svg>';
+const SUP_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 8 9 11M13 8l-9 11"/><path d="M16 5.5a2.2 2.2 0 1 1 3.8 1.5L16 11h4.5" stroke-width="1.6"/></svg>';
+const FIND_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>';
+
+/** 줄 간격 선택지 (단위 없는 배수) */
+const LINE_HEIGHTS = ['1', '1.2', '1.5', '1.8', '2'];
+
 /** 켜고 끄는 서식 버튼 (aria-pressed 대상, 모드 버튼은 group 으로 따로 판단) */
-const TOGGLE_CMDS = new Set(['bold', 'italic', 'underline', 'strike', 'ul', 'ol']);
+const TOGGLE_CMDS = new Set(['bold', 'italic', 'underline', 'strike', 'sub', 'sup', 'ul', 'ol']);
 
 /** 글자 크기 선택지 (px) */
 const FONT_SIZES = [10, 11, 12, 13, 14, 15, 16, 18, 20, 24, 28, 32, 36, 48];
@@ -97,6 +106,8 @@ const BUTTONS = [
   ['italic', 'I', (s) => s.em, false, { tip: '기울임 (Ctrl+I)' }],
   ['underline', 'U', (s) => s.u, false, { tip: '밑줄 (Ctrl+U)' }],
   ['strike', 'S', (s) => s.s, false, { tip: '취소선' }],
+  ['sub', '아래 첨자', (s) => s.sub, false, { tip: '아래 첨자', icon: SUB_ICON, iconOnly: true }],
+  ['sup', '위 첨자', (s) => s.sup, false, { tip: '위 첨자', icon: SUP_ICON, iconOnly: true }],
   ['color', 'A', (s) => !!s.color, false, { tip: '글자색' }],     // 버튼 하단 색 띠로 현재 색 표시
   ['bgColor', 'A', (s) => !!s.bg, false, { tip: '글자 배경색' }],
   ['fontSize', '크기', () => false, false, { tip: '글자 크기', select: FONT_SIZES.map((n) => [`${n}px`, `${n}px`]), inherited: (editor, node) => inheritedFontSize(node, editor.root), sorted: true }],
@@ -111,8 +122,10 @@ const BUTTONS = [
   // 정렬: 드롭다운 두 개 (가로 / 세로). 버튼 아이콘은 현재 상태를 보여주고, 누르면 목록
   ['alignMenu', '가로 정렬', () => false, false, { tip: '가로 정렬', icon: ALIGN_LEFT_ICON, iconOnly: true, dropdown: true }],
   ['valignMenu', '세로 정렬', () => false, false, { tip: '세로 정렬 (표 셀)', icon: VALIGN_TOP_ICON, iconOnly: true, dropdown: true, tableEnabled: true }],
-  ['outdent', '내어쓰기', () => false, false, { tip: '내어쓰기 (목록은 Shift+Tab)', icon: OUTDENT_ICON, iconOnly: true }],
-  ['indent', '들여쓰기', () => false, false, { tip: '들여쓰기 (목록은 Tab)', icon: INDENT_ICON, iconOnly: true }],
+  // 줄 간격: 크기·글꼴과 같이 실제 값을 표시, 지정 안 했을 때의 값을 고르면 해제
+  ['lineHeight', '줄 간격', () => false, false, { tip: '줄 간격', select: LINE_HEIGHTS.map((v) => [v, v]), inherited: (editor, node) => inheritedLineHeight(node, editor.root), sorted: true }],
+  ['outdent', '내어쓰기', () => false, false, { tip: '내어쓰기 (목록은 Shift+Tab)', icon: OUTDENT_ICON, iconOnly: true, noCell: true }],
+  ['indent', '들여쓰기', () => false, false, { tip: '들여쓰기 (목록은 Tab)', icon: INDENT_ICON, iconOnly: true, noCell: true }],
   null,
   // 목록: 스플릿 버튼 (본 버튼 = 토글, 오른쪽 꺾쇠 = 유형 메뉴)
   ['ul', '비순서 목록', (s) => s.list === 'ul', false, { tip: '비순서 목록', icon: UL_ICON, iconOnly: true, splitMain: true }],
@@ -126,6 +139,7 @@ const BUTTONS = [
   ['table', '표', (s) => s.table, false, { tip: '표 삽입', icon: TABLE_ICON, iconOnly: true }], // 행·열 편집은 표 레이어 우클릭 메뉴에서
   ['hr', '가로줄', () => false, false, { tip: '가로줄', icon: HR_ICON, iconOnly: true }],
   null,
+  ['find', '찾기·바꾸기', () => false, false, { tip: '찾기·바꾸기 (Ctrl+F·Ctrl+H)', icon: FIND_ICON, iconOnly: true }],
   ['undo', '실행 취소', () => false, false, { tip: '실행 취소 (Ctrl+Z)', icon: UNDO_ICON, iconOnly: true }],
   ['redo', '다시 실행', () => false, false, { tip: '다시 실행 (Ctrl+Y)', icon: REDO_ICON, iconOnly: true }],
 ];
@@ -139,6 +153,7 @@ export class JmToolbarEditor {
    *   contentId:  지정 시 생성 직후 api.get(contentId) 로 내용을 불러옴 (수정 화면)
    *   onLoaded(record), onSaved(record): 조회·저장 완료 콜백
    *   onError(error): 조회 실패 콜백 (없으면 notify 로 안내)
+   *   charCount:  true 또는 { max } — 편집 영역 아래 글자 수 표시 (기본 꺼짐). max 를 넘으면 경고 색만, 입력은 막지 않음
    */
   constructor(container, options = {}) {
     // API 레이어 (옵션으로 켬)
@@ -179,7 +194,7 @@ export class JmToolbarEditor {
     this.inputBar = document.createElement('div');
     this.inputBar.className = 'jm-inputbar';
     this.inputBar.hidden = true;
-    this.inputBar.innerHTML = '<span class="jm-inputbar-label"></span><input type="text" class="jm-inputbar-input"><button type="button" class="jm-btn jm-inputbar-ok">적용</button><button type="button" class="jm-btn jm-inputbar-cancel">취소</button>';
+    this.inputBar.innerHTML = '<span class="jm-inputbar-label"></span><input type="text" class="jm-inputbar-input"><label class="jm-inputbar-check jm-inputbar-newwin" hidden><input type="checkbox">새 창</label><button type="button" class="jm-btn jm-inputbar-ok">적용</button><button type="button" class="jm-btn jm-inputbar-cancel">취소</button>';
     this.inputLabel = this.inputBar.querySelector('.jm-inputbar-label');
     this.inputField = this.inputBar.querySelector('.jm-inputbar-input');
     this.inputBar.querySelector('.jm-inputbar-ok').addEventListener('mousedown', (e) => e.preventDefault());
@@ -188,12 +203,31 @@ export class JmToolbarEditor {
     this.inputBar.querySelector('.jm-inputbar-cancel').addEventListener('click', () => this.#closeInput());
     this.inputField.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.#submitInput(); } if (e.key === 'Escape') this.#closeInput(); });
     this.inputHandler = null;
+    // 링크 입력줄의 새 창 체크박스 (linkWindowChoice: 사용자가 고른 값, null 이면 주소 종류에 따른 기본값)
+    this.newWinLabel = this.inputBar.querySelector('.jm-inputbar-newwin');
+    this.newWinBox = this.newWinLabel.querySelector('input');
+    this.linkWindowChoice = null;
+    this.newWinLabel.addEventListener('mousedown', (e) => e.preventDefault());
+    this.newWinBox.addEventListener('change', () => { this.linkWindowChoice = this.newWinBox.checked; });
+    this.inputField.addEventListener('input', () => { if (!this.newWinLabel.hidden) this.#syncLinkWindow(); });
 
     // 미리보기 패널 — 저장될 HTML 을 뷰어 스타일(.jm-content)로 렌더
     this.previewPane = document.createElement('div');
     this.previewPane.className = 'jm-preview-pane jm-content';
     this.previewPane.hidden = true;
     this.container.append(this.toolbarTop, this.toolbar, this.inputBar, this.area, this.source, this.previewPane);
+    // 글자 수 표시 (옵션을 켰을 때만)
+    this.charCountEl = null;
+    this.charMax = null;
+    if (options.charCount) {
+      this.charCountEl = document.createElement('div');
+      this.charCountEl.className = 'jm-charcount';
+      this.container.appendChild(this.charCountEl);
+      const max = options.charCount.max;
+      this.charMax = typeof max === 'number' && max > 0 && Number.isFinite(max) ? max : null;
+      this.onSourceInput = () => { clearTimeout(this.charTimer); this.charTimer = setTimeout(() => this.#refreshCount(), 150); }; // 소스 정제는 무거워 입력을 묶는다
+      this.source.addEventListener('input', this.onSourceInput);
+    }
     this.mode = 'editor'; // 'editor' | 'html' | 'preview'
 
     // 이미지 선택용 숨김 input
@@ -231,13 +265,17 @@ export class JmToolbarEditor {
 
     this.editor = new JmEditor(this.area, {
       ...options,
-      onChange: (html) => { this.dirty = true; options.onChange?.(html); },
+      onChange: (html) => { this.dirty = true; if (this.charCountEl && this.mode === 'editor') this.#renderCount(JmEditor.countText(html)); options.onChange?.(html); },
+      onFindShortcut: (replace) => { if (this.mode === 'editor') this.openFind(replace); },
       onSelectionChange: () => this.#refreshState(),
       pickColor: (x, y, cb) => this.colorPicker.open(x, y, cb, { sampleMode: 'background' }),
     });
     if (!this.editor.fontFamilies.length) this.buttons.fontFamily.hidden = true; // 글꼴 목록을 비우면 도구도 숨김
+    this.findBar = new FindBar(this.editor);
+    this.inputBar.after(this.findBar.el);
     if (options.initialHTML) this.editor.setHTML(options.initialHTML);
     this.#refreshState(); // 처음부터 실제 크기·글꼴 표시
+    this.#refreshCount();
     // 웹폰트는 나중에 로드되므로 그때 글꼴 이름을 다시 읽는다
     this.onFontsLoaded = () => this.#refreshState();
     document.fonts?.addEventListener('loadingdone', this.onFontsLoaded);
@@ -303,6 +341,43 @@ export class JmToolbarEditor {
     this.dirty = false;
     this.onSaved?.(rec);
     return rec;
+  }
+
+  /**
+   * 글자 수 (공백 포함, ZWSP·플러그인 헤더 글자 제외, 표·제목 포함). HTML 모드에서는 소스를 정제한 결과 기준
+   * @returns {number}
+   */
+  getTextLength() {
+    return JmEditor.countText(this.getHTML());
+  }
+
+  /** 지금 내용으로 글자 수 표시를 다시 센다 (옵션을 껐으면 세지 않음) */
+  #refreshCount() {
+    if (this.charCountEl) this.#renderCount(this.getTextLength());
+  }
+
+  /**
+   * 글자 수 표시 갱신. max 를 넘으면 경고 색
+   * @param {number} n
+   */
+  #renderCount(n) {
+    this.charCountEl.textContent = this.charMax ? `${n.toLocaleString()} / ${this.charMax.toLocaleString()}자` : `${n.toLocaleString()}자`;
+    this.charCountEl.classList.toggle('is-over', !!this.charMax && n > this.charMax);
+  }
+
+  /**
+   * 찾기·바꾸기 입력줄 열기 (편집 모드에서만)
+   * @param {boolean} [toReplace=false] 바꿀 말 입력란에 포커스
+   */
+  openFind(toReplace = false) {
+    if (this.mode !== 'editor') return;
+    this.#closeInputBar();
+    this.findBar.open(toReplace);
+  }
+
+  /** 찾기·바꾸기 입력줄 닫기 (강조 제거, 커서 복귀) */
+  closeFind() {
+    this.findBar.close();
   }
 
   /** 새 글 작성 상태로 초기화 (등록 화면 재사용) */
@@ -446,15 +521,16 @@ export class JmToolbarEditor {
 
   /** 버튼 클릭 → 명령 실행. 링크/이미지는 입력 UI 를 거친다 */
   #onCommand(cmd) {
+    if (cmd === 'find') { this.openFind(); return; }
     if (cmd === 'link') {
       const a = this.editor.sel.closest('a');
       // 허용되지 않는 주소(javascript: 등)면 입력줄을 닫지 않고 안내
       const apply = (v) => {
-        if (v && this.editor.exec('link', v) === false) { this.inputField.setCustomValidity('http(s)·mailto·tel 주소나 / 로 시작하는 경로만 쓸 수 있습니다'); this.inputField.reportValidity(); return false; }
+        if (v && this.editor.exec('link', v, { newWindow: this.newWinBox.checked }) === false) { this.inputField.setCustomValidity('http(s)·mailto·tel 주소나 / 로 시작하는 경로만 쓸 수 있습니다'); this.inputField.reportValidity(); return false; }
         return true;
       };
-      if (a) this.#openInput('링크 URL (비우면 해제)', JmEditor.getHref(a), (v) => (v ? apply(v) : (this.editor.exec('unlink'), true)));
-      else this.#openInput('링크 URL', 'https://', apply);
+      if (a) this.#openInput('링크 URL (비우면 해제)', JmEditor.getHref(a), (v) => (v ? apply(v) : (this.editor.exec('unlink'), true)), a.getAttribute('target') === '_self' ? false : null);
+      else this.#openInput('링크 URL', 'https://', apply, null);
       return;
     }
     if (cmd === 'youtube') {
@@ -530,6 +606,7 @@ export class JmToolbarEditor {
       if (this.buttons[cmd].hasAttribute('aria-pressed')) this.buttons[cmd].setAttribute('aria-pressed', String(!!isActive(state)));
       if (tableOnly) this.buttons[cmd].hidden = !state.table;
       if (def[4]?.tableEnabled) this.buttons[cmd].disabled = !state.table;
+      if (def[4]?.noCell) this.buttons[cmd].disabled = state.table && state.block !== 'li'; // 표 칸에서는 칸 안 목록만
     });
     // 정렬 버튼 아이콘을 현재 상태로
     const setIcon = (cmd, icon) => { const b = this.buttons[cmd]; if (b) b.innerHTML = icon + CHEVRON_ICON; };
@@ -539,21 +616,39 @@ export class JmToolbarEditor {
     this.#setSelectValue('heading', state.block);
     this.#setSelectValue('fontSize', state.fontSize);
     this.#setSelectValue('fontFamily', state.fontFamily);
+    this.#setSelectValue('lineHeight', state.lineHeight);
     // 현재 색을 버튼 하단 띠로 표시
     this.buttons.color.style.setProperty('--jm-swatch', state.color || 'transparent');
     this.buttons.bgColor.style.setProperty('--jm-swatch', state.bg || 'transparent');
   }
 
-  /** 인라인 입력줄 열기. handler(value) 가 true 를 돌려주면 닫는다 */
-  #openInput(label, initial, handler) {
+  /**
+   * 인라인 입력줄 열기. handler(value) 가 true 를 돌려주면 닫는다
+   * @param {string} label
+   * @param {string} initial
+   * @param {(value: string) => boolean} handler
+   * @param {boolean|null} [linkWindow] 있으면(undefined 아님) 새 창 체크박스를 보인다: 지금 링크가 고른 값, null 이면 주소 종류에 따른 기본값
+   */
+  #openInput(label, initial, handler, linkWindow) {
+    this.findBar.close(false);
     this.editor.sel.save();
+    this.newWinLabel.hidden = linkWindow === undefined;
+    this.linkWindowChoice = linkWindow ?? null;
     this.inputLabel.textContent = label;
     this.inputField.value = initial;
     this.inputField.setCustomValidity('');
     this.inputHandler = handler;
     this.inputBar.hidden = false;
+    if (!this.newWinLabel.hidden) this.#syncLinkWindow();
     this.inputField.focus();
     this.inputField.select();
+  }
+
+  /** 새 창 체크박스를 지금 주소에 맞춘다: #·tel:·mailto: 는 꺼진 채 잠그고, 그 밖은 고른 값(없으면 켬) */
+  #syncLinkWindow() {
+    const inPage = Sanitizer.isInPageHref(this.inputField.value);
+    this.newWinBox.disabled = inPage;
+    this.newWinBox.checked = !inPage && (this.linkWindowChoice ?? true);
   }
 
   #submitInput() {
@@ -565,8 +660,16 @@ export class JmToolbarEditor {
     else this.inputField.focus();
   }
 
+  /** 입력줄만 닫는다 (커서는 그대로) */
+  #closeInputBar() {
+    this.inputBar.hidden = true;
+    this.newWinLabel.hidden = true;
+    this.inputHandler = null;
+  }
+
   #closeInput() {
     this.inputBar.hidden = true;
+    this.newWinLabel.hidden = true;
     this.inputHandler = null;
     this.editor.root.focus();
     this.editor.sel.restore();
@@ -581,6 +684,7 @@ export class JmToolbarEditor {
     if (mode === this.mode) return;
     // 현재 모드 정리
     if (this.mode === 'html') this.#applySource();
+    this.findBar.close(false); // 찾기는 편집 모드에서만
     this.mode = mode;
 
     this.area.hidden = mode !== 'editor';
@@ -606,6 +710,8 @@ export class JmToolbarEditor {
     });
     this.buttons.format.disabled = !editing;
     this.toolbar.hidden = !editing; // 편집 모드가 아니면 하단 서식 줄 숨김
+    clearTimeout(this.charTimer);
+    this.#refreshCount();
   }
 
   /**
@@ -640,7 +746,7 @@ export class JmToolbarEditor {
 
   /** 저장할 HTML. HTML 모드에서는 입력 중인 소스를 Sanitizer 로 거른 결과 */
   getHTML() { return this.mode === 'html' ? Sanitizer.clean(this.source.value, this.editor.structure, this.editor.fontFamilies) : this.editor.getHTML(); }
-  setHTML(html) { this.editor.setHTML(html); if (this.mode === 'html') this.#fillSource(html); if (this.mode === 'preview') this.#renderPreview(); }
+  setHTML(html) { this.editor.setHTML(html); if (this.mode === 'html') this.#fillSource(html); if (this.mode === 'preview') this.#renderPreview(); this.#refreshCount(); }
 
   /** 미리보기 그리기: 이전 런타임(갤러리 배치 감시·슬라이드 타이머)을 정리하고 Sanitizer 를 거친 HTML 로 다시 그림 */
   #renderPreview() {
@@ -656,11 +762,14 @@ export class JmToolbarEditor {
   refreshFormats() { this.formatPicker.refresh(); }
   destroy() {
     document.fonts?.removeEventListener('loadingdone', this.onFontsLoaded);
+    clearTimeout(this.charTimer);
+    this.source.removeEventListener('input', this.onSourceInput);
+    this.findBar.destroy();
     this.#stopPreviewLayout?.(); // 미리보기 런타임(갤러리 감시·슬라이드 타이머) 정리
     this.#stopPreviewLayout = null;
     this.gridPicker.destroy(); this.colorPicker.destroy(); this.formatPicker.destroy(); this.listMenu.destroy(); this.editor.destroy();
     // 래퍼가 만든 DOM 정리 (컨테이너에 다시 생성해도 툴바가 쌓이지 않게). 저장은 destroy 전에 할 것
-    [this.toolbarTop, this.toolbar, this.inputBar, this.area, this.source, this.previewPane, this.fileInput].forEach((el) => el.remove());
+    [this.toolbarTop, this.toolbar, this.inputBar, this.area, this.source, this.previewPane, this.fileInput, this.charCountEl].forEach((el) => el?.remove());
     this.container.classList.remove('jm-container');
   }
 }

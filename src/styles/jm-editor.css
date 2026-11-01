@@ -336,6 +336,23 @@ div[data-type="gallery"] p[data-role="title"] { flex: 0 0 100%; margin: 0 0 2px;
 .jm-inputbar-label { font-size: 12px; color: var(--jm-text-soft); white-space: nowrap; }
 .jm-inputbar-input { flex: 1; min-width: 0; padding: 5px 8px; border: 1px solid var(--jm-border); border-radius: 4px; font: 13px ui-monospace, Menlo, monospace; }
 
+.jm-inputbar-check { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--jm-text-soft); white-space: nowrap; cursor: pointer; }
+.jm-inputbar-check[hidden] { display: none; }
+/* 찾기·바꾸기 입력줄 (좁으면 여러 줄), 강조는 DOM 없이 ::highlight */
+.jm-findbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--jm-border); background: var(--jm-head); }
+.jm-findbar[hidden] { display: none; }
+.jm-find-input { flex: 1 1 120px; min-width: 0; padding: 5px 8px; border: 1px solid var(--jm-border); border-radius: 4px; font: 13px ui-monospace, Menlo, monospace; }
+.jm-find-count { min-width: 32px; font-size: 12px; color: var(--jm-text-soft); text-align: center; white-space: nowrap; }
+::highlight(jm-find) { background-color: #fde68a; color: #1f2421; }
+::highlight(jm-find-current) { background-color: #fb923c; color: #1f2421; }
+/* 글자 수 (편집 영역 아래) */
+.jm-charcount { padding: 4px 10px; border-top: 1px solid var(--jm-border); font-size: 12px; color: var(--jm-text-soft); text-align: right; }
+.jm-charcount.is-over { color: var(--jm-danger, #d92d20); font-weight: 600; }
+/* 줄 간격 버튼 앞 아이콘 (값을 나타내는 숫자와 구분) */
+.jm-btn[data-cmd="lineHeight"]::before { content: ""; flex: none; width: 14px; height: 14px; margin-right: 3px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 6h10M11 12h10M11 18h10M5 5v14M2.5 7.5 5 5l2.5 2.5M2.5 16.5 5 19l2.5-2.5'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 6h10M11 12h10M11 18h10M5 5v14M2.5 7.5 5 5l2.5 2.5M2.5 16.5 5 19l2.5-2.5'/%3E%3C/svg%3E") center / contain no-repeat; }
+
 /* 유튜브 블록 (저장 HTML 에도 필요 — 뷰어에도 포함) */
 div[data-type="youtube"] { position: relative; margin: 0 0 8px; }
 div[data-type="youtube"][data-width="100"] { width: 100%; }

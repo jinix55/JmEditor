@@ -329,7 +329,7 @@ export class LayoutCommands {
         ? await this.editor.options.uploadImage(resized)
         : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(resized); });
       const img = document.createElement('img');
-      img.alt = file.name;
+      img.alt = ''; // 대체 글은 비워 둔다 (파일명은 설명이 아니다)
       await new Promise((resolve) => { img.onload = () => { stampSize(img, true); resolve(); }; img.onerror = resolve; img.src = src; });
       img.onload = null;
       cell.replaceChildren(img);

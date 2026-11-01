@@ -225,7 +225,7 @@ export class SliderCommands {
         break;
       }
       const img = document.createElement('img');
-      img.alt = file.name;
+      img.alt = ''; // 대체 글은 비워 둔다 (파일명은 설명이 아니다)
       await new Promise((resolve) => { img.onload = () => { stampSize(img); resolve(); }; img.onerror = resolve; img.src = src; });
       block.appendChild(img);
     }

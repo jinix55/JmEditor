@@ -3,7 +3,7 @@
  * - 서식 명령 모음. execCommand 를 쓰지 않고 Range/DOM 조작으로 구현.
  * - 모든 명령은 에디터 루트 안에서만 동작하며, 실행 후 editor.commit() 으로 히스토리 기록·변경 알림을 한다.
  */
-import { SelectionUtil, TRANSFORMABLE_BLOCK } from './SelectionUtil.js';
+import { SelectionUtil, TRANSFORMABLE_BLOCK, hasInlineContent } from './SelectionUtil.js';
 import { Sanitizer, HIDDEN_ID_ATTR } from './Sanitizer.js';
 import { notify } from '../plugins/gallery/gallery-upload.js';
 import { fontFamilyName } from './font-policy.js';
@@ -44,6 +44,30 @@ export class Commands {
       this.#toggleInlineCollapsed(tag, range);
     } else {
       this.#toggleInlineRange(tag, range);
+    }
+    this.editor.commit();
+  }
+
+  /**
+   * 위·아래 첨자 토글. 서로 배타: 하나를 켜면 다른 쪽은 해제된다. 커서면 이후 입력에, 범위면 그 글자에
+   * @param {'sub'|'sup'} tag
+   */
+  toggleScript(tag) {
+    const other = tag === 'sub' ? 'SUP' : 'SUB';
+    const range = this.sel.getRange();
+    if (!range) return;
+    if (range.collapsed) {
+      if (this.#findAncestor(range.startContainer, other)) this.#toggleInlineCollapsed(other.toLowerCase(), range);
+      this.#toggleInlineCollapsed(tag, this.sel.getRange());
+    } else {
+      const pieces = this.#textPieces(range);
+      if (!pieces.length) return;
+      pieces.forEach((t) => {
+        const anc = this.#findAncestor(t, other);
+        if (anc) { this.#hoistLink(t, anc); this.#unwrapEl(this.#isolate(t, anc)); }
+      });
+      this.#selectPieces(pieces);
+      this.#toggleInlineRange(tag, this.sel.getRange());
     }
     this.editor.commit();
   }
@@ -175,7 +199,7 @@ export class Commands {
    * @returns {HTMLElement} node 를 담은 anc
    */
   #isolate(node, anc) {
-    const hasContent = (frag) => frag.textContent.replace(new RegExp(ZWSP, 'g'), '') !== '' || !!frag.querySelector?.('img, br');
+    const hasContent = hasInlineContent;
     const pre = document.createRange();
     pre.setStart(anc, 0); pre.setEndBefore(node);
     if (!pre.collapsed) {
@@ -540,6 +564,39 @@ export class Commands {
     else if (/^(UL|OL)$/.test(li.parentNode.tagName) && !(this.sel.structure && SelectionUtil.hasBlockChild(li, /^(P|UL|OL)$/))) this.#removeFromList(li);
   }
 
+  // ───────────── 줄 간격 ─────────────
+
+  /**
+   * 범위 안 글 블록(p·h1~h6·li·blockquote, 직접 글이 있는 표 칸, 구조 모드의 글만 있는 div 등)의 줄 간격. 표 칸 범위 선택이면 그 칸 안의 블록과 직접 글이 있는 칸.
+   * 블록 안 span 의 줄 간격은 지운다 (블록 값을 가리지 않게). 플러그인 제목은 대상이 아니다
+   * @param {string|null} value 정제 규칙을 통과하는 line-height 값. null·빈 값이면 해제
+   * @returns {boolean|undefined} 쓸 수 없는 값이면 false
+   */
+  setLineHeight(value) {
+    const clean = value ? /^line-height: ([^;]+)$/.exec(Sanitizer.cleanStyle(`line-height: ${value}`, 'p'))?.[1] : null;
+    if (value && !clean) return false;
+    const cells = this.#selectedCells();
+    const cellBlocks = (c) => {
+      const inner = Array.from(c.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, li'));
+      return inner.length && !SelectionUtil.hasDirectText(c) ? inner : [c, ...inner];
+    };
+    const blocks = (cells.length ? cells.flatMap(cellBlocks) : this.#rangeBlocks()).filter((b) => !Commands.#isPluginText(b));
+    if (!blocks.length) return undefined;
+    /** 줄 간격 지우기 (style 이 비면 속성도) */
+    const drop = (el) => { el.style.removeProperty('line-height'); if (!el.getAttribute('style')?.trim()) el.removeAttribute('style'); };
+    blocks.forEach((b) => {
+      b.querySelectorAll(':scope > p').forEach(drop); // li·인용 직속 문단의 값은 블록 값을 가린다
+      b.querySelectorAll('span').forEach((sp) => {
+        if (!sp.style.lineHeight || this.sel.textBlockOf(sp) !== b) return;
+        drop(sp);
+        if (!sp.attributes.length) this.#unwrapEl(sp);
+      });
+      if (clean) b.style.lineHeight = clean; else drop(b);
+    });
+    this.editor.commit();
+    return true;
+  }
+
   // ───────────── 블록 정렬 ─────────────
 
   /**
@@ -893,8 +950,9 @@ export class Commands {
    * 링크 적용/해제
    * - 커서가 링크 안이면 해제, 선택 영역이 있으면 a 태그로 감쌈
    * @param {string|null} url null 이면 해제
+   * @param {{newWindow?: boolean}} [opts] 새 창 여부. 생략하면 기존 규칙(새 링크는 외부 주소·경로면 새 창, 기존 링크는 지금 값 유지). #·tel:·mailto: 는 항상 target 없음
    */
-  setLink(url) {
+  setLink(url, opts = {}) {
     const range = this.sel.getRange();
     if (!range) return undefined;
     // 주소 검증: javascript: 등은 거부(false 반환 → 툴바가 안내), 도메인만 쓰면 https:// 를 붙임
@@ -903,7 +961,7 @@ export class Commands {
     const existing = this.sel.closest('a');
 
     if (existing) {
-      if (href) { this.editor.constructor.setHref(existing, href); Sanitizer.applyLinkTarget(existing, href); } // 기존 링크: 주소만 수정(새 창 규칙도 다시 맞춤)
+      if (href) { this.editor.constructor.setHref(existing, href); Sanitizer.setLinkWindow(existing, href, opts?.newWindow); } // 기존 링크: 주소 수정(새 창 규칙도 다시 맞춤)
       else this.#unwrapEl(existing);                                // 해제
       this.editor.commit();
       return true;
@@ -916,7 +974,7 @@ export class Commands {
     pieces.forEach((t) => {
       const a = document.createElement('a');
       this.editor.constructor.setHref(a, href);
-      Sanitizer.applyLinkTarget(a, href); // #·tel:·mailto: 는 새 창 아님
+      Sanitizer.setLinkWindow(a, href, opts?.newWindow); // #·tel:·mailto: 는 새 창 아님
       t.parentNode.insertBefore(a, t);
       a.appendChild(t);
       this.#mergeSiblings(a); // 같은 주소로 이어진 조각(글자·이미지)은 하나의 링크로
@@ -1251,6 +1309,15 @@ export class Commands {
     this.editor.commit();
   }
 
+  /**
+   * 블록(또는 그 직속 문단이 속한 li·인용)에 지정한 줄 간격
+   * @param {HTMLElement} block
+   * @returns {string|null}
+   */
+  #lineHeightAt(block) {
+    return this.sel.closest('p')?.style.lineHeight || block.style.lineHeight || null;
+  }
+
   /** 현재 커서 위치의 서식 상태(툴바 활성화 표시용) */
   getState() {
     const block = this.sel.getBlock();
@@ -1260,6 +1327,9 @@ export class Commands {
       em: this.sel.isInside('em'),
       u: this.sel.isInside('u'),
       s: this.sel.isInside('s'),
+      sub: this.sel.isInside('sub'),
+      sup: this.sel.isInside('sup'),
+      lineHeight: block ? this.#lineHeightAt(block) : null,
       a: this.sel.isInside('a'),
       ...this.getStyleState(),
       block: block ? block.tagName.toLowerCase() : null,

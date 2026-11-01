@@ -170,10 +170,10 @@ test.describe('가로줄', () => {
   test('hr 만 있는 문서도 경계에서 단락을 추가할 수 있다', async ({ page }) => {
     await setHTML(page, '<hr>');
     const box = await page.locator('.jm-editor hr').boundingBox();
-    await page.mouse.move(box.x + 50, box.y + box.height + 8);
+    await page.mouse.move(box.x + 50, box.y); // 뒤에는 자동 문단이 있어 앞 경계에서
     await page.click('.jm-gap-insert');
     await page.keyboard.type('X');
-    expect(await html(page)).toBe('<hr><p>X</p>');
+    expect(await html(page)).toBe('<p>X</p><hr>');
   });
 });
 
@@ -428,12 +428,12 @@ test.describe('이미지 대체 글', () => {
     expect(await html(page)).not.toContain('photo-1234');
   });
 
-  test('교체하면 alt 를 비운다', async ({ page }) => {
+  test('교체해도 쓴 대체 글을 유지한다', async ({ page }) => {
     await setHTML(page, '<p><img src="/a.png" alt="옛 설명"></p>');
     await page.click('.jm-editor img', { force: true });
     await page.locator('body > input[type=file]').first().setInputFiles(PNG);
     await page.waitForFunction(() => window.core.root.querySelector('img').src.startsWith('data:'));
-    expect(await html(page)).toMatch(/alt=""/);
+    expect(await html(page)).toContain('alt="옛 설명"');
   });
 
   for (const [name, doc] of [

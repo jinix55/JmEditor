@@ -384,3 +384,57 @@
 > a<table><tbody><tr><td>b</td></tr></tbody></table>
 < <p style="mso-margin-left-alt:40px;mso-char-indent-count:2;margin-right:10px">a</p>
 > <p>a</p>
+
+# ── 줄 간격: p·제목·li·blockquote 의 line-height (단위 없는 수는 그대로, % ·px 범위 검사)
+< <p style="line-height:1.5">a</p><h2 style="line-height:2">b</h2><ul><li style="line-height:1.2">c</li></ul><blockquote style="line-height:1">d</blockquote>
+> <p style="line-height: 1.5">a</p><h2 style="line-height: 2">b</h2><ul><li style="line-height: 1.2">c</li></ul><blockquote style="line-height: 1">d</blockquote>
+< <p style="line-height:1.80">a</p><p style="line-height:9">b</p><p style="line-height:url(x)">c</p>
+> <p style="line-height: 1.8">a</p><p>b</p><p>c</p>
+
+# ── 링크 새 창 선택: target="_self" 는 존중(rel 없음), _blank 는 rel 강제, 그 밖은 새 창으로, #·tel:·mailto: 는 target 없음
+< <a href="https://a.com" target="_self">a</a>
+> <a href="https://a.com" target="_self">a</a>
+< <a href="/x" target="_SELF" rel="nofollow">a</a>
+> <a href="/x" target="_self">a</a>
+< <a href="https://a.com" target="_blank">a</a>
+> <a href="https://a.com" target="_blank" rel="noopener noreferrer">a</a>
+< <a href="https://a.com" target="_top">a</a><a href="/x" target="foo">b</a>
+> <a href="https://a.com" target="_blank" rel="noopener noreferrer">a</a><a href="/x" target="_blank" rel="noopener noreferrer">b</a>
+< <a href="#x" target="_self">a</a><a href="tel:1" target="_self">b</a><a href="MAILTO:a@b.c" target="_self" rel="x">c</a>
+> <a href="#x">a</a><a href="tel:1">b</a><a href="MAILTO:a@b.c">c</a>
+< <div data-type="buttons" data-align="left"><a href="/x" data-role="button" data-style="primary" target="_self">a</a></div>
+> <div data-type="buttons" data-align="left"><a href="/x" data-role="button" data-style="primary" target="_self">a</a></div>
+
+# ── 위·아래 첨자: 구조 모드 밖에서도 남고 플러그인 블록 안에서도 남는다
+< <p>H<sub>2</sub>O x<sup>2</sup></p>
+> <p>H<sub>2</sub>O x<sup>2</sup></p>
+< <sup onclick="x()" title="t" id="">1</sup> 각주
+> <sup>1</sup> 각주
+< <p><sup style="color:red;position:absolute">a</sup></p>
+> <p><sup style="color: red">a</sup></p>
+< <div data-type="gallery" data-layout="justify"><p data-role="title">H<sub>2</sub>O</p></div>
+> <div data-type="gallery" data-layout="justify"><p data-role="title">H<sub>2</sub>O</p></div>
+
+# ── 가로줄 분할 상한: 분할할 조상이 8단계까지는 나누고, 넘으면 hr 만 버린다 (글은 유지)
+< <u><u><u><u><u><u><u><u>a<hr>b</u></u></u></u></u></u></u></u>
+> <u><u><u><u><u><u><u><u>a</u></u></u></u></u></u></u></u><hr><u><u><u><u><u><u><u><u>b</u></u></u></u></u></u></u></u>
+< <u><u><u><u><u><u><u><u><u>a<hr>b</u></u></u></u></u></u></u></u></u>
+> <u><u><u><u><u><u><u><u><u>ab</u></u></u></u></u></u></u></u></u>
+
+# ── 스타일 없는 span·font 가 글과 블록을 함께 감싸도 터지지 않고 벗겨진다
+< <span>x<hr>y</span>
+> x<hr>y
+< <span>x<p>y</p></span>
+> x<p>y</p>
+< <font>x<p>y</p></font>
+> x<p>y</p>
+< <span class="k">x<hr>y</span>
+> x<hr>y
+
+# ── 줄 간격: 표 칸(td·th)에도 남는다
+< <table><tbody><tr><td style="line-height:1.5">a</td><th style="line-height:2">b</th></tr></tbody></table>
+> <table><tbody><tr><td style="line-height: 1.5">a</td><th style="line-height: 2">b</th></tr></tbody></table>
+
+# ── target 비교는 ASCII 소문자 기준: 긴 s(ſ)는 _self 가 아니다
+< <a href="/x" target="_ſelf">a</a>
+> <a href="/x" target="_blank" rel="noopener noreferrer">a</a>
