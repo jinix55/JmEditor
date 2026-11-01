@@ -15,6 +15,7 @@
 import { stampSize } from '../gallery/gallery-layout.js';
 import { Sanitizer } from '../../core/Sanitizer.js';
 import { notify } from '../gallery/gallery-upload.js';
+import { isBlankInline } from '../../core/SelectionUtil.js';
 
 const IMG_SELECTED_CLASS = 'jm-img-selected';
 /** 다른 블록이 다루는 이미지 영역 */
@@ -267,8 +268,13 @@ export class ImageCommands {
    */
   remove(img) {
     const target = img.parentElement?.tagName === 'PICTURE' ? img.parentElement : img;
-    const p = target.parentElement;
+    let p = target.parentElement;
     target.remove();
+    while (p && p !== this.root && isBlankInline(p)) { // 이미지를 감싸던 링크·서식도 함께 (빈 a 가 남지 않게)
+      const up = p.parentElement;
+      p.remove();
+      p = up;
+    }
     if (p && p !== this.root && !p.textContent.trim() && !p.querySelector('img')) p.replaceChildren(document.createElement('br'));
     this.clear();
     this.editor.commit();

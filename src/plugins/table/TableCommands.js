@@ -46,6 +46,7 @@ export class TableCommands {
     handle.textContent = '⠿';
     layer.append(handle, table);
     table.contentEditable = 'true';
+    new TableGrid(table); // 표보다 큰 rowspan 을 불러올 때 정규화
     this.editor.blockDrag?.makeDraggable(handle, layer);
     this.#bindSelection(table);
     this.#bindResize(layer, table);
@@ -101,20 +102,29 @@ export class TableCommands {
 
   #bindSelection(table) {
     let anchor = null;
+    // 표 밖에서 놓아도 끝낸다 (드래그 동안에만 document 에 건다)
+    const end = () => { anchor = null; document.removeEventListener('mouseup', end, true); };
     table.addEventListener('mousedown', (e) => {
       if (e.button !== 0 || table._resizeHit) return; // 경계 리사이즈 시작 중이면 선택 안 함
       const cell = e.target.closest('td,th');
       if (!cell || cell.closest('table') !== table) return;
-      if (e.shiftKey && this.selection?.table === table) {
-        e.preventDefault();
-        this.#selectRange(table, this.selection.anchorCell, cell);
-        return;
+      if (e.shiftKey) {
+        // Shift+클릭: 지금 범위의 기준 칸, 없으면 커서가 있는 칸에서 클릭한 칸까지
+        const from = this.selection?.table === table ? this.selection.anchorCell : this.getCell();
+        if (from?.closest('table') === table && from !== cell) {
+          e.preventDefault();
+          window.getSelection()?.removeAllRanges();
+          this.#selectRange(table, from, cell);
+          return;
+        }
       }
       anchor = cell;
+      document.addEventListener('mouseup', end, true);
       this.clearSelection();
     });
     table.addEventListener('mousemove', (e) => {
-      if (!anchor || !(e.buttons & 1) || table._resizing) return;
+      if (!anchor || table._resizing) return;
+      if (!(e.buttons & 1)) { end(); return; } // 창 밖에서 놓아 mouseup 을 못 받은 경우
       const cell = e.target.closest('td,th');
       if (!cell || cell.closest('table') !== table || cell === anchor) return;
       // 다른 셀로 넘어가면 브라우저 텍스트 선택 대신 셀 범위 선택
@@ -122,8 +132,6 @@ export class TableCommands {
       window.getSelection()?.removeAllRanges();
       this.#selectRange(table, anchor, cell);
     });
-    const end = () => { anchor = null; };
-    table.addEventListener('mouseup', end);
     table.addEventListener('mouseleave', (e) => { if (!(e.buttons & 1)) end(); });
   }
 
@@ -138,10 +146,40 @@ export class TableCommands {
     this.editor.options.onSelectionChange?.();
   }
 
+  /**
+   * 범위 선택한 칸으로 만든 표 HTML (병합 유지, 편집 표시 없음)
+   * @returns {string}
+   */
+  selectionHTML() {
+    const { table: src, r1, r2, c1, c2 } = this.selection;
+    const grid = this.#grid(src);
+    const table = document.createElement('table');
+    const tbody = table.appendChild(document.createElement('tbody'));
+    for (let r = r1; r <= r2; r++) {
+      const tr = tbody.appendChild(document.createElement('tr'));
+      for (let c = c1; c <= c2; c++) {
+        const g = grid.grid[r]?.[c];
+        if (!g || g.r0 !== r || g.c0 !== c) continue;
+        const cell = g.cell.cloneNode(true);
+        cell.classList.remove(SEL_CLASS);
+        if (!cell.classList.length) cell.removeAttribute('class');
+        tr.appendChild(cell);
+      }
+    }
+    return table.outerHTML;
+  }
+
+  /** 범위 선택한 칸 비우기 (되돌리기 한 단계, 선택은 그대로) */
+  clearSelectedCells() {
+    this.#targetCells().forEach((c) => c.replaceChildren(document.createElement('br')));
+    this.editor.commit();
+  }
+
   clearSelection() {
     if (!this.selection) return;
-    this.selection.table.querySelectorAll(`.${SEL_CLASS}`).forEach((c) => c.classList.remove(SEL_CLASS));
+    this.selection.table.querySelectorAll(`.${SEL_CLASS}`).forEach((c) => { c.classList.remove(SEL_CLASS); if (!c.classList.length) c.removeAttribute('class'); });
     this.selection = null;
+    this.editor.options.onSelectionChange?.(); // 툴바의 표 전용 버튼 갱신
   }
 
   // ───────────── 열 너비 / 행 높이 드래그 조절 ─────────────
@@ -379,27 +417,31 @@ export class TableCommands {
   }
 
   /**
-   * 행을 위/아래로 옮길 수 있는지: 같은 구역(thead·tbody·tfoot) 안이고 가로지르는 병합 셀이 없어야 한다
+   * 행(범위면 모든 행)을 위/아래로 옮길 수 있는지: 같은 구역(thead·tbody·tfoot) 안이고 대상 행과 넘어갈 행에 세로 병합 셀이 없어야 한다
    * @param {TableGrid} grid
    * @param {{r1: number, r2: number}} rect
    * @param {number} dir -1 위, 1 아래
    */
   #canMoveRow(grid, rect, dir) {
-    const r = dir < 0 ? rect.r1 : rect.r2, t = r + dir;
-    return t >= 0 && t < grid.rowCount && !grid.rowHasSpanAcross(r) && !grid.rowHasSpanAcross(t) && grid.rows[r].parentNode === grid.rows[t].parentNode;
+    const t = (dir < 0 ? rect.r1 : rect.r2) + dir;
+    if (t < 0 || t >= grid.rowCount || grid.rowHasSpanAcross(t) || !grid.rows[t]) return false;
+    for (let r = rect.r1; r <= rect.r2; r++) {
+      if (grid.rowHasSpanAcross(r) || grid.rows[r]?.parentNode !== grid.rows[t].parentNode) return false;
+    }
+    return true;
   }
 
-  /** 행 위/아래로 이동 (같은 구역 안에서만, 가로지르는 병합 셀이 있으면 불가) */
+  /** 행 위/아래로 이동: 범위면 함께 옮긴다 — 넘어갈 행을 범위 반대쪽으로 보낸다 (같은 구역 안에서만, 세로 병합 셀이 있으면 불가) */
   moveRow(dir) {
     const rect = this.#targetRect();
     if (!rect) return;
     const { table } = rect;
     const grid = this.#grid(table);
     if (!this.#canMoveRow(grid, rect, dir)) return;
-    const r = dir < 0 ? rect.r1 : rect.r2, t = r + dir;
-    const a = grid.rows[r], b = grid.rows[t];
-    if (dir < 0) a.parentNode.insertBefore(a, b); else a.parentNode.insertBefore(b, a);
-    this.#afterChange(table, a.cells[0]);
+    const first = grid.rows[rect.r1], last = grid.rows[rect.r2];
+    const over = grid.rows[(dir < 0 ? rect.r1 : rect.r2) + dir];
+    if (dir < 0) last.after(over); else first.before(over);
+    this.#afterChange(table, first.cells[0]);
   }
 
   // ───────────── 열 ─────────────
@@ -453,22 +495,39 @@ export class TableCommands {
     this.#normalizeRowSpans(table);
   }
 
+  /**
+   * 열(범위면 모든 열)을 왼쪽/오른쪽으로 옮길 수 있는지: 대상 열과 넘어갈 열에 병합 셀이 없어야 한다
+   * @param {TableGrid} grid
+   * @param {{c1: number, c2: number}} rect
+   * @param {number} dir -1 왼쪽, 1 오른쪽
+   */
+  #canMoveColumn(grid, rect, dir) {
+    const t = (dir < 0 ? rect.c1 : rect.c2) + dir;
+    if (t < 0 || t >= grid.colCount || grid.colHasSpanAcross(t)) return false;
+    for (let c = rect.c1; c <= rect.c2; c++) if (grid.colHasSpanAcross(c)) return false;
+    return true;
+  }
+
   moveColumn(dir) {
     const rect = this.#targetRect();
     if (!rect) return;
     const { table } = rect;
     const grid = this.#grid(table);
-    const c = dir < 0 ? rect.c1 : rect.c2, t = c + dir;
-    if (t < 0 || t >= grid.colCount || grid.colHasSpanAcross(c) || grid.colHasSpanAcross(t)) return;
-    for (let r = 0; r < grid.rowCount; r++) {
-      const a = grid.grid[r][c]?.cell, b = grid.grid[r][t]?.cell;
-      if (!a || !b) continue;
-      if (dir < 0) a.parentNode.insertBefore(a, b); else a.parentNode.insertBefore(b, a);
+    if (!this.#canMoveColumn(grid, rect, dir)) return;
+    const t = (dir < 0 ? rect.c1 : rect.c2) + dir;
+    for (let r = 0; r < grid.rowCount; r++) { // 넘어갈 열을 범위 반대쪽으로 보낸다 (범위는 함께 옮겨진다)
+      const over = grid.grid[r][t]?.cell, first = grid.grid[r][rect.c1]?.cell, last = grid.grid[r][rect.c2]?.cell;
+      if (!over || !first || !last) continue;
+      if (dir < 0) last.after(over); else first.before(over);
     }
     this.#flattenCols(table);
     const cg = table.querySelector(':scope > colgroup');
-    if (cg) { const a = cg.children[c], b = cg.children[t]; if (a && b) { if (dir < 0) cg.insertBefore(a, b); else cg.insertBefore(b, a); } }
-    this.#afterChange(table, this.#grid(table).cellAt(rect.r1, t));
+    this.#padCols(cg, grid.colCount);
+    if (cg) {
+      const over = cg.children[t], first = cg.children[rect.c1], last = cg.children[rect.c2];
+      if (over && first && last) { if (dir < 0) last.after(over); else first.before(over); }
+    }
+    this.#afterChange(table, this.#grid(table).cellAt(rect.r1, rect.c1 + dir));
   }
 
   // ───────────── 병합 / 분할 ─────────────
@@ -615,7 +674,7 @@ export class TableCommands {
   resetColumnWidths() {
     const table = this.getTable();
     if (!table) return;
-    table.querySelector(':scope > colgroup')?.remove();
+    table.querySelectorAll(':scope > colgroup').forEach((g) => g.remove());
     Array.from(table.rows).forEach((tr) => tr.style.removeProperty('height'));
     this.editor.commit();
   }
@@ -660,11 +719,7 @@ export class TableCommands {
     const rect = this.#targetRect();
     const sel = !!this.selection;
     const rowMovable = (d) => rect && grid && this.#canMoveRow(grid, rect, d);
-    const colMovable = (d) => {
-      if (!rect || !grid) return false;
-      const c = d < 0 ? rect.c1 : rect.c2, t = c + d;
-      return t >= 0 && t < grid.colCount && !grid.colHasSpanAcross(c) && !grid.colHasSpanAcross(t);
-    };
+    const colMovable = (d) => !!rect && !!grid && this.#canMoveColumn(grid, rect, d);
     const colorItems = pickColor ? [
       { label: '셀 배경색…', action: () => this.#pickColorFor(pickColor, (c, r) => this.setCellBackground(c, r)) },
       { label: '행 배경색…', action: () => this.#pickColorFor(pickColor, (c, r) => this.setRowBackground(c, r)) },
@@ -729,8 +784,9 @@ export class TableCommands {
   }
 
   getState() {
-    const cell = this.getCell();
-    return { table: !!this.getTable(), tableSelection: !!this.selection, valign: cell ? (cell.style.verticalAlign || 'top') : null };
+    // 범위 선택 중에는 문서 선택이 없으므로 범위의 첫 칸을 본다
+    const cell = this.getCell() || this.selection?.table.querySelector(`.${SEL_CLASS}`);
+    return { table: !!(this.getTable() || this.selection), tableSelection: !!this.selection, valign: cell ? (cell.style.verticalAlign || 'top') : null };
   }
 
   // ───────────── 내부 유틸 ─────────────
@@ -786,11 +842,21 @@ export class TableCommands {
     Array.from(cg.children).forEach((col, i) => { col.style.width = `${((filled[i] / sum) * 100).toFixed(2)}%`; });
   }
 
+  /**
+   * col 이 열 수보다 적으면 뒤에 빈 col 을 채운다 (열 번호로 col 을 찾을 수 있게)
+   * @param {HTMLElement|null} cg colgroup
+   * @param {number} n 열 수
+   */
+  #padCols(cg, n) {
+    while (cg && cg.children.length < n) cg.appendChild(document.createElement('col'));
+  }
+
   /** 열 추가 시: at 위치에 col 을 끼우고 평균 너비를 준 뒤 100% 로 재배분 */
   #colgroupInsert(table, at) {
     this.#flattenCols(table);
     const cg = table.querySelector(':scope > colgroup');
     if (!cg) return;
+    this.#padCols(cg, this.#grid(table).colCount - 1); // 칸은 이미 늘었다: col 이 모자란 표에서 새 col 이 엉뚱한 자리에 가지 않게
     const pct = this.#colPercents(table);
     const col = document.createElement('col');
     cg.insertBefore(col, cg.children[at] || null);

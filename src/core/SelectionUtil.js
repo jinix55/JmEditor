@@ -16,8 +16,21 @@ export const TRANSFORMABLE_BLOCK = /^(P|H[1-6]|BLOCKQUOTE)$/;
 /** 블록 요소 태그 (구조 컨테이너인지 — 블록 자식이 있는지 — 판정용) */
 const BLOCK_TAG = /^(P|H[1-6]|UL|OL|LI|BLOCKQUOTE|TABLE|DIV|SECTION|ARTICLE|ASIDE|HEADER|FOOTER|NAV|DL|DT|DD|FIGURE|FIGCAPTION|HR)$/;
 
+/** 편집 중 id 보관 속성 (Sanitizer.HIDDEN_ID_ATTR 과 같음 — Sanitizer 가 이 모듈을 쓰지 않아도 되게 이름을 직접 적는다) */
+const HIDDEN_ID = 'data-jm-id';
 /** 비어 있으면 없는 것으로 치는 글자 서식 태그 */
 const BLANK_INLINE_TAG = /^(STRONG|EM|U|S|SUB|SUP|SPAN|A)$/;
+
+/**
+ * 지워도 되는 빈 글자 서식 요소인지: 글·내용 요소가 없는 strong·em·u·s·sub·sup·a·span. 퍼블 class·id 가 있는 span 과 플러그인 역할(data-role)이 있는 요소는 아니다
+ * @param {Element} el
+ * @returns {boolean}
+ */
+export function isBlankInline(el) {
+  if (!BLANK_INLINE_TAG.test(el.tagName) || el.hasAttribute('data-role')) return false;
+  if (el.tagName === 'SPAN' && (el.hasAttribute('class') || el.hasAttribute(HIDDEN_ID) || el.hasAttribute('id'))) return false;
+  return !hasInlineContent(el);
+}
 
 /**
  * 글자나 내용 요소가 있는지: ZWSP 말고 글이 있거나, 자손 중 빈 글자 서식(strong·em·u·s·sub·sup·a·class·id 없는 span)이 아닌 요소(이미지·줄바꿈·아이콘 i 등)가 있으면 true

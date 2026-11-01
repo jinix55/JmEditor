@@ -102,7 +102,12 @@ export class SliderCommands {
     const add = mk('＋ 이미지 추가', () => { this.pending = block; this.fileInput.click(); });
     const delSel = mk('선택 삭제', () => this.deleteSelected(block), 'jm-slider-delsel');
     const delAll = mk('전체 삭제', () => this.deleteAll(block));
-    const interval = mkSelect('jm-slider-interval', [['0', '수동'], ['2000', '2초'], ['3000', '3초'], ['5000', '5초'], ['8000', '8초']], String(parseInt(block.dataset.interval, 10) || 0), (v) => { block.dataset.interval = v; block._slider?.refresh(); }, '자동 전환 간격');
+    const curInterval = parseInt(block.dataset.interval, 10) || 0;
+    const intervals = [['0', '수동'], ['2000', '2초'], ['3000', '3초'], ['5000', '5초'], ['8000', '8초']];
+    // 목록에 없는 값(옮겨 온 글의 4000 등)도 선택 상자가 비지 않게 항목을 더한다
+    if (!intervals.some(([v]) => +v === curInterval)) intervals.push([String(curInterval), `${curInterval / 1000}초`]);
+    intervals.sort((a, b) => +a[0] - +b[0]);
+    const interval = mkSelect('jm-slider-interval', intervals, String(curInterval), (v) => { block.dataset.interval = v; block._slider?.refresh(); }, '자동 전환 간격');
     const ratio = mkSelect('jm-slider-ratio', [['16:9', '16:9'], ['4:3', '4:3'], ['1:1', '1:1'], ['21:9', '21:9']], block.dataset.ratio || '16:9', (v) => { block.dataset.ratio = v; }, '화면 비율');
     const indicator = mkSelect('jm-slider-indicator', [['dots', '점'], ['numbers', '숫자'], ['bars', '막대'], ['none', '표시 없음']], block.dataset.indicator || 'dots', (v) => { block.dataset.indicator = v; block._slider?.refresh(); }, '인디케이터');
     const indPos = mkSelect('jm-slider-indpos', [['bottom-left', '왼쪽'], ['bottom-center', '가운데'], ['bottom-right', '오른쪽']], block.dataset.indicatorPos || 'bottom-center', (v) => { block.dataset.indicatorPos = v; block._slider?.refresh(); }, '인디케이터 위치');

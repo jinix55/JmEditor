@@ -438,3 +438,113 @@
 # ── target 비교는 ASCII 소문자 기준: 긴 s(ſ)는 _self 가 아니다
 < <a href="/x" target="_ſelf">a</a>
 > <a href="/x" target="_blank" rel="noopener noreferrer">a</a>
+
+# ── object: 태그만 벗기고 대체 내용은 남긴다 (글이 사라지지 않게, 안의 태그도 정제)
+< <object>fb</object>
+> fb
+< <object data="x"><p>fb <b>k</b></p><param name="a"></object>after
+> <p>fb <strong>k</strong></p>after
+
+# ── 갤러리 data-cols: 1~6 정수만, 그 밖은 지움 (호환용 속성)
+< <div data-type="gallery" data-cols="3"><img src="/a.png"></div>
+> <div data-type="gallery" data-cols="3"><img src="/a.png"></div>
+< <div data-type="gallery" data-cols="9"><img src="/a.png"></div>
+> <div data-type="gallery"><img src="/a.png"></div>
+< <div data-type="gallery" data-cols="-1"><img src="/a.png"></div>
+> <div data-type="gallery"><img src="/a.png"></div>
+< <div data-type="gallery" data-cols="3x"><img src="/a.png"></div>
+> <div data-type="gallery"><img src="/a.png"></div>
+
+# ── 갤러리 안 문단에 든 이미지도 살린다 (글은 버림)
+< <div data-type="gallery"><p><img src="/a.png"></p></div>
+> <div data-type="gallery"><img src="/a.png"></div>
+< <div data-type="gallery"><p data-role="title">t</p><p><img src="/a.png">x</p><img src="/b.png"></div>
+> <div data-type="gallery"><p data-role="title">t</p><img src="/a.png"><img src="/b.png"></div>
+< <div data-type="gallery"><p data-role="title">t<img src="/a.png"></p></div>
+> <div data-type="gallery"><p data-role="title">t<img src="/a.png"></p></div>
+< <div data-type="gallery"><p data-role="title">t</p><p data-role="title">u</p></div>
+> <div data-type="gallery"><p data-role="title">t</p></div>
+< <div data-type="gallery"><p><picture><source srcset="/m.png"><img src="/a.png"></picture></p></div>
+> <div data-type="gallery"><img src="/a.png"></div>
+
+# ── 유튜브 블록: 안쪽에 있는 첫 iframe 을 쓴다
+< <div data-type="youtube"><p><iframe src="https://www.youtube.com/embed/abcdefghijk"></iframe></p></div>
+> <div data-type="youtube" data-width="100" data-align="center"><iframe src="https://www.youtube-nocookie.com/embed/abcdefghijk" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen=""></iframe></div>
+< <div data-type="youtube"><iframe src="https://www.youtube.com/embed/abcdefghijk"></iframe><iframe src="https://www.youtube.com/embed/bbbbbbbbbbb"></iframe></div>
+> <div data-type="youtube" data-width="100" data-align="center"><iframe src="https://www.youtube-nocookie.com/embed/abcdefghijk" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen=""></iframe></div>
+< <p>a</p><div data-type="youtube"><p><iframe src="https://evil.example/x"></iframe></p></div>
+> <p>a</p>
+
+# ── 슬라이드 간격: 0~60000 정수만, 그 밖은 3000 (1e3·1.5 도)
+< <div data-type="slider" data-interval="4000"><img src="/a.png"></div>
+> <div data-type="slider" data-interval="4000" data-ratio="16:9" data-indicator="dots" data-indicator-pos="bottom-center" data-width="100" data-align="center"><img src="/a.png"></div>
+< <div data-type="slider" data-interval="1e3"><img src="/a.png"></div>
+> <div data-type="slider" data-interval="3000" data-ratio="16:9" data-indicator="dots" data-indicator-pos="bottom-center" data-width="100" data-align="center"><img src="/a.png"></div>
+< <div data-type="slider" data-interval="1.5"><img src="/a.png"></div>
+> <div data-type="slider" data-interval="3000" data-ratio="16:9" data-indicator="dots" data-indicator-pos="bottom-center" data-width="100" data-align="center"><img src="/a.png"></div>
+
+# ── 이미지 폭: 같은 속성이 여러 번이면 마지막 값 (브라우저와 같게), %만 남긴다
+< <p><img src="/a.png" style="width:50px;width:60%"></p>
+> <p><img src="/a.png" style="width: 60%"></p>
+< <p><img src="/a.png" style="width:60%;width:50px"></p>
+> <p><img src="/a.png"></p>
+
+# ── option: select 밖의 것은 글자로 남고, select 안의 것은 함께 버린다
+< <option>o</option><p>x</p>
+> o<p>x</p>
+< <p>a<option>o</option>b</p>
+> <p>aob</p>
+< <select><option>o</option></select><p>x</p>
+> <p>x</p>
+
+# ── README style·속성 표 확인
+< <p style="margin-left:500px;text-indent:-400px;line-height:6">a</p>
+> <p style="text-indent: -400px">a</p>
+< <p style="margin-left:400px;line-height:1.5;letter-spacing:0">a</p>
+> <p style="margin-left: 400px; line-height: 1.5">a</p>
+< <span style="font-size:1rem;letter-spacing:2pt">a</span><span style="font-size:1em">b</span>
+> <span style="font-size: 16px; letter-spacing: 2.67px">a</span>b
+< <table style="margin-left:auto;margin-right:10px;border-collapse:collapse"><tbody><tr><td style="border:1px solid red;margin-left:5px">a</td></tr></tbody></table>
+> <table style="margin-left: auto; border-collapse: collapse"><tbody><tr><td style="border: 1px solid red">a</td></tr></tbody></table>
+< <ol start="12345"><li>a</li></ol><ol start="1234"><li>b</li></ol>
+> <ol><li>a</li></ol><ol start="1234"><li>b</li></ol>
+< <table><colgroup><col span="1001"><col span="1000"></colgroup><tbody><tr><td>a</td></tr></tbody></table>
+> <table><colgroup><col><col span="1000"></colgroup><tbody><tr><td>a</td></tr></tbody></table>
+< <a href="/x" target="_self">a</a><a href="#x" target="_blank">b</a>
+> <a href="/x" target="_self">a</a><a href="#x">b</a>
+< <p>a<sub style="color:red">b</sub><sup>c</sup></p>
+> <p>a<sub style="color: red">b</sub><sup>c</sup></p>
+
+# ── 밑줄·취소선·기울임 style 은 태그로 (a 의 밑줄·버튼·플러그인 블록 자체는 제외)
+< <span style="text-decoration:underline">a</span>
+> <u>a</u>
+< <span style="text-decoration:line-through">a</span>
+> <s>a</s>
+< <span style="text-decoration-line:underline line-through">a</span>
+> <u><s>a</s></u>
+< <span style="font-style:italic">a</span>
+> <em>a</em>
+< <span style="font-style:oblique;color:red">a</span>
+> <span style="color: red"><em>a</em></span>
+< <span style="font-style:normal;text-decoration:none">a</span>
+> a
+< <p style="font-style:italic;text-align:center">a</p>
+> <p style="text-align: center"><em>a</em></p>
+< <em style="font-style:italic">a</em><u style="text-decoration:underline">b</u>
+> <em>a</em><u>b</u>
+< <span style="font-style:italic">a<span style="font-style:normal">b</span>c</span>
+> <em>a</em>b<em>c</em>
+< <span style="font-style:italic">a<span style="font-style:italic">b</span></span>
+> <em>ab</em>
+< <span style="text-decoration:underline"><p>a</p><p>b</p></span>
+> <p><u>a</u></p><p><u>b</u></p>
+< <table style="font-style:italic"><tbody><tr><td>a</td></tr></tbody></table>
+> <table><tbody><tr><td><em>a</em></td></tr></tbody></table>
+< <ul style="text-decoration:underline"><li>a</li></ul>
+> <ul><li><u>a</u></li></ul>
+< <a href="/x" target="_self" style="text-decoration:underline">a</a>
+> <a href="/x" target="_self">a</a>
+< <span style="font-style:italic;font-weight:bold">a</span>
+> <strong><em>a</em></strong>
+< <div data-type="buttons" data-align="left"><a href="/x" target="_self" data-role="button" data-style="primary" style="font-style:italic">a</a></div>
+> <div data-type="buttons" data-align="left"><a href="/x" target="_self" data-role="button" data-style="primary">a</a></div>

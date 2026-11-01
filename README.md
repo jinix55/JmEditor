@@ -7,7 +7,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 ## 기능
 
 - 굵게 / 기울임 / 밑줄 / 취소선, 글자 크기(10~48px), 글꼴(설정 목록), 글자색 / 배경색 (견본 + HSV 팔레트 + HEX 입력 + 스포이드)
-- 제목(본문·제목 1~3 셀렉트), 인용(세로선·박스·따옴표 — 인용 버튼 목록에서 선택·해제), 가로 정렬(왼쪽/가운데/오른쪽)·세로 정렬(표 셀) 드롭다운, 순서 / 비순서 목록(● ○ ■, 1. 01. a. A. i. I. 가.), 링크(입력줄의 「새 창」 체크 — 기본은 외부 주소·/ 경로 켬, #·tel:·mailto: 는 새 창 없음), 버튼 그룹 블록(서식 — 이름·주소 입력으로 추가, 모양(채움·외곽선·연한색)·색(테마 7색 또는 직접 선택 — 고른 색 하나로 테두리·오버·연한 배경·글자색 자동)·크기·아이콘 16종(글자 앞/뒤), 그립 드래그로 순서, 정렬)
+- 제목(본문·제목 1~6 목록), 인용(세로선·박스·따옴표 — 인용 버튼 목록에서 선택·해제), 가로 정렬(왼쪽/가운데/오른쪽)·세로 정렬(표 셀) 드롭다운, 순서 / 비순서 목록(● ○ ■, 1. 01. a. A. i. I. 가.), 링크(입력줄의 「새 창」 체크 — 기본은 외부 주소·/ 경로 켬, #·tel:·mailto: 는 새 창 없음), 버튼 그룹 블록(서식 — 이름·주소 입력으로 추가, 모양(채움·외곽선·연한색)·색(테마 7색 또는 직접 선택 — 고른 색 하나로 테두리·오버·연한 배경·글자색 자동)·크기·아이콘 16종(글자 앞/뒤), 그립 드래그로 순서, 정렬)
 - 가로줄(`<hr>`) — 툴바 버튼으로 커서 블록 뒤에 넣고 다음 문단으로 커서 이동. Backspace·Delete 는 선만 지웁니다
 - 위·아래 첨자 — 툴바 버튼(서로 배타), 커서면 이후 입력에 적용
 - 줄 간격 — 툴바 선택(1·1.2·1.5·1.8·2, 지정 안 했을 때의 실제 값 표시), 선택한 p·제목·li·인용(직접 글이 있는 표 칸, 구조 모드의 글만 있는 div 포함) 전체에, 블록 안 span 의 줄 간격은 지웁니다. 지정 안 했을 때의 값을 고르면 해제
@@ -26,7 +26,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 - 이미지 갤러리 블록 — 사진을 여러 장 올리면 원본 비율을 유지한 채 줄 전체를 채우도록 자동 배치합니다(세로 사진이 섞여도 줄 높이가 같고, 마지막 줄은 늘리지 않고 왼쪽 정렬). 사진은 드래그로 순서 변경, 선택 후 교체·삭제. 줄 높이·간격은 CSS 변수로 디자인에서 정합니다. 업로드 제한(jpg·png·gif·webp, 파일당 10MB, 1회 10장, 글당 50장 또는 100MB)과 긴 변 2000px 초과 시 축소(GIF 제외)는 설정 파일로 바꿉니다. 헤더의 ⠿ 핸들로 블록 이동, 제목은 선택 사항, 사진별 캡션은 없음
 - 서식(템플릿) 삽입 — 서버에서 받아온 HTML 조각을 골라 본문에 넣습니다. 서식 관리는 별도 화면에서
 - Editor / HTML / 미리보기 모드 전환
-- undo / redo, 한글 IME 조합 처리, 외부 글 붙여넣기 시 허용 태그만 남김
+- undo / redo, 한글 IME 조합 처리, 외부 글 붙여넣기 시 허용 태그만 남김. 에디터 안 복사·잘라내기는 저장 형태 HTML 로 클립보드에 넣어 다시 붙여도 글꼴·폭이 그대로. 클립보드 HTML 의 / 경로는 절대 주소로 나가고 같은 출처에 붙이면 되돌아옵니다. 글자는 블록·br·li·tr 줄바꿈, 칸 사이 탭. 표 칸 범위도 복사·잘라내기(칸 비우기)·Delete·붙여넣기(첫 칸, 표는 표 뒤)가 됩니다
 - 조회 / 등록 / 수정 / 이미지 업로드 / 서식 목록 API 연동 (`JmEditorApi`)
 
 동시편집은 아직 없습니다.
@@ -42,7 +42,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 | `dist/jm-viewer.min.js` | 조회 화면용 런타임 (갤러리 배치·슬라이드 전환·카카오 지도). ESM 은 `jm-viewer.esm.js` |
 | `dist/jm-editor.config.js` | 설정 견본 (업로드 제한 등). 선택 사항 — 아래 [설정](#설정) 참고 |
 
-복사하지 않고 CDN(jsDelivr)으로 불러와도 됩니다. 주소의 `@v0.0.5` 은 릴리스 태그로, 내용이 고정됩니다.
+복사하지 않고 CDN(jsDelivr)으로 불러와도 됩니다. 주소의 `@v0.0.5` 은 릴리스 태그로, 내용이 고정됩니다. 그 태그 뒤에 추가된 최신 기능(가로줄·들여쓰기·서식 지우기·대체 글·줄 간격·글자 수·링크 새 창·첨자·찾기 바꾸기)은 그 버전에 없습니다.
 
 ```html
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.5/dist/jm-editor.css">
@@ -91,6 +91,24 @@ ES Module 은 `…@v0.0.5/dist/jm-editor.esm.js` 를 import 합니다. 설정은
 
 링크 새 창은 `editor.editor.exec('link', url, { newWindow: false })` 로도 고릅니다. 생략하면 주소 종류에 따른 기본 규칙입니다.
 
+명령은 `editor.editor.exec(이름, 값)` 으로 부릅니다.
+
+| 명령 | 값 | 동작 |
+|---|---|---|
+| `hr` | — | 커서 블록 뒤에 가로줄 |
+| `indent` · `outdent` | — | 문단·제목·인용 왼쪽 여백 40px 단위(최대 200px), 목록은 중첩·해제 |
+| `clearFormat` | — | 글자 서식 지우기 |
+| `lineHeight` | `'1.5'` 등, `null` 이면 해제 | 글 블록 줄 간격. 규칙에 맞지 않는 값이면 `false` |
+| `sub` · `sup` | — | 아래·위 첨자 (서로 배타) |
+| `link` · `unlink` | 주소, 셋째 인자 `{ newWindow }` | 링크 적용·해제. 선택이 링크 밖으로 이어지면 선택 전체에 적용, 해제는 선택에 걸친 링크 전부 |
+
+| 찾기·바꾸기 | 동작 |
+|---|---|
+| `editor.openFind(replace)` · `editor.closeFind()` | 입력줄 열기·닫기 |
+| `editor.editor.find` | `search(말, { caseSensitive })`, `next()`, `prev()`, `replace(글)`, `replaceAll(글)`, `clear()` |
+
+이미지 대체 글은 도구 막대의 입력란에서 고칩니다.
+
 `destroy()` 는 툴바와 함께 편집 영역도 제거하므로 내용이 필요하면 먼저 `getHTML()` 로 받으세요.
 
 저장 중에 `save()` 를 다시 부르면 새 요청 없이 진행 중인 Promise 를 돌려줍니다. 저장 실패는 `save()` 의 거부로 받습니다.
@@ -137,10 +155,26 @@ window.JmEditorConfig = {
   font: {
     families: ['맑은 고딕', 'Noto Sans KR', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman'], // 글꼴 도구 목록이자 허용 목록
   },
+  structure: {
+    enabled: true,
+    tags: ['section', 'article', 'aside', 'div', 'dl', 'dt', 'dd', 'figure', 'figcaption', 'caption', 'header', 'footer', 'nav', 'h4', 'h5', 'h6', 'small', 'sub', 'sup'],
+    classPattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
+    classAllow: null,
+    classDeny: [],
+    idPattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
+    idDeny: [],
+  },
 };
 ```
 
-우선순위는 생성 옵션 `galleryLimits` > `window.JmEditorConfig` > 기본값입니다. 제한에 걸리면 `notify` 옵션으로 넘긴 함수에 안내 문구를 주고, 없으면 `alert` 로 띄웁니다. 글당 용량은 이번 편집에서 올린 사진만 셉니다(불러온 기존 사진은 크기를 알 수 없음). 클라이언트 제한은 우회할 수 있으므로 서버에서도 같은 값으로 검사하세요 ([서버 연동 가이드](server/spring-boot/README.md)).
+| 영역 | 생성 옵션 (우선) | 항목 |
+|---|---|---|
+| `gallery` | `galleryLimits` | `types`, `maxFileSizeMB`, `maxFilesPerAdd`, `maxImagesPerPost`, `maxTotalSizeMB`, `maxDimension` |
+| `image` | `image` | `mobileMedia` |
+| `font` | `font` | `families` |
+| `structure` | `structure` | `enabled`, `tags`, `classPattern`(class 이름 형식), `classAllow`(`null` 이면 형식만, `tit-*` 접두어 가능), `classDeny`, `idPattern`, `idDeny` |
+
+우선순위는 생성 옵션 > `window.JmEditorConfig` > 기본값입니다. 제한에 걸리면 `notify` 옵션으로 넘긴 함수에 안내 문구를 주고, 없으면 `alert` 로 띄웁니다. 글당 용량은 이번 편집에서 올린 사진만 셉니다(불러온 기존 사진은 크기를 알 수 없음). 클라이언트 제한은 우회할 수 있으므로 서버에서도 같은 값으로 검사하세요 ([서버 연동 가이드](server/spring-boot/README.md)).
 
 갤러리 줄 높이·간격·한 줄 장수는 CSS 변수로 정합니다.
 
@@ -224,7 +258,38 @@ api: {
 
 ## 저장되는 HTML
 
-허용 태그는 p, br, hr(속성 없음), strong, em, u, s, sub, sup, h1~h6, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`(모양 `data-style`, 테마 색 `data-color`, 직접 색 `style="--jm-btn: #rrggbb"`+`data-tone`, 아이콘 `data-icon`·`data-icon-pos` — 테마 실제 색은 `:root { --jm-btn-green: … }` 처럼 사이트에서 바꿀 수 있음), 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]`, 카카오 지도용 `div[data-type="map"]`(속성 `data-timestamp`·`data-key`·`data-height`·`data-title` 만, 안의 내용은 버림) 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100), `loading`(lazy·eager)만 더 남고, 모바일 이미지용 `picture > source + img` 도 남습니다(아래 「퍼블리싱 구조 보존」 참고). 인용은 `blockquote` 기본(세로선)에 `data-style="box"`(박스)·`data-style="quote"`(글 처음·끝에 따옴표)가 있습니다. style 은 `color`, `background-color`, `text-align`, `vertical-align`, `width`, `height`, `font-size`, `list-style-type` 과 p·h1~h6·li·blockquote 의 `margin-left`·`text-indent`, `line-height`(단위 없는 수 0.5~5, 50~500%, px 8~200) 만 남고 값 형식도 검사합니다. 링크의 `target` 은 `_self`(같은 창, rel 없음)만 그대로 두고 그 밖은 `_blank` + `rel="noopener noreferrer"`, `#`·`tel:`·`mailto:` 는 target·rel 을 지웁니다. 문단·제목·글자 서식 안의 hr 은 그 요소를 나눠 밖으로 꺼내는데, 나눌 조상이 8단계를 넘거나 한 입력에서 복제가 1만 개를 넘으면 hr 만 버립니다(글은 유지).
+허용 태그는 p, br, hr(속성 없음), strong, em, u, s, sub, sup, h1~h6, ul, ol, li, blockquote, a, img, table 계열(colgroup, col 포함), span, 갤러리용 `div[data-type="gallery"]`, 유튜브용 `div[data-type="youtube"] > iframe` (src 는 youtube-nocookie.com/embed/ 만), 버튼용 `div[data-type="buttons"] > a[data-role="button"]`(모양 `data-style`, 테마 색 `data-color`, 직접 색 `style="--jm-btn: #rrggbb"`+`data-tone`, 아이콘 `data-icon`·`data-icon-pos` — 테마 실제 색은 `:root { --jm-btn-green: … }` 처럼 사이트에서 바꿀 수 있음), 이미지 + 글 배치용 `div[data-type="layout"] > div[data-cell]`, 카카오 지도용 `div[data-type="map"]`(속성 `data-timestamp`·`data-key`·`data-height`·`data-title` 만, 안의 내용은 버림) 입니다. 이미지에는 글 감싸기용 `data-float`(left·right)와 `style="width: N%"`(10~100), `loading`(lazy·eager)만 더 남고, 모바일 이미지용 `picture > source + img` 도 남습니다(아래 「퍼블리싱 구조 보존」 참고). 인용은 `blockquote` 기본(세로선)에 `data-style="box"`(박스)·`data-style="quote"`(글 처음·끝에 따옴표)가 있습니다.
+
+| 요소·속성 | 규칙 |
+|---|---|
+| `hr` | 속성 없음. 문단·제목·글자 서식 안이면 그 요소를 나눠 밖으로(`<strong>a<hr>b</strong>` → `<strong>a</strong><hr><strong>b</strong>`), 플러그인 블록 안은 지움. 나눌 조상이 8단계를 넘거나 한 입력에서 복제가 1만 개를 넘으면 hr 만 버림(글은 유지) |
+| `sub` · `sup` | `style`. 구조 모드와 상관없이 허용 |
+| `a[target]` | `_self` 는 같은 창(rel 없음), 그 밖은 `_blank` + `rel="noopener noreferrer"`. `#`·`tel:`·`mailto:` 는 target·rel 을 지움 |
+| `ol[start]` | 숫자 1~4자리만 |
+| `col[span]` | 1~1000 정수만 |
+| `img[style]` | `width: N%`(10~100)만. 같은 속성이 여러 번이면 마지막 값으로 판단 |
+
+`style` 은 아래 속성만 남고 값 형식도 검사합니다. 저장 HTML 의 `style` 은 정제 표기로 맞춰 끝에 `;` 가 없고, 빈 `class`·`style` 은 남지 않습니다.
+
+| 속성 | 대상 | 값 |
+|---|---|---|
+| `color`, `background-color` | 모두 | `#hex`(3~8자리), `rgb()`·`rgba()`, 색 이름 |
+| `background` | 표 요소·`span` | 색만 `background-color` 로 (주소 등은 버림, 색이 없으면 지움) |
+| `text-align` | 모두 | left, center, right, justify |
+| `vertical-align` | 모두 | top, middle, bottom |
+| `width` | 모두 | 숫자 + `px`·`%`, `auto`. 표 요소는 `pt`·`mm`·`cm` → 정수 `px` |
+| `height` | 모두 | 숫자 + `px`. 표 요소는 `pt`·`mm`·`cm` → 정수 `px` |
+| `list-style-type` | 모두 | disc, circle, square, decimal, decimal-leading-zero, lower-alpha, upper-alpha, lower-roman, upper-roman, hangul, hangul-consonant, none |
+| `font-size` | 모두 | `px`·`pt`·`mm`·`cm`·`rem`(1rem=16px) → 정수 `px`, 8~96 안으로 맞춤. `em`·`%` 는 지움 |
+| `font-family` | 모두 | 허용 목록의 첫 이름만 `"맑은 고딕"` 꼴로, 없으면 지움 |
+| `line-height` | 모두 | 단위 없는 수 0.5~5, 50~500%, `px`·`pt` → `px`(8~200). `normal` 등은 지움 |
+| `letter-spacing` | 모두 | `px`·`pt` → `px`(소수 둘째 자리, -10~20), `em`(-1~2). `normal`·`0` 은 지움 |
+| `margin-left` | p·h1~h6·li·blockquote | `px`·`pt`·`mm`·`cm` → 정수 `px`, 0~400. 음수·`%`·`em` 은 지움 |
+| `margin-left`, `margin-right` | table | `auto` 만 |
+| `text-indent` | p·h1~h6·li·blockquote | `px`·`pt`·`mm`·`cm` → 정수 `px`, -400~400(음수는 내어쓰기) |
+| `border`, `border-top`·`right`·`bottom`·`left`, `border-*-width`·`style`·`color` | td·th | 폭 0~20(`px`·`pt`·`mm`·`cm`·thin·medium·thick), 스타일 none·solid·dashed·dotted·double, 색 |
+| `border-collapse` | table | collapse, separate |
+| `--jm-btn` | 버튼 `a` | `#rgb`·`#rrggbb` |
 
 표는 이렇게 저장됩니다. 열 너비는 `colgroup`, 행 높이는 `tr`, 병합은 `colspan` / `rowspan`, 테두리 숨김은 `data-border="0"` 입니다.
 
@@ -270,25 +335,18 @@ initSliders(document.querySelector('.jm-content'));
 |---|---|
 | `<font color size face>` | `span style` — size 1~7 은 10·13·16·18·24·32·48px, 남는 값이 없으면 벗김 |
 | 블록·표를 감싼 `font`·`span` | 벗기고 글자색·크기·글꼴·배경을 안쪽 글자의 `span` 으로 내려줌 (블록이 직접 지정한 항목은 블록 우선, class·id 는 사라짐) |
-| `font-size` 의 `pt`·`mm`·`cm`·소수 `px` | 정수 `px`(1pt=1.333px, 1mm=3.78px, 1cm=37.8px, 반올림), 8~96 안으로 맞춤. `em`·`%` 는 지움 |
 | `font-weight: bold·bolder·700~900` | 내용을 `strong` 으로. `normal` 등은 지움. `th` 는 원래 굵어서 감싸지 않음. 바로 아래 자식이 굵기를 해제하면 strong 밖에 둠. 버튼·플러그인 블록은 건드리지 않음 |
-| 표(table·tr·td·th·col) `width`·`height` 의 `pt`·`mm`·`cm` | `px` |
-| 표·`span` 의 `background` 단축값 | 색만 `background-color` 로 (주소 등은 버림, 색이 없으면 지움) |
 | 표 `bgcolor`·`align`·`valign`·`width`·`height` 속성 | `style` (style 에 같은 항목이 있으면 style 우선) |
 | `table align=center` | `margin-left·right: auto` (표 위치, left·right 는 지움) |
 | `table border=0` | `data-border="0"` |
 | `p`·`div`·제목 `align` | `text-align` |
-| `col span` | 1~1000 정수만 유지 |
 | 구조 모드를 끈 `caption` | 표 앞 `p` |
 | td·th `border`, `border-top` 등, `border-*-width·style·color`, table `border-collapse` | 값 검사 후 `1px solid windowtext` 꼴로 정규화 (폭 0~20px·pt·mm·cm·thin·medium·thick, 소수 둘째 자리까지 실제 값 유지 — `0.50pt` → `0.67px`, 토큰 순서 무관, 스타일 none·solid·dashed·dotted·double, 색. 소수 둘째 자리까지 유지(0.01 미만은 0.01px)) |
-| `font-size` | px·pt·mm·cm·rem(1rem=16px) → px 반올림, 8~96px 로 맞춤. em·% 는 지움 |
-| `line-height` | 단위 없는 수 0.5~5, 50~500%, px·pt → px(8~200px). `normal` 등 그 밖은 지움 |
-| `letter-spacing` | px·pt → px(소수 둘째 자리, -10~20px), em(-1~2em). `normal`·`0` 등 그 밖은 지움 |
-| `font-family` | 허용 목록의 첫 이름만 `font-family: "맑은 고딕"` 으로. 없으면 지움 |
-| `hr` | 속성 없이 유지. 문단·제목·글자 서식 안이면 그 요소를 나눠 밖으로 꺼냄 (`<strong>a<hr>b</strong>` → `<strong>a</strong><hr><strong>b</strong>`). 플러그인 블록 안은 지움 |
-| p·h1~h6·li·blockquote 의 `margin-left` | px·pt·mm·cm → 정수 px, 0~400px 만. 음수·`%`·`em`·`auto` 는 지움 |
-| p·h1~h6·li·blockquote 의 `text-indent` | px·pt·mm·cm → 정수 px, -400~400px 만 (음수는 내어쓰기). `%`·`em` 은 지움 |
 | `mso-*` 등 그 밖의 속성 | 지움 |
+| `<pre>` (붙여넣기만) | 줄마다 `br` 인 문단으로, 줄 앞·연속 공백은 nbsp 로 (허용 태그는 아님) |
+| 다른 페이지의 계산 스타일 (붙여넣기만) | style 에 `orphans`·`widows`·`-webkit-text-stroke-width` 흔적이 있으면 글꼴·자간·낱말 간격·줄 간격·첫 줄 들여쓰기, 흰색·투명 배경을 뺌. 글자색·크기는 2종 이상이면 가장 많은 값만, 1종이면 글자색은 무채색만·크기는 16px·medium 만 뺌. 배경이 남는 요소의 글자색은 유지. 오피스 원본·흔적 없는 style 은 그대로 |
+| `font-style: italic·oblique`, `text-decoration: underline·line-through` | 내용을 `em`·`u`·`s` 로 (a 자신의 밑줄·버튼·플러그인 블록 제외, 블록·표·목록은 안쪽 글자에). 서버도 같음 |
+| `<object>` | 태그만 벗기고 안의 대체 내용은 정제해 남김 |
 
 엑셀·파워포인트는 표·글과 함께 그림 미리보기도 클립보드에 넣으므로, `text/html`·`text/plain` 이 있으면 그림은 무시하고 파일만 있을 때 이미지로 넣습니다. 오피스 문서를 붙여 넣으면 문서 머리 `<style>` 의 class 규칙(`.xl65{…}`)을 표 칸·`font` 의 `style` 로 옮겨 테두리·배경·정렬을 살립니다 (붙여넣기 전용, 칸에 직접 쓴 값 우선, 값 검사는 정제가 그대로 함). `td{…}` 같은 태그 규칙과 표 밖 문단 규칙은 옮기지 않습니다.
 
@@ -464,10 +522,10 @@ window.JmEditorConfig = {
 
 ```
 src/
-  core/      JmEditor.js(진입점), Commands.js, SelectionUtil.js, History.js, Sanitizer.js, legacy-format.js(옛 형식 변환), font-policy.js(글꼴 허용 목록)
+  core/      JmEditor.js(진입점), Commands.js, SelectionUtil.js, History.js, BlockDrag.js, FindReplace.js(찾기·바꾸기), Sanitizer.js, legacy-format.js(옛 형식 변환), font-policy.js(글꼴 허용 목록), structure-policy.js(구조 보존 정책)
   plugins/   table/, gallery/, embed/(유튜브), buttons/, slider/(SliderCommands, slider-runtime), layout/(이미지 + 글 배치), map/(MapCommands, map-runtime — 카카오 지도) — 블록형 기능. 편집 중에만 쓰는 레이어를 씌우고 저장 시 벗김
              image/(본문 이미지 글 감싸기·크기 조절 도구)
-  ui/        JmToolbarEditor.js(툴바), ColorPicker, TableGridPicker, FormatPicker, ContextMenu
+  ui/        JmToolbarEditor.js(툴바), ColorPicker, TableGridPicker, FormatPicker, ContextMenu, FindBar
   api/       JmEditorApi.js
   styles/    jm-editor.css
 examples/    demo(단독 HTML), thymeleaf, react
@@ -486,7 +544,9 @@ npx playwright install chromium webkit
 npm run test:e2e
 ```
 
-`test/e2e/` 에 기본 기능 회귀 테스트와 퍼블 구조 모드 테스트(정리 규칙·편집·키 입력)가 있고, 같은 테스트를 구조 모드를 끈 채로도 돌립니다(`chromium-off`). `test/fixtures/publisher/` 의 샘플 HTML 을 정리한 기대 결과(`expected/`)는 서버 `HtmlSanitizer` 테스트도 같은 파일로 비교합니다.
+`test/e2e/` 에 기본 기능 회귀 테스트와 퍼블 구조 모드 테스트(정리 규칙·편집·키 입력)가 있고, 같은 테스트를 구조 모드를 끈 채로도 돌립니다(`chromium-off`). `test/fixtures/publisher/` 의 기대 결과(`expected/`)와 `test/fixtures/legacy/cases.txt` 의 정제 사례는 서버 `HtmlSanitizer` 테스트도 같은 파일로 비교합니다.
+
+서버 테스트는 이 저장소에 없습니다. `server/spring-boot` 는 연동 가이드용 소스만 담고, 실행·테스트는 저장소 밖의 서버 프로젝트(`JmEditor-server`, 이 저장소와 나란한 폴더)에서 `./gradlew test` 로 합니다.
 
 ## 라이선스
 

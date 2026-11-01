@@ -29,9 +29,6 @@
 
    파일명은 UUID, 경로는 `upload-dir/yyyy/MM/dd/` 입니다. Content-Type 은 클라이언트가 보내는 값이므로, 더 엄격하게 하려면 파일 앞부분(매직바이트) 검사를 추가하세요.
 4. **권한** — 샘플에는 인증·권한 처리가 없습니다. 등록·수정·업로드 API 는 각 서비스의 보안 설정 안에 두세요(작성자 검증, CSRF — 클라이언트는 `api.headers` 옵션으로 토큰 전달, 업로드 횟수 제한).
-6. **업로드 파일 응답 헤더** — 업로드 폴더를 정적 리소스로 서빙할 때 `X-Content-Type-Options: nosniff` 와 `Content-Security-Policy: …; sandbox` 를 붙입니다(`UploadConfig.UploadHeaderInterceptor`). 이미지로 위장한 파일을 브라우저가 HTML 등으로 추측해 실행하지 않게 하고, 문서로 열려도 스크립트가 돌지 않게 합니다. 가능하면 업로드 파일은 쿠키가 없는 별도 도메인에서 서빙하세요.
-7. **본문 크기 제한** — `EditorDto.MAX_CONTENT_LENGTH`(기본 200만 자)를 넘는 본문은 400 으로 거부합니다. base64 이미지를 본문에 넣어 업로드 크기 제한을 우회하거나 DB 를 부풀리는 것을 막습니다. 이미지 `data:` 주소는 이미지 형식(png·jpeg·gif·webp·svg)의 base64 만 남깁니다.
-8. **오류 응답** — 입력 오류는 안내 문구를, 파일 입출력 오류는 서버 경로 같은 내부 정보가 담길 수 있으므로 로그에만 남기고 일반 문구(500)를 내려줍니다.
 5. **갤러리 업로드 제한** — 에디터는 설정값(`window.JmEditorConfig` 또는 생성 옵션 `galleryLimits`)으로 업로드 전에 막지만 우회할 수 있으므로, 서버에서도 같은 값으로 검사합니다.
 
    | 항목 | 기본값 | 서버에서 검사하는 곳 |
@@ -44,6 +41,9 @@
    | 긴 변 축소 | 2000px (GIF 제외) | 에디터가 업로드 전에 줄임. 서버에서 강제하려면 업로드 시 크기 확인 후 축소·거부 |
 
    제한 값을 바꾸면 설정 파일과 서버 설정을 함께 바꿔야 합니다.
+6. **업로드 파일 응답 헤더** — 업로드 폴더를 정적 리소스로 서빙할 때 `X-Content-Type-Options: nosniff` 와 `Content-Security-Policy: …; sandbox` 를 붙입니다(`UploadConfig.UploadHeaderInterceptor`). 이미지로 위장한 파일을 브라우저가 HTML 등으로 추측해 실행하지 않게 하고, 문서로 열려도 스크립트가 돌지 않게 합니다. 가능하면 업로드 파일은 쿠키가 없는 별도 도메인에서 서빙하세요.
+7. **본문 크기 제한** — `EditorDto.MAX_CONTENT_LENGTH`(기본 200만 자)를 넘는 본문은 400 으로 거부합니다. base64 이미지를 본문에 넣어 업로드 크기 제한을 우회하거나 DB 를 부풀리는 것을 막습니다. 이미지 `data:` 주소는 이미지 형식(png·jpeg·gif·webp·svg)의 base64 만 남깁니다.
+8. **오류 응답** — 입력 오류는 안내 문구를, 파일 입출력 오류는 서버 경로 같은 내부 정보가 담길 수 있으므로 로그에만 남기고 일반 문구(500)를 내려줍니다.
 
 ## 의존성 (build.gradle)
 ```groovy
@@ -109,7 +109,7 @@ jm-editor:
 ```
 
 켜면 구조 태그와 class(허용 토큰만)·`th[scope]`·`id`(형식·`idDeny`·예약 전역·중복 검사)·`aria-labelledby`/`describedby`/`label`/`hidden`·글자 없는 아이콘 `<i class>`(class·`aria-hidden="true"` 만)를 남기고, 블록 기능(`div[data-type]`) 안의 class 는 지웁니다. 정책과 무관하게 `jm-*`·`is-selected` 등 에디터 예약 이름은 지우고, `section` 등을 설정해도 `StructurePolicy.TAG_LIMIT` 밖의 태그(script·form 등)는 열리지 않습니다.
-같은 규칙을 클라이언트와 같은 픽스처(`test/fixtures/publisher/` 와 `expected/`)로 확인합니다.
+같은 규칙을 클라이언트와 같은 픽스처(`test/fixtures/publisher/` 와 `expected/`)로 확인합니다. 이 폴더에는 테스트가 없습니다. 실행·테스트는 저장소 밖의 서버 프로젝트(`JmEditor-server`)에서 `./gradlew test` 로 합니다.
 
 공통 변경: 링크 `tel:` 허용, `b`·`i`·`strike` 를 `strong`·`em`·`s` 로 바꿈(클라이언트와 같게), 저장 HTML 은 줄 맞춤(pretty print) 없이 출력합니다.
 
@@ -122,20 +122,22 @@ jm-editor:
 | hr | — (class·id·aria 도 지움. 문단·제목·글자 서식 안이면 나눠서 밖으로, 플러그인 블록 안은 제거. 나눌 조상이 8단계 초과이거나 입력 하나의 복제가 1만 개를 넘으면 hr 만 버림, 글은 유지) |
 | sub, sup | style (구조 모드와 상관없이 허용, 플러그인 블록 안에서도 남음) |
 | blockquote | style, data-style(box·quote 만 — 세로선은 기본값이라 속성 없음) |
-| ol | style, start |
+| ol | style, start(숫자 1~4자리만) |
 | br, strong, em, u, s, tbody, thead | — |
 | a | href, target, rel, data-role, data-style, data-size, data-color, data-tone, data-icon, data-icon-pos, style(버튼의 `--jm-btn: #hex` 만) — 버튼 속성은 `data-role="button"` 일 때만 남음 |
-| img | src, alt, width, height, data-float(left·right), loading(lazy·eager), style(`width: N%` 10~100 만 — 글 감싸기) |
+| img | src, alt, width, height, data-float(left·right), loading(lazy·eager), style(`width: N%` 10~100 만 — 글 감싸기, 같은 속성이 여러 번이면 마지막 값) |
 | picture | (구조 모드에서 class·id·aria) — `source` 0~4개 + `img` 1개만 |
 | source | srcset(후보 1~4개, `data:` 는 1개만), media(200자 이하·`url(` 금지), type(이미지 형식만) |
 | table | style, data-border |
 | colgroup | — |
-| col, tr | style |
+| col | style, span(1~1000 정수만) |
+| tr | style |
 | td, th | style, colspan, rowspan |
 | div | 아래 블록(`data-type`)일 때만 |
 | iframe | 유튜브 블록 안에서만 |
+| a target | `_self` 만 존중(rel 지움). 그 밖은 `_blank` + `rel="noopener noreferrer"`, `#`·`tel:`·`mailto:` 는 둘 다 지움 |
 
-- 그 밖의 태그는 제거하고 안의 텍스트만 남깁니다 (`script`·`style` 은 내용까지 제거). `data-type` 이 없거나 모르는 값인 `div` 는 속성을 모두 지우고 `p` 로 바꿉니다.
+- 그 밖의 태그는 제거하고 안의 내용은 정제해 남깁니다 (`object` 도 태그만 벗김. `script`·`style`·`title`·`textarea`·`select` 는 내용까지 제거). `data-type` 이 없거나 모르는 값인 `div` 는 속성을 모두 지우고 `p` 로 바꿉니다.
 - `style` 이 모두 걸러진 `span` 은 풀어서(unwrap) 안의 내용만 남깁니다.
 - `p[data-role]` 은 부모가 `gallery` 또는 `slider` 블록일 때만 남습니다.
 
@@ -160,28 +162,29 @@ jm-editor:
 | vertical-align | top, middle, bottom |
 | width | 숫자 + `px`/`%`, `auto` |
 | height | 숫자 + `px` |
-| font-size | `px`·`pt`·`mm`·`cm`(소수 허용) → 정수 `px`, 8~96 안으로 맞춤. `em`·`%` 는 지움 |
+| font-size | `px`·`pt`·`mm`·`cm`·`rem`(1rem=16px, 소수 허용) → 정수 `px`, 8~96 안으로 맞춤. `em`·`%` 는 지움 |
+| line-height | 단위 없는 수 0.5~5, 50~500%, `px`·`pt` → `px`(8~200) |
+| letter-spacing | `px`·`pt` → `px`(소수 둘째 자리, -10~20), `em`(-1~2) |
+| list-style-type | disc, circle, square, decimal, decimal-leading-zero, lower-alpha, upper-alpha, lower-roman, upper-roman, hangul, hangul-consonant, none |
 | font-family | `FontPolicy` 허용 목록의 첫 이름만 `"이름"` 으로 (대소문자 무시, 영문 별칭 변환), 없으면 지움 |
 | width, height (table·tr·td·th·col) | `pt`·`mm`·`cm` → 정수 `px` |
 | background (table·tr·td·th·col·span) | 색만 `background-color` 로, 색이 없으면 지움 |
 | border, border-top·right·bottom·left, border-\*-width·style·color (td·th) | 폭 0~20px·pt·mm·cm·thin·medium·thick, 스타일 none·solid·dashed·dotted·double, 색. 단축값은 토큰 3개 이하로 정규화 |
 | border-collapse (table) | collapse, separate |
 | margin-left, margin-right (table) | auto 만 |
-| a target | `_self` 만 존중(rel 지움). 그 밖은 `_blank` + `rel="noopener noreferrer"`, `#`·`tel:`·`mailto:` 는 둘 다 지움 |
 | margin-left (p·h1~h6·li·blockquote) | `px`·`pt`·`mm`·`cm` → 정수 `px`, 0~400. 음수·`%`·`em` 은 지움 |
 | text-indent (p·h1~h6·li·blockquote) | `px`·`pt`·`mm`·`cm` → 정수 `px`, -400~400 (음수는 내어쓰기). `%`·`em` 은 지움 |
 
-`font-size` 의 rem 은 px 로(1rem=16px), `line-height`·`letter-spacing` 은 값 검사 후 다시 조립해 남기고, 셀 테두리 폭은 소수 둘째 자리까지 실제 값을 유지합니다(`0.50pt` → `0.67px`). 허용 검사 전에 `LegacyFormat` 이 옛 형식을 바꿉니다: `font` → `span style`, 표 `bgcolor`·`align`·`valign`·`width`·`height` 속성 → `style`, `font-weight` 굵게 → 내용을 `strong` 으로, 블록을 감싼 `font`·`span` → 안쪽 글자에 내려줌, `table border=0` → `data-border`, 구조 모드를 끈 `caption` → 표 앞 `p`. 파싱 전 `object`·`applet`·`marquee` 여는 태그는 합계 2000개까지만 남깁니다. 선언 값은 256자까지이며 따옴표·괄호 안의 `;`·`:` 는 구분자로 보지 않습니다. 클라이언트 `core/legacy-format.js` 와 같은 사례 파일(`test/fixtures/legacy/cases.txt`)로 확인합니다.
-| list-style-type | disc, circle, square, decimal, decimal-leading-zero, lower-alpha, upper-alpha, lower-roman, upper-roman, hangul, hangul-consonant, none |
+셀 테두리 폭은 소수 둘째 자리까지 실제 값을 유지합니다(`0.50pt` → `0.67px`). 허용 검사 전에 `LegacyFormat` 이 옛 형식을 바꿉니다: `font` → `span style`, 표 `bgcolor`·`align`·`valign`·`width`·`height` 속성 → `style`, `font-weight` 굵게 → 내용을 `strong` 으로, 블록을 감싼 `font`·`span` → 안쪽 글자에 내려줌, `table border=0` → `data-border`, 구조 모드를 끈 `caption` → 표 앞 `p`. 파싱 전 `object`·`applet`·`marquee` 여는 태그는 합계 2000개까지만 남깁니다. 선언 값은 256자까지이며 따옴표·괄호 안의 `;`·`:` 는 구분자로 보지 않습니다. 클라이언트 `core/legacy-format.js` 와 같은 사례 파일(`test/fixtures/legacy/cases.txt`)로 확인합니다.
 
 ### 블록 (`div[data-type]`)
 
 | 블록 | 자식 | 속성 (허용 값 밖이면 기본값) |
 |---|---|---|
-| gallery | 제목 `p[data-role=title]`, `img` | data-layout justify/cover. 예전 저장분 호환용: data-cols 는 있을 때만 1~6 으로 맞춤(숫자가 아니면 제거), data-auto `1`, data-align center/right — 허용 값이 아니면 해당 속성 제거 |
-| slider | 제목 `p[data-role=title]`, `img` | data-interval 0~60000 (기본 3000), data-ratio 16:9/4:3/1:1/21:9, data-indicator dots/numbers/bars/none, data-indicator-pos bottom-center/bottom-left/bottom-right, data-width 100/75/50, data-align left/center/right (기본 center) |
+| gallery | 바로 아래 첫 제목 `p[data-role=title]`, `img`(문단 등에 들어 있어도 꺼내 문서 순서로) | data-layout justify/cover. 예전 저장분 호환용: data-cols 1~6 만, data-auto `1`, data-align center/right — 허용 값이 아니면 해당 속성 제거 |
+| slider | 제목 `p[data-role=title]`, `img` | data-interval 0~60000 정수 (그 밖은 3000), data-ratio 16:9/4:3/1:1/21:9, data-indicator dots/numbers/bars/none, data-indicator-pos bottom-center/bottom-left/bottom-right, data-width 100/75/50, data-align left/center/right (기본 center) |
 | buttons | `a` 만 (`data-role="button"` 강제) | data-align left/center/right (기본 center). 버튼 `data-style` primary/outline/soft/gray (기본 primary), `data-size` sm/lg, `data-color` green/red/orange/purple/gray/black (blue 는 기본값이라 제거), `data-icon` 16종(arrow·external·download·phone·mail·calendar·pin·search·play·check·info·heart·star·plus·chat·file), `data-icon-pos` right(아이콘이 있을 때만). 직접 색은 `style` 의 `--jm-btn: #rgb/#rrggbb` 만 남기고(테마 색보다 우선) 밝기로 `data-tone="light"` 를 다시 계산. 버튼이 없으면 블록 제거 |
-| youtube | `iframe` 하나 | data-width 100/75/50, data-align left/center/right (기본 center). 바로 아래 `iframe` 이 없으면 블록 제거 |
+| youtube | `iframe` 하나 | data-width 100/75/50, data-align left/center/right (기본 center). 안쪽의 첫 `iframe` 하나를 바로 아래로 옮겨 씀. 없거나 주소가 틀리면 블록 제거 |
 | map | 없음 (안의 내용은 모두 버림) | data-provider `kakao-roughmap` 고정, data-timestamp 숫자 10~16자리 + data-key 영문·숫자 2~32자 (둘 중 하나라도 틀리면 둘 다 제거 — 빈 블록), data-height 300/400/500 (기본 400), data-title 공백 정리 후 100자까지 |
 | layout | `div[data-cell=image]`(img 1장만), `div[data-cell=text]`(문단·제목·목록·인용·인라인만 — 표·이미지·iframe·블록 제거) | data-preset side/one/diagonal/pair (기본 side), data-variant 는 preset 별 허용 값(기본 첫 배치), data-split 20~80 의 5 배수만. 칸은 variant 의 저장 순서대로 다시 세우고 모자라면 빈 칸을 채우며 넘치면 버림 |
 
@@ -191,8 +194,8 @@ jm-editor:
 
 ### 클라이언트 Sanitizer 와 다른 점
 
+정제 결과는 같게 맞추고 공통 사례(`test/fixtures/legacy/cases.txt`)로 확인합니다. 출력은 양쪽 모두 줄 맞춤(pretty print) 없이 나옵니다. 남은 차이는 극단 입력의 사전 제한뿐입니다.
+
 | 항목 | 클라이언트 (`core/Sanitizer.js`) | 서버 (`HtmlSanitizer`) |
 |---|---|---|
-| `ol[start]` | 1~4자리 숫자만 | 값 검사 없음 |
-| `a[href]` | http(s)·mailto·tel·`#`·`/` 경로만 (`//…`, `/\…` 같은 외부 주소 우회 차단). 사용자가 입력한 링크는 도메인만 쓰면 `https://` 를 붙이고 `javascript:` 등은 거부 | 클라이언트와 같음 |
-| 출력 형식 | 공백 없이 | 블록 사이에 줄바꿈·들여쓰기가 들어감 (`body().html()` pretty print) |
+| 파싱 전 태그 제한 | 태그 순 열림 합계 2만 초과분을 지움 | `object`·`applet`·`marquee` 여는 태그를 합계 2000개까지만 |

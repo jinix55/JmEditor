@@ -58,6 +58,7 @@ export class History {
   }
 
   redo() {
+    this.push(); // 미기록 타이핑이 있으면 먼저 반영 (새 글이 생겼으면 다시 실행할 것이 없어진다)
     if (this.redoStack.length === 0) return;
     this.undoStack.push(this.last);
     this.last = this.redoStack.pop();

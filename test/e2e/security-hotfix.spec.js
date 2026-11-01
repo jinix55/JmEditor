@@ -85,7 +85,7 @@ test.describe('H2 깊은 중첩', () => {
     test(`스캔 우회 입력도 2초 안: ${name}`, async ({ page }) => {
       const r = await clean(page, input);
       expect(r.ms).toBeLessThan(DEEP_LIMIT_MS);
-      if (!input.includes('object')) expect(r.out).toContain('끝'); // object 는 안의 내용째 버린다 (기존 규칙)
+      expect(r.out).toContain('끝');
     });
   }
 

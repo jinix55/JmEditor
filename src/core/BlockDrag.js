@@ -7,6 +7,7 @@
 export const BLOCK_MIME = 'application/x-jm-block';
 const DROP_BEFORE = 'jm-drop-before';
 const DROP_AFTER = 'jm-drop-after';
+const DRAGGING = 'is-block-dragging';
 
 export class BlockDrag {
   /** @param {import('./JmEditor.js').JmEditor} editor */
@@ -34,7 +35,7 @@ export class BlockDrag {
       // 퍼블 구조 안에 있던 블록(불러온 문서의 표 등)은 끌어서 옮기지 않는다 — 루트로 빠져 구조가 바뀜
       if (this.editor?.structure && block.parentNode !== this.root) { e.preventDefault(); return; }
       this.dragging = block;
-      block.classList.add('is-block-dragging');
+      block.classList.add(DRAGGING);
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData(BLOCK_MIME, '1');
       e.dataTransfer.setData('text/plain', 'jm-block'); // Firefox 드래그 시작 조건
@@ -63,7 +64,10 @@ export class BlockDrag {
   }
 
   #clearMarks() {
-    this.root.querySelectorAll(`.${DROP_BEFORE}, .${DROP_AFTER}`).forEach((el) => el.classList.remove(DROP_BEFORE, DROP_AFTER));
+    this.root.querySelectorAll(`.${DROP_BEFORE}, .${DROP_AFTER}`).forEach((el) => {
+      el.classList.remove(DROP_BEFORE, DROP_AFTER);
+      if (!el.classList.length) el.removeAttribute('class'); // 빈 class 를 남기면 저장 HTML 이 달라져 되돌리기 단계가 생긴다
+    });
   }
 
   #over(e) {
@@ -91,17 +95,22 @@ export class BlockDrag {
   }
 
   #end() {
-    this.dragging?.classList.remove('is-block-dragging');
+    this.dragging?.classList.remove(DRAGGING);
     this.#clearMarks();
     this.dragging = null; this.target = null;
   }
 
-  /** 저장용 HTML 에서 드래그 표시 클래스 제거 */
+  /**
+   * 저장용 HTML 에서 드래그 표시 클래스 제거 (비는 class 속성은 getHTML 의 정규화가 지운다)
+   * @param {string} html
+   * @returns {string}
+   */
   static cleanHTML(html) {
-    return html.replace(/\s?class="(?:[^"]*\s)?(?:jm-drop-before|jm-drop-after|is-block-dragging)(?:\s[^"]*)?"/g, (m) => {
-      const cls = m.match(/class="([^"]*)"/)[1].split(/\s+/).filter((c) => c && !/^(jm-drop-before|jm-drop-after|is-block-dragging)$/.test(c));
-      return cls.length ? ` class="${cls.join(' ')}"` : '';
-    });
+    if (!html.includes(DROP_BEFORE) && !html.includes(DROP_AFTER) && !html.includes(DRAGGING)) return html;
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll(`.${DROP_BEFORE}, .${DROP_AFTER}, .${DRAGGING}`).forEach((el) => el.classList.remove(DROP_BEFORE, DROP_AFTER, DRAGGING));
+    return tpl.innerHTML;
   }
 
   destroy() {

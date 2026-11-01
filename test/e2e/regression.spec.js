@@ -36,7 +36,7 @@ test.describe('입력·문단', () => {
     await setHTML(page, '<p>가</p><p><span style="color: rgb(255, 0, 0);">나</span>다</p>');
     await caret(page, 'p:nth-child(2) span', 0);
     await page.keyboard.press('Backspace');
-    expect(await html(page)).toBe('<p>가<span style="color: rgb(255, 0, 0);">나</span>다</p>');
+    expect(await html(page)).toBe('<p>가<span style="color: rgb(255, 0, 0)">나</span>다</p>');
     await exec(page, 'undo');
     expect((await html(page)).replace(/;"/g, '"')).toBe('<p>가</p><p><span style="color: rgb(255, 0, 0)">나</span>다</p>'); // style 끝 ; 표기는 무시
   });
@@ -62,7 +62,7 @@ test.describe('글자 서식', () => {
     await setHTML(page, '<p>가나다라</p>');
     await select(page, 'p', 0, 2);
     await exec(page, 'color', '#ff0000');
-    expect(await html(page)).toBe('<p><span style="color: rgb(255, 0, 0);">가나</span>다라</p>');
+    expect(await html(page)).toBe('<p><span style="color: rgb(255, 0, 0)">가나</span>다라</p>');
     await select(page, 'span', 0, 2);
     await exec(page, 'color', null);
     expect(await html(page)).toBe('<p>가나다라</p>');
@@ -72,7 +72,7 @@ test.describe('글자 서식', () => {
     await setHTML(page, '<p>hello world</p>');
     await caret(page, 'p', 8);
     await exec(page, 'fontSize', '24px');
-    expect(await html(page)).toBe('<p>hello <span style="font-size: 24px;">world</span></p>');
+    expect(await html(page)).toBe('<p>hello <span style="font-size: 24px">world</span></p>');
     await caret(page, 'span', 2);
     await exec(page, 'fontSize', null);
     expect(await html(page)).toBe('<p>hello world</p>');
@@ -123,7 +123,7 @@ test.describe('블록 서식', () => {
     await setHTML(page, '<p>정렬</p>');
     await caret(page, 'p', 1);
     await exec(page, 'alignCenter');
-    expect(await html(page)).toBe('<p style="text-align: center;">정렬</p>');
+    expect(await html(page)).toBe('<p style="text-align: center">정렬</p>');
   });
 });
 

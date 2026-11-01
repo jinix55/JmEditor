@@ -190,6 +190,7 @@ export class JmToolbarEditor {
     this.source.className = 'jm-source';
     this.source.hidden = true;
     this.source.spellcheck = false;
+    this.source.addEventListener('input', () => { this.dirty = true; }); // 소스를 고친 것도 변경 (반영은 모드를 나갈 때)
     // 인라인 입력줄 (링크 URL / 유튜브 주소) — 툴바 아래에 펼쳐짐
     this.inputBar = document.createElement('div');
     this.inputBar.className = 'jm-inputbar';
@@ -465,11 +466,10 @@ export class JmToolbarEditor {
   #openSelectMenu(cmd, opts) {
     this.#refreshState(); // 사이트 CSS 가 바뀌었어도 표시 값과 목록의 선택 표시가 어긋나지 않게
     const btn = this.buttons[cmd];
-    const r = btn.getBoundingClientRect();
     this.editor.sel.save();
     const inherited = opts.inherited?.(this.editor, this.editor.sel.getRange()?.startContainer) ?? null;
     const items = opts.inherited ? this.#valueItems(opts, btn.dataset.value, inherited) : (opts.defaultLast ? [...this.#selectItems(opts), opts.selectDefault] : [opts.selectDefault, ...this.#selectItems(opts)]).filter(Boolean); // 제목은 큰 글자부터 본문까지
-    this.listMenu.open(r.left, r.bottom + 4, items.map(([v, text]) => ({
+    this.listMenu.toggleAt(btn, items.map(([v, text]) => ({
       label: text, className: opts.itemClass?.(v), checked: v === btn.dataset.value, action: () => this.editor.exec(cmd, (v && v !== inherited) ? v : null),
     })));
   }
@@ -552,38 +552,35 @@ export class JmToolbarEditor {
       return;
     }
     if (cmd === 'alignMenu' || cmd === 'valignMenu') {
-      const r = this.buttons[cmd].getBoundingClientRect();
       this.editor.sel.save();
       const items = cmd === 'alignMenu' ? ALIGN_ITEMS : VALIGN_ITEMS;
       const prefix = cmd === 'alignMenu' ? 'align' : 'valign';
-      this.listMenu.open(r.left, r.bottom + 4, items.map(([v, label]) => ({
+      this.listMenu.toggleAt(this.buttons[cmd], items.map(([v, label]) => ({
         label, action: () => this.editor.exec(prefix + v.charAt(0).toUpperCase() + v.slice(1)),
       })));
       return;
     }
     if (cmd === 'ulType' || cmd === 'olType') {
       const tag = cmd === 'ulType' ? 'ul' : 'ol';
-      const r = this.buttons[cmd].getBoundingClientRect();
       this.editor.sel.save();
       const types = tag === 'ul' ? UL_TYPES : OL_TYPES;
       // 커서가 이 종류의 목록 안이면 현재 번호 형식을 선택 표시 (지정이 없으면 첫 항목이 기본)
       const list = this.editor.sel.closest('li')?.parentNode;
       const current = list?.localName === tag ? (list.style.listStyleType || types[0][0]) : null;
-      this.listMenu.open(r.left, r.bottom + 4, types.map(([v, label]) => ({
+      this.listMenu.toggleAt(this.buttons[cmd], types.map(([v, label]) => ({
         label, checked: v === current, action: () => this.editor.exec(tag, v),
       })));
       return;
     }
     if (cmd === 'quote') {
       // 인용 스타일 목록: 항목을 그 스타일 모양(세로선·박스·따옴표)으로 보여 주고 현재 스타일은 강조, 인용 안이면 「인용 해제」
-      const r = this.buttons.quote.getBoundingClientRect();
       this.editor.sel.save();
       const current = this.editor.getState().quote;
       const items = QUOTE_ITEMS.map(([v, label]) => ({
         label, className: `jm-quote-item jm-quote-item-${v}`, checked: current === v, action: () => this.editor.exec('quote', v),
       }));
       if (current) items.push({ divider: true }, { label: '인용 해제', action: () => this.editor.exec('quote', null) });
-      this.listMenu.open(r.left, r.bottom + 4, items);
+      this.listMenu.toggleAt(this.buttons.quote, items);
       return;
     }
     if (cmd === 'table') { this.editor.sel.save(); this.gridPicker.toggle(this.buttons.table); return; }
@@ -685,6 +682,7 @@ export class JmToolbarEditor {
     // 현재 모드 정리
     if (this.mode === 'html') this.#applySource();
     this.findBar.close(false); // 찾기는 편집 모드에서만
+    this.#closeInputBar();     // 링크·유튜브 입력줄은 편집 모드의 커서에 쓰는 것
     this.mode = mode;
 
     this.area.hidden = mode !== 'editor';
@@ -712,6 +710,7 @@ export class JmToolbarEditor {
     this.toolbar.hidden = !editing; // 편집 모드가 아니면 하단 서식 줄 숨김
     clearTimeout(this.charTimer);
     this.#refreshCount();
+    this.#refreshState(); // 위에서 켠 버튼을 지금 커서에 맞게 (표 전용 버튼 등)
   }
 
   /**
@@ -746,7 +745,7 @@ export class JmToolbarEditor {
 
   /** 저장할 HTML. HTML 모드에서는 입력 중인 소스를 Sanitizer 로 거른 결과 */
   getHTML() { return this.mode === 'html' ? Sanitizer.clean(this.source.value, this.editor.structure, this.editor.fontFamilies) : this.editor.getHTML(); }
-  setHTML(html) { this.editor.setHTML(html); if (this.mode === 'html') this.#fillSource(html); if (this.mode === 'preview') this.#renderPreview(); this.#refreshCount(); }
+  setHTML(html) { this.editor.setHTML(html); if (this.mode === 'html') this.#fillSource(html); if (this.mode === 'preview') this.#renderPreview(); this.#refreshCount(); this.#refreshState(); }
 
   /** 미리보기 그리기: 이전 런타임(갤러리 배치 감시·슬라이드 타이머)을 정리하고 Sanitizer 를 거친 HTML 로 다시 그림 */
   #renderPreview() {

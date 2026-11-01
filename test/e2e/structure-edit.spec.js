@@ -120,7 +120,7 @@ test.describe('Codex 단계 2 검토 반영', () => {
     await setHTML(page, '<dl><dt>t</dt><dd>ab<p>cd</p></dd></dl>');
     await caret(page, 'dd', 1);
     await exec(page, 'color', '#ff0000');
-    expect(await html(page)).toBe('<dl><dt>t</dt><dd><span style="color: rgb(255, 0, 0);">ab</span><p>cd</p></dd></dl>');
+    expect(await html(page)).toBe('<dl><dt>t</dt><dd><span style="color: rgb(255, 0, 0)">ab</span><p>cd</p></dd></dl>');
   });
 
   test('블록 자식이 있는 li 는 목록 해제하지 않는다', async ({ page }) => {
@@ -172,7 +172,7 @@ test.describe('인라인 구조 태그(small·sub·sup)는 블록이 아니라 �
     await caret(page, 'small', 1);
     expect(await page.evaluate(() => window.core.sel.getBlock()?.tagName)).toBe('P');
     await exec(page, 'alignCenter');
-    expect(await html(page)).toBe('<p style="text-align: center;">작은 <small>글씨</small></p>');
+    expect(await html(page)).toBe('<p style="text-align: center">작은 <small>글씨</small></p>');
   });
 });
 

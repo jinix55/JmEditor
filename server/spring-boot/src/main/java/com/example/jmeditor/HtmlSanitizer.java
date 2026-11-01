@@ -162,6 +162,8 @@ public class HtmlSanitizer {
 
     /** col span 허용 값: 1~1000 */
     private static final Pattern COL_SPAN = Pattern.compile("^([1-9]\\d{0,2}|1000)$");
+    /** 슬라이드 전환 간격 형식: 정수 1~5자리 (범위는 0~60000) */
+    private static final Pattern SLIDER_INTERVAL = Pattern.compile("^\\d{1,5}$");
     /** 파싱 전에 남기는 object·applet·marquee 여는 태그 수 합계 */
     private static final int BARRIER_TAGS_MAX = 2000;
     private static final java.util.List<String> BARRIER_TAGS = java.util.List.of("object", "applet", "marquee");
@@ -263,8 +265,9 @@ public class HtmlSanitizer {
             if (!img.attr("loading").equals("lazy") && !img.attr("loading").equals("eager")) img.removeAttr("loading");
             String f = img.attr("data-float");
             if (!f.equals("left") && !f.equals("right")) img.removeAttr("data-float");
+            // 같은 속성이 여러 번이면 브라우저처럼 마지막 값으로 판단 (클라이언트와 같게)
             var m = IMG_WIDTH.matcher(Arrays.stream(img.attr("style").split(";")).map(String::trim)
-                    .filter(d -> d.startsWith("width")).findFirst().orElse(""));
+                    .filter(d -> d.startsWith("width")).reduce((a, b) -> b).orElse(""));
             int w = m.matches() ? Integer.parseInt(m.group(1)) : 0;
             if (w >= 10 && w <= 100) img.attr("style", "width: " + w + "%"); else img.removeAttr("style");
         }
@@ -289,6 +292,12 @@ public class HtmlSanitizer {
             applyLinkTarget(a);
             if (!"button".equals(a.attr("data-role"))) BUTTON_ATTRS.forEach(a::removeAttr);
             else cleanButton(a);
+        }
+        // 유튜브 블록은 안쪽 어디에 있든 첫 iframe 하나만 쓴다 (클라이언트와 같게): 블록 바로 아래로 옮겨 아래 검사를 받는다
+        for (Element block : doc.select("div[data-type=youtube]")) {
+            Element first = block.selectFirst("iframe");
+            for (Element other : new java.util.ArrayList<>(block.select("iframe"))) if (other != first) other.remove();
+            if (first != null && first.parent() != block) block.prependChild(first);
         }
         // iframe 은 유튜브 블록 안의 embed 주소만 허용
         Pattern yt = Pattern.compile("^https://www\\.(youtube|youtube-nocookie)\\.com/embed/([A-Za-z0-9_-]{11})([?#].*)?$");
@@ -315,7 +324,7 @@ public class HtmlSanitizer {
                     if (!isTitle && !child.tagName().equals("img")) child.remove();
                 }
                 div.textNodes().forEach(org.jsoup.nodes.Node::remove);
-                int iv = parseIntOr(div.attr("data-interval"), 3000);
+                int iv = SLIDER_INTERVAL.matcher(div.attr("data-interval")).matches() ? Integer.parseInt(div.attr("data-interval")) : 3000; // 1e3·1.5 처럼 정수가 아닌 값은 기본값
                 div.attr("data-interval", String.valueOf(iv < 0 || iv > 60000 ? 3000 : iv));
                 if (!java.util.Set.of("16:9", "4:3", "1:1", "21:9").contains(div.attr("data-ratio"))) div.attr("data-ratio", "16:9");
                 if (!java.util.Set.of("dots", "numbers", "bars", "none").contains(div.attr("data-indicator"))) div.attr("data-indicator", "dots");
@@ -363,21 +372,21 @@ public class HtmlSanitizer {
                 if (!st.isEmpty()) div.attr("style", st);
                 continue;
             }
-            // data-cols 는 예전 cover 갤러리 호환용 — 있을 때만 1~6 으로 맞춰 남긴다
-            int cols = parseIntOr(div.attr("data-cols"), 0);
-            if (cols == 0) div.removeAttr("data-cols");
-            else div.attr("data-cols", String.valueOf(Math.max(1, Math.min(6, cols))));
+            // data-cols 는 예전 cover 갤러리 호환용 — 1~6 일 때만 남긴다
+            if (!div.attr("data-cols").matches("[1-6]")) div.removeAttr("data-cols");
             if (!"1".equals(div.attr("data-auto"))) div.removeAttr("data-auto");
             String layout = div.attr("data-layout");
             if (!layout.equals("justify") && !layout.equals("cover")) div.removeAttr("data-layout");
             String align = div.attr("data-align");
             if (!align.equals("center") && !align.equals("right")) div.removeAttr("data-align");
-            for (Element child : div.children()) {
-                boolean isTitle = child.tagName().equals("p") && "title".equals(child.attr("data-role")) && !child.text().isBlank();
-                boolean isImg = child.tagName().equals("img");
-                if (!isTitle && !isImg) child.remove();
-            }
-            div.textNodes().forEach(org.jsoup.nodes.Node::remove);
+            // 제목은 바로 아래 첫 p[data-role=title] (비어 있으면 없음), 이미지는 문단 등에 들어 있어도 문서 순서대로 모은다 (클라이언트와 같게)
+            Element title = div.selectFirst("> p[data-role=title]");
+            if (title != null && title.text().isBlank()) title = null;
+            java.util.List<Element> imgs = new java.util.ArrayList<>();
+            for (Element img : div.select("img")) if (title == null || !img.parents().contains(title)) imgs.add(img);
+            div.empty();
+            if (title != null) div.appendChild(title);
+            imgs.forEach(div::appendChild);
         }
         // 갤러리·슬라이드 제목 밖의 data-role 은 제거
         for (Element p : doc.select("p[data-role]")) {

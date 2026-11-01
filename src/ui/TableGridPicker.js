@@ -3,6 +3,8 @@
  * - 툴바 「표」 버튼 아래에 N×M 격자 팝업을 띄워, 마우스로 행·열 수를 고른 뒤 클릭하면 onPick(rows, cols) 호출.
  * - 프레임워크 독립. 키보드(방향키/Enter/Esc) 도 지원.
  */
+import { placeBelowAnchor } from './ContextMenu.js';
+
 export class TableGridPicker {
   /**
    * @param {object} options
@@ -49,6 +51,7 @@ export class TableGridPicker {
     this.anchor = null;
     this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.anchor?.contains(e.target)) this.close(); };
     this.onKey = (e) => this.#handleKey(e);
+    this.onScroll = (e) => { if (e.target !== this.el && !this.el.contains(e.target)) this.close(); }; // 화면에 고정돼 있어 바깥이 스크롤되면 버튼과 어긋난다
     this.#highlight(0, 0);
   }
 
@@ -58,10 +61,11 @@ export class TableGridPicker {
     const r = anchorEl.getBoundingClientRect();
     this.el.hidden = false;
     this.el.style.left = `${Math.min(r.left, window.innerWidth - this.el.offsetWidth - 8)}px`;
-    this.el.style.top = `${r.bottom + 4}px`;
+    placeBelowAnchor(this.el, anchorEl);
     this.#highlight(1, 1);
     document.addEventListener('mousedown', this.onDocDown, true);
     document.addEventListener('keydown', this.onKey, true);
+    window.addEventListener('scroll', this.onScroll, true);
   }
 
   close() {
@@ -69,6 +73,7 @@ export class TableGridPicker {
     this.el.hidden = true;
     document.removeEventListener('mousedown', this.onDocDown, true);
     document.removeEventListener('keydown', this.onKey, true);
+    window.removeEventListener('scroll', this.onScroll, true);
   }
 
   toggle(anchorEl) {

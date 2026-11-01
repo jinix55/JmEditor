@@ -6,6 +6,7 @@
  *   → 별도 서식 관리 화면/DB 테이블(예: format_template: id, name, description, html, sort_order, use_yn)에서 관리.
  */
 import { Sanitizer } from '../core/Sanitizer.js';
+import { placeBelowAnchor } from './ContextMenu.js';
 
 export class FormatPicker {
   /**
@@ -38,6 +39,7 @@ export class FormatPicker {
     this.anchor = null; // 팝업을 연 버튼 — 그 버튼 클릭은 '바깥 클릭'으로 보지 않음 (토글 동작)
     this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.anchor?.contains(e.target)) this.close(); };
     this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
+    this.onScroll = (e) => { if (e.target !== this.el && !this.el.contains(e.target)) this.close(); }; // 화면에 고정돼 있어 바깥이 스크롤되면 버튼과 어긋난다
   }
 
   /** 버튼 아래에 열기. 목록이 없으면 불러온 뒤 그린다 */
@@ -46,9 +48,10 @@ export class FormatPicker {
     const r = anchorEl.getBoundingClientRect();
     this.el.hidden = false;
     this.el.style.left = `${Math.min(r.left, window.innerWidth - 280)}px`;
-    this.el.style.top = `${r.bottom + 4}px`;
+    placeBelowAnchor(this.el, anchorEl);
     document.addEventListener('mousedown', this.onDocDown, true);
     document.addEventListener('keydown', this.onKey, true);
+    window.addEventListener('scroll', this.onScroll, true);
 
     if (!this.formats) {
       this.#renderMessage('불러오는 중…');
@@ -56,10 +59,12 @@ export class FormatPicker {
         this.formats = await this.loadFormats();
       } catch (err) {
         this.#renderMessage('서식을 불러오지 못했습니다');
+        placeBelowAnchor(this.el, anchorEl);
         return;
       }
     }
     this.#renderList();
+    if (!this.el.hidden) placeBelowAnchor(this.el, anchorEl); // 목록을 그린 뒤 높이가 바뀐다
   }
 
   toggle(anchorEl) {
@@ -71,6 +76,7 @@ export class FormatPicker {
     this.el.hidden = true;
     document.removeEventListener('mousedown', this.onDocDown, true);
     document.removeEventListener('keydown', this.onKey, true);
+    window.removeEventListener('scroll', this.onScroll, true);
   }
 
   /** 서식 관리에서 변경된 뒤 다시 받도록 캐시 비움 */

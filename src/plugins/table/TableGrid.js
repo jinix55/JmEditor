@@ -16,12 +16,13 @@ export class TableGrid {
 
   #build() {
     const grid = [];
+    const left = this.#rowsLeftInSection();
     this.rows.forEach((tr, r) => {
       grid[r] = grid[r] || [];
       let c = 0;
       Array.from(tr.cells).forEach((cell) => {
         while (grid[r][c]) c++; // 위에서 내려온 rowspan 이 차지한 칸은 건너뜀
-        const cs = cell.colSpan || 1, rs = cell.rowSpan || 1;
+        const cs = cell.colSpan || 1, rs = this.#clampRowSpan(cell, left[r]);
         for (let i = 0; i < rs; i++) {
           grid[r + i] = grid[r + i] || [];
           for (let j = 0; j < cs; j++) grid[r + i][c + j] = { cell, r0: r, c0: c };
@@ -30,6 +31,30 @@ export class TableGrid {
       });
     });
     this.grid = grid;
+  }
+
+  /**
+   * 행마다 자기 구역(thead·tbody·tfoot) 끝까지 남은 행 수 (자기 포함)
+   * @returns {number[]}
+   */
+  #rowsLeftInSection() {
+    const left = [];
+    for (let r = this.rows.length - 1; r >= 0; r--) left[r] = this.rows[r + 1]?.parentNode === this.rows[r].parentNode ? left[r + 1] + 1 : 1;
+    return left;
+  }
+
+  /**
+   * rowspan 을 구역 끝까지로 줄여 칸에 적는다 — 브라우저도 구역 끝에서 자르므로 모양은 그대로이고, 격자에 tr 없는 행이 생기지 않는다.
+   * rowspan="0" 은 구역 끝까지라는 뜻이라 같은 값으로 적는다
+   * @param {HTMLTableCellElement} cell
+   * @param {number} left 구역 끝까지 남은 행 수
+   * @returns {number} 맞춘 rowspan
+   */
+  #clampRowSpan(cell, left) {
+    const rs = cell.rowSpan;
+    if (rs >= 1 && rs <= left) return rs;
+    if (left > 1) cell.rowSpan = left; else cell.removeAttribute('rowspan');
+    return left;
   }
 
   get rowCount() { return this.grid.length; }

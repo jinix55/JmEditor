@@ -3,7 +3,7 @@
  * - 서식 명령 모음. execCommand 를 쓰지 않고 Range/DOM 조작으로 구현.
  * - 모든 명령은 에디터 루트 안에서만 동작하며, 실행 후 editor.commit() 으로 히스토리 기록·변경 알림을 한다.
  */
-import { SelectionUtil, TRANSFORMABLE_BLOCK, hasInlineContent } from './SelectionUtil.js';
+import { SelectionUtil, TRANSFORMABLE_BLOCK, hasInlineContent, isBlankInline } from './SelectionUtil.js';
 import { Sanitizer, HIDDEN_ID_ATTR } from './Sanitizer.js';
 import { notify } from '../plugins/gallery/gallery-upload.js';
 import { fontFamilyName } from './font-policy.js';
@@ -376,7 +376,8 @@ export class Commands {
     while ((styled = this.#findStyledAncestor(t, prop))) {
       const mid = this.#isolate(t, styled);
       mid.style.removeProperty(prop);
-      if (!mid.getAttribute('style')?.trim()) this.#unwrapEl(mid);
+      if (!mid.style.length) mid.removeAttribute('style');
+      if (!mid.attributes.length) this.#unwrapEl(mid); // class 등이 남은 span 은 둔다
     }
   }
 
@@ -825,6 +826,8 @@ export class Commands {
       : TRANSFORMABLE_BLOCK.test(b.tagName) && !Commands.#isPluginText(b)));
     if (!blocks.length) return;
     const collapsed = this.#isCollapsed();
+    const range = this.sel.getRange();
+    const points = range && Commands.#rangePoints(range); // 항목을 다른 목록으로 옮기면 살아 있는 선택이 밀려난다
     const isDefault = !styleType || styleType === (listTag === 'ul' ? 'disc' : 'decimal');
     const applyType = (list) => {
       if (isDefault) list.style.removeProperty('list-style-type'); else list.style.listStyleType = styleType;
@@ -841,6 +844,7 @@ export class Commands {
 
     let made = null; // 이번에 만든 목록 — 이어진 블록은 같은 목록의 항목으로
     let moved = false; // 블록을 항목으로 바꿨는지 (커서를 옮겨 줘야 함)
+    const created = new Set(); // 이번에 생긴 목록 — 끝나면 앞뒤 같은 종류 목록과 합친다
     const done = blocks.map((block) => {
       if (block.tagName === 'LI') {
         const list = block.parentNode;
@@ -855,6 +859,7 @@ export class Commands {
           list.replaceWith(newList);
           newList.style.removeProperty('list-style-type'); // 이전 종류의 유형(square 등)은 새 종류에 맞지 않음
           applyType(newList);
+          created.add(newList);
         }
         return block;
       }
@@ -870,12 +875,52 @@ export class Commands {
         made.appendChild(li);
         block.replaceWith(made);
         applyType(made);
+        created.add(made);
       }
       moved = true;
       return li;
     });
+    created.forEach((list) => this.#joinAdjacentLists(list));
     if (!collapsed || moved) this.#restoreBlocks(done, collapsed);
+    else if (points) this.#restorePoints(points);
     this.editor.commit();
+  }
+
+  /**
+   * 새로 생긴 목록을 앞뒤의 같은 종류 목록과 합친다 (인접 문단을 하나씩 ol 로 바꿔도 1, 1 이 되지 않게)
+   * @param {HTMLElement} list
+   */
+  #joinAdjacentLists(list) {
+    const nextTo = (el, step) => {
+      let n = el[step];
+      while (n?.nodeType === Node.TEXT_NODE && !n.textContent.trim()) n = n[step];
+      return n?.nodeType === Node.ELEMENT_NODE ? n : null;
+    };
+    const absorb = (keep, gone) => {
+      while (gone.firstChild) keep.appendChild(gone.firstChild);
+      gone.remove();
+    };
+    if (!list.isConnected) return;
+    const prev = nextTo(list, 'previousSibling');
+    let cur = list;
+    if (Commands.#canJoinLists(prev, list)) { absorb(prev, list); cur = prev; }
+    const next = nextTo(cur, 'nextSibling');
+    if (Commands.#canJoinLists(cur, next)) absorb(cur, next);
+  }
+
+  /**
+   * 목록 gone 을 keep 뒤에 이어 붙여도 모양이 같은지: 태그·class·style 이 같고, gone 에 다른 속성(id·aria 등)이 없으며, gone 의 시작 번호가 있으면 keep 다음 번호여야 한다
+   * @param {Element|null} keep
+   * @param {Element|null} gone
+   * @returns {boolean}
+   */
+  static #canJoinLists(keep, gone) {
+    if (!keep || !gone || !/^(UL|OL)$/.test(keep.tagName) || keep.tagName !== gone.tagName) return false;
+    if ((keep.getAttribute('class') || '') !== (gone.getAttribute('class') || '') || keep.style.cssText !== gone.style.cssText) return false;
+    if (Array.from(gone.attributes).some((a) => !['class', 'style', 'start'].includes(a.name))) return false;
+    if (!gone.hasAttribute('start')) return true;
+    const first = parseInt(keep.getAttribute('start'), 10);
+    return parseInt(gone.getAttribute('start'), 10) === (Number.isNaN(first) ? 1 : first) + keep.querySelectorAll(':scope > li').length;
   }
 
   /**
@@ -960,17 +1005,30 @@ export class Commands {
     if (url && !href) return false;
     const existing = this.sel.closest('a');
 
-    if (existing) {
+    // 커서가 링크 안이거나 선택이 한 링크 안에 있을 때: 그 링크 하나를 고치거나 푼다 (선택이 링크 밖으로 이어지면 아래에서 조각별로)
+    if (existing && (range.collapsed || existing.contains(range.endContainer))) {
       if (href) { this.editor.constructor.setHref(existing, href); Sanitizer.setLinkWindow(existing, href, opts?.newWindow); } // 기존 링크: 주소 수정(새 창 규칙도 다시 맞춤)
       else this.#unwrapEl(existing);                                // 해제
       this.editor.commit();
       return true;
     }
-    if (!href || range.collapsed) return undefined;
+    if (range.collapsed) return undefined;
 
-    // 문단 여러 개에 걸쳐도 문단마다 따로 링크를 건다 (a 안에 문단이 들어가지 않게). 선택한 이미지도 포함
-    const pieces = this.#textPieces(range, true).filter((t) => !t.parentElement.closest('a'));
+    // 문단 여러 개에 걸쳐도 문단마다 따로 링크를 건다 (a 안에 문단이 들어가지 않게). 선택한 이미지도 포함. 버튼 링크는 대상이 아니다
+    const pieces = this.#textPieces(range, true).filter((t) => !t.parentElement.closest('a[data-role]'));
     if (!pieces.length) return undefined;
+    if (!href) { // 해제: 선택에 걸친 링크를 통째로 푼다
+      const links = new Set(pieces.map((t) => t.parentElement.closest('a')).filter(Boolean));
+      if (!links.size) return undefined;
+      links.forEach((a) => this.#unwrapEl(a));
+      this.#selectPieces(pieces);
+      this.editor.commit();
+      return true;
+    }
+    pieces.forEach((t) => {
+      const old = t.parentElement.closest('a'); // 선택 안 조각은 새 주소로: 기존 링크에서 그 부분만 꺼낸다
+      if (old) this.#unwrapEl(this.#isolate(t, old));
+    });
     pieces.forEach((t) => {
       const a = document.createElement('a');
       this.editor.constructor.setHref(a, href);
@@ -1103,7 +1161,9 @@ export class Commands {
     this.#removeCoveredBlocks(range);
     const touched = new Set([this.sel.textBlockOf(range.startContainer), this.sel.textBlockOf(range.endContainer)]);
     const pieces = this.#textPieces(range, true);
-    pieces.forEach((t) => { touched.add(this.sel.textBlockOf(t)); t.remove(); });
+    const emptied = new Set();
+    pieces.forEach((t) => { touched.add(this.sel.textBlockOf(t)); emptied.add(t.parentElement); t.remove(); });
+    emptied.forEach((el) => this.#dropBlankInlines(el));
     // 범위 안에 남은 줄바꿈(br)도 지움 (글 블록 안의 것만)
     const brs = [];
     const host = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE ? range.commonAncestorContainer : range.commonAncestorContainer.parentNode;
@@ -1121,6 +1181,18 @@ export class Commands {
     const first = !this.sel.textBlockOf(range.startContainer) && Array.from(this.root.querySelectorAll('*')).find((el) => el.isContentEditable && this.sel.isTextBlock(el));
     if (first) this.sel.placeCursor(first, false);
     else this.sel.setRange(range);
+  }
+
+  /**
+   * 글을 지워 빈 글자 서식(strong·a 등)이 된 요소를 위로 올라가며 지운다 (블록이나 내용이 남은 요소에서 멈춤)
+   * @param {Element} el
+   */
+  #dropBlankInlines(el) {
+    for (let n = el; n?.isConnected && n !== this.root && isBlankInline(n);) {
+      const up = n.parentElement;
+      n.remove();
+      n = up;
+    }
   }
 
   /**
@@ -1189,7 +1261,11 @@ export class Commands {
     const range = this.sel.getRange();
     if (!range) return;
     // 구조 경계를 넘는 선택이면 구조를 지키는 삭제, 아니면 지금처럼
-    if (this.crossesStructure(range)) this.deleteRange(range); else range.deleteContents();
+    if (this.crossesStructure(range)) this.deleteRange(range);
+    else {
+      range.deleteContents();
+      this.#dropBlanksAround(range);
+    }
     const tpl = document.createElement('template');
     tpl.innerHTML = html;
     const frag = tpl.content;
@@ -1223,6 +1299,9 @@ export class Commands {
       return;
     }
 
+    this.#dropRedundantInlines(frag, range.startContainer);
+    // 빈 블록의 자리표시 br 은 글이 들어오면 필요 없다
+    if (frag.firstChild && block?.childNodes.length === 1 && block.firstChild.nodeName === 'BR') block.firstChild.remove();
     const last = frag.lastChild;
     range.insertNode(frag);
     if (last) {
@@ -1233,6 +1312,37 @@ export class Commands {
       this.sel.setRange(r);
     }
     this.editor.commit();
+  }
+
+  /**
+   * 넣을 조각의 글자 서식이 커서 자리에 이미 걸려 있으면 벗긴다 (같은 색 span 안에 붙여넣어도 중첩이 쌓이지 않게)
+   * @param {DocumentFragment} frag
+   * @param {Node} at 넣을 자리
+   */
+  #dropRedundantInlines(frag, at) {
+    const ancestors = [];
+    for (let n = at.nodeType === Node.ELEMENT_NODE ? at : at.parentElement; n && n !== this.root && !this.sel.isTextBlock(n); n = n.parentElement) ancestors.push(n);
+    frag.querySelectorAll('span, strong, em, u, s').forEach((el) => {
+      if (Sanitizer.redundantInline(el, ancestors)) this.#unwrapEl(el);
+    });
+  }
+
+  /**
+   * deleteContents 뒤 접힌 범위 자리와 그 양옆에 남은 빈 글자 서식을 지운다 (선택을 덮어 붙여넣을 때 <strong></strong> 이 남지 않게)
+   * @param {Range} range
+   */
+  #dropBlanksAround(range) {
+    let n = range.startContainer;
+    if (n.nodeType === Node.TEXT_NODE) {
+      if (n.length) return;
+      const up = n.parentElement;
+      n.remove();
+      n = up;
+    }
+    this.#dropBlankInlines(n);
+    const host = range.startContainer;
+    if (host.nodeType !== Node.ELEMENT_NODE) return;
+    [host.childNodes[range.startOffset - 1], host.childNodes[range.startOffset]].forEach((c) => { if (c?.nodeType === Node.ELEMENT_NODE) this.#dropBlankInlines(c); });
   }
 
   /**
@@ -1300,7 +1410,7 @@ export class Commands {
     const frag = tpl.content;
     frag.appendChild(after);
 
-    const isEmptyPara = block && block.tagName === 'P' && block.textContent.replace(ZWSP, '') === '' && !block.querySelector('img');
+    const isEmptyPara = block && block.tagName === 'P' && block.textContent.replace(new RegExp(ZWSP, 'g'), '') === '' && !block.querySelector('img');
     if (isEmptyPara) block.replaceWith(frag);
     else if (block) block.parentNode.insertBefore(frag, block.nextSibling);
     else this.root.appendChild(frag);

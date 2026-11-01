@@ -52,7 +52,7 @@ const PASTE_OFFICE_CLASS = /^(xl\d+|font\d+)$/;
 /** 붙여넣은 원본 HTML 의 오피스 흔적 */
 const OFFICE_MARK = /mso-|urn:schemas-microsoft-com|ProgId/i;
 /** 자식까지 통째로 버리는 태그: 위험 태그 + 글이 본문에 새면 안 되는 문서 머리·폼 입력 (서버 HtmlSanitizer 와 같음) */
-const DROP_TAGS = ['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link', 'title', 'textarea', 'select'];
+const DROP_TAGS = ['script', 'style', 'iframe', 'embed', 'meta', 'link', 'title', 'textarea', 'select'];
 /** 닫는 태그가 없으면 뒤 글을 통째로 삼키는 태그 — 파싱 전에 그 여는 태그만 지운다 (서버와 같은 규칙) */
 const SWALLOW_TAG = /<(\/?)(textarea|title|select)(?=[ \t\n\f\r\/>])[^>]*>/gi;
 /** 요소 중첩 깊이 상한 — 그보다 깊은 요소는 벗기고 글만 남긴다 (서버 DEPTH_MAX 와 같음) */
@@ -104,6 +104,39 @@ export const HIDDEN_ID_ATTR = 'data-jm-id';
 const STRUCTURE_ATTRS = ['style'];
 /** th[scope] 허용 값 (구조 모드) */
 const TH_SCOPES = ['row', 'col', 'rowgroup', 'colgroup'];
+
+/** 브라우저가 복사할 때 계산값을 통째로 넣은 style 의 흔적 — 사람이 직접 쓰는 일이 없는 속성 */
+const COMPUTED_STYLE_MARK = /^(orphans|widows|-webkit-text-stroke-width)$/;
+/** 계산값 style 에서 지우는 글자 모양 (붙는 곳의 글꼴을 따르게) */
+const COMPUTED_STYLE_DROP = new Set(['font-family', 'letter-spacing', 'word-spacing', 'line-height', 'text-indent']);
+/** 흰색·투명 배경 값 */
+/** 끝 br 을 찾을 때 지나가는 글자 서식 */
+const TIDY_INLINE = /^(SPAN|STRONG|EM|U|S|A|SUB|SUP|SMALL)$/;
+/** 무채색으로 보는 색 이름 */
+const ACHROMATIC_NAME = /^(black|white|gr[ae]y|dimgr[ae]y|darkgr[ae]y|lightgr[ae]y|silver|gainsboro|whitesmoke)$/;
+/** 무채색으로 보는 RGB 채널 차이 상한 (본문색 #1f2421 처럼 살짝 물든 회색 포함) */
+const ACHROMATIC_SPREAD = 24;
+
+/**
+ * 검정·회색 계열 색인지
+ * @param {string} value 소문자 색 값
+ * @returns {boolean}
+ */
+function isAchromatic(value) {
+  if (ACHROMATIC_NAME.test(value)) return true;
+  let rgb = null;
+  const hex = /^#([0-9a-f]{3,8})$/.exec(value)?.[1];
+  if (hex) {
+    const full = hex.length < 6 ? hex.replace(/./g, '$&$&') : hex;
+    rgb = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+  } else {
+    const m = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/.exec(value);
+    if (m) rgb = m.slice(1, 4).map(Number);
+  }
+  return !!rgb && Math.max(...rgb) - Math.min(...rgb) <= ACHROMATIC_SPREAD;
+}
+
+const BLANK_BACKGROUND = /^(white|transparent|#fff(fff)?(ff)?|rgba?\(\s*255\s*,\s*255\s*,\s*255\s*(,\s*1(\.0*)?\s*)?\)|rgba\([^)]*,\s*0(\.0*)?\s*\))$/i;
 
 /** 오피스 머리 style 의 class 서식을 옮길 요소 */
 const OFFICE_STYLE_TARGETS = 'table, tr, td, th, col, font';
@@ -437,6 +470,176 @@ export class Sanitizer {
   }
 
   /**
+   * 붙여넣기 전용: 다른 페이지에서 복사하면 브라우저가 계산값을 style 로 넣는다. 그 흔적(orphans·widows 등)이 있는 요소만 글꼴·자간 등과 흰색·투명 배경을 뺀다.
+   * 글자색·크기는 조각에 값이 2종 이상이면 가장 많은 값(본문 값)만 빼고, 1종이면 글자색은 무채색만, 크기는 16px·medium 만 뺀다.
+   * 배경이 남는 요소의 글자색은 빼지 않는다 (흰 글자 + 어두운 배경이 어두운 글자가 되지 않게). 흔적 없는 style 과 오피스 원본은 그대로
+   * @param {string} html
+   * @returns {string}
+   */
+  static stripComputedStyles(html) {
+    if (OFFICE_MARK.test(html) || !/orphans|widows|-webkit-text-stroke-width/i.test(html)) return html;
+    const doc = new DOMParser().parseFromString(Sanitizer.#limitOpenTags(Sanitizer.#dropUnclosedTags(html)), 'text/html');
+    const marked = [];
+    doc.body.querySelectorAll('[style]').forEach((el) => {
+      const decls = parseStyle(el.getAttribute('style'));
+      if (decls.some(([n]) => COMPUTED_STYLE_MARK.test(n))) marked.push([el, decls]);
+    });
+    const color = Sanitizer.#droppableValue(marked, 'color', isAchromatic);
+    const size = Sanitizer.#droppableValue(marked, 'font-size', (v) => /^(16px|medium)$/.test(v));
+    marked.forEach(([el, decls]) => {
+      const kept = decls.filter(([n, v]) => !COMPUTED_STYLE_DROP.has(n) && !(n === 'background-color' && BLANK_BACKGROUND.test(v)) && !(n === 'font-size' && v.toLowerCase() === size));
+      const hasBackground = kept.some(([n]) => n === 'background-color' || n === 'background');
+      const out = kept.filter(([n, v]) => !(n === 'color' && !hasBackground && v.toLowerCase() === color));
+      if (out.length) el.setAttribute('style', out.map(([n, v]) => `${n}: ${v}`).join('; '));
+      else el.removeAttribute('style');
+    });
+    return doc.body.innerHTML;
+  }
+
+  /**
+   * 계산값 style 에서 지울 값: 2종 이상이면 직접 글자 수가 가장 많은 값, 1종이면 그 값이 본문 값으로 볼 만할 때만
+   * @param {Array<[Element, Array<[string,string]>]>} marked
+   * @param {string} prop
+   * @param {(value: string) => boolean} plain 1종일 때 지워도 되는 값인지
+   * @returns {string|null} 소문자 값
+   */
+  static #droppableValue(marked, prop, plain) {
+    const weight = new Map();
+    marked.forEach(([el, decls]) => {
+      const v = decls.find(([n]) => n === prop)?.[1].toLowerCase();
+      if (!v) return;
+      const own = Array.from(el.childNodes).reduce((sum, n) => sum + (n.nodeType === Node.TEXT_NODE ? n.data.length : 0), 0);
+      weight.set(v, (weight.get(v) || 0) + own);
+    });
+    if (weight.size === 1) { const [only] = weight.keys(); return plain(only) ? only : null; }
+    let top = null;
+    weight.forEach((w, v) => { if (top === null || w > weight.get(top)) top = v; });
+    return top;
+  }
+
+  /**
+   * 바깥에 이미 같은 서식이 걸려 있어 벗겨도 되는 글자 서식인지. strong·em·u·s 는 같은 태그가 조상이면, span 은 속성마다 그 속성을 가진 가장 가까운 조상 span 의 값이 같으면 (사이에 다른 색이 끼면 벗기면 안 된다)
+   * @param {Element} el
+   * @param {Element[]} [outer] el 의 부모 사슬 위에 이어지는 조상 (가까운 것부터)
+   * @returns {boolean}
+   */
+  static redundantInline(el, outer = []) {
+    const ups = [...outer];
+    for (let p = el.parentElement, i = 0; p; p = p.parentElement, i++) ups.splice(i, 0, p);
+    if (/^(STRONG|EM|U|S)$/.test(el.tagName)) return !el.attributes.length && ups.some((a) => a.tagName === el.tagName);
+    if (el.tagName !== 'SPAN' || !el.style.length || Array.from(el.attributes).some((x) => x.name !== 'style')) return false;
+    return Array.from(el.style).every((prop) => {
+      const near = ups.find((a) => a.tagName === 'SPAN' && a.style.getPropertyValue(prop));
+      return !!near && near.style.getPropertyValue(prop) === el.style.getPropertyValue(prop);
+    });
+  }
+
+  /**
+   * 붙여넣기 전용, 정제 뒤: 같은 서식의 중첩을 벗기고, 조각의 마지막 블록 끝 줄바꿈 하나를 지운다 (복사 범위 끝에 브라우저가 넣는 br).
+   * 앞에 글·인라인이 있는 br 만 지운다 — 빈 칸·빈 문단의 자리표시 br 과 빈 줄을 만드는 연속 br 은 그대로
+   * @param {string} html 정제한 HTML
+   * @returns {string}
+   */
+  static tidyPaste(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll('span, strong, em, u, s').forEach((el) => {
+      if (Sanitizer.redundantInline(el)) el.replaceWith(...el.childNodes);
+    });
+    tpl.content.normalize();
+    const isBlank = (n) => n.nodeType === Node.TEXT_NODE && !n.data.trim();
+    const lastOf = (el) => { let n = el.lastChild; while (n && isBlank(n)) n = n.previousSibling; return n; };
+    let end = lastOf(tpl.content);
+    while (end?.nodeType === Node.ELEMENT_NODE && end.nodeName !== 'BR' && end.lastChild) end = lastOf(end);
+    if (end?.nodeName !== 'BR') return tpl.innerHTML;
+    let at = end;
+    let before = at.previousSibling;
+    while (before && isBlank(before)) before = before.previousSibling;
+    while (!before && TIDY_INLINE.test(at.parentElement?.tagName)) {
+      at = at.parentElement;
+      before = at.previousSibling;
+      while (before && isBlank(before)) before = before.previousSibling;
+    }
+    if (!before || before.nodeName === 'BR') return tpl.innerHTML;
+    const up = end.parentElement;
+    end.remove();
+    for (let n = up; n && n !== at.parentElement && !n.firstChild;) { const next = n.parentElement; n.remove(); n = next; }
+    return tpl.innerHTML;
+  }
+
+  /**
+   * HTML 안 주소(href·src·srcset)를 바꾼다
+   * @param {string} html
+   * @param {(url: string) => string} fn
+   * @returns {string}
+   */
+  static #mapUrls(html, fn) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll('[href], [src]').forEach((el) => {
+      ['href', 'src'].forEach((n) => { if (el.hasAttribute(n)) el.setAttribute(n, fn(el.getAttribute(n))); });
+    });
+    tpl.content.querySelectorAll('source[srcset]').forEach((el) => {
+      el.setAttribute('srcset', el.getAttribute('srcset').split(/, +/).map((c) => { const [u, ...rest] = c.split(' '); return [fn(u), ...rest].join(' '); }).join(', '));
+    });
+    return tpl.innerHTML;
+  }
+
+  /**
+   * 클립보드용: / 경로를 절대 주소로 (다른 사이트에 붙여도 링크·이미지가 깨지지 않게). 파일로 연 페이지처럼 출처가 없으면 그대로
+   * @param {string} html
+   * @returns {string}
+   */
+  static absoluteUrls(html) {
+    const { origin } = window.location;
+    if (origin === 'null') return html;
+    return Sanitizer.#mapUrls(html, (u) => (/^\/(?![/\\])/.test(u) ? origin + u : u));
+  }
+
+  /**
+   * 붙여넣기 전용: 같은 출처의 절대 주소를 / 경로로 되돌린다 (에디터 안 복사가 저장 형태 그대로 돌아오게)
+   * @param {string} html
+   * @returns {string}
+   */
+  static relativeUrls(html) {
+    const { origin } = window.location;
+    if (origin === 'null' || !html.includes(origin)) return html;
+    return Sanitizer.#mapUrls(html, (u) => (u.startsWith(`${origin}/`) ? u.slice(origin.length) : u));
+  }
+
+  /**
+   * 붙여넣기 전용: pre 는 허용 태그가 아니라 벗겨지면 소스 줄바꿈이 공백이 되므로, 정제 전에 문단 + br 로 바꾼다.
+   * 줄 앞 공백·연속 공백은 nbsp 로, 탭은 공백 4칸으로 (코드 들여쓰기 유지). pre 안 서식 태그는 그대로 정제에 맡긴다
+   * @param {string} html 붙여넣은 원본 HTML
+   * @returns {string} pre 가 없으면 원본 그대로
+   */
+  static keepPreLines(html) {
+    if (!/<pre[\s>]/i.test(html)) return html;
+    const doc = new DOMParser().parseFromString(Sanitizer.#limitOpenTags(Sanitizer.#dropUnclosedTags(html)), 'text/html');
+    doc.querySelectorAll('pre').forEach((pre) => {
+      const walker = doc.createTreeWalker(pre, NodeFilter.SHOW_TEXT);
+      const texts = [];
+      while (walker.nextNode()) texts.push(walker.currentNode);
+      texts.forEach((t) => {
+        const lines = t.data.split(/\r?\n/).map((l) => l.replace(/\t/g, '    ').replace(/^ +| {2,}/g, (s) => '\u00a0'.repeat(s.length)));
+        const frag = doc.createDocumentFragment();
+        lines.forEach((l, i) => {
+          if (i) frag.appendChild(doc.createElement('br'));
+          if (l) frag.appendChild(doc.createTextNode(l));
+        });
+        t.replaceWith(frag);
+      });
+      if (pre.lastChild?.nodeName === 'BR') pre.lastChild.remove(); // 끝 줄바꿈은 줄이 아니다
+      const p = doc.createElement('p');
+      ['class', 'style'].forEach((n) => { if (pre.hasAttribute(n)) p.setAttribute(n, pre.getAttribute(n)); });
+      while (pre.firstChild) p.appendChild(pre.firstChild);
+      if (!p.firstChild) p.appendChild(doc.createElement('br'));
+      pre.replaceWith(p);
+    });
+    return doc.body.innerHTML;
+  }
+
+  /**
    * 붙여넣기 전용: 오피스·브라우저가 붙인 class 토큰을 뺀다 (정제를 마친 HTML 에 적용). Mso*·Apple-* 는 항상,
    * xl숫자·font숫자는 원본에 오피스 흔적이 있을 때만. setHTML·HTML 보기 경로에서는 쓰지 않는다
    * @param {string} html 정제한 HTML
@@ -614,8 +817,8 @@ export class Sanitizer {
       const g = document.createElement('div');
       g.setAttribute('data-type', 'gallery');
       // data-cols 는 예전 cover 갤러리 호환용 — 있을 때만 남긴다 (새 갤러리는 쓰지 않음)
-      const cols = parseInt(node.getAttribute('data-cols'), 10);
-      if (cols >= 1 && cols <= 6) g.setAttribute('data-cols', String(cols));
+      const cols = node.getAttribute('data-cols');
+      if (/^[1-6]$/.test(cols)) g.setAttribute('data-cols', cols);
       if (node.getAttribute('data-auto') === '1') g.setAttribute('data-auto', '1');
       const layout = node.getAttribute('data-layout');
       if (layout === 'justify' || layout === 'cover') g.setAttribute('data-layout', layout);
@@ -623,13 +826,14 @@ export class Sanitizer {
       if (align === 'center' || align === 'right') g.setAttribute('data-align', align);
       // 제목(선택): 첫 번째 p[data-role=title]. 비어 있으면 저장하지 않음
       const title = node.querySelector(':scope > p[data-role="title"]');
-      if (title && title.textContent.trim()) {
+      const keptTitle = title && title.textContent.trim() ? title : null;
+      if (keptTitle) {
         const t = Sanitizer.#cleanNode(title);
         if (t && t.nodeType === Node.ELEMENT_NODE) { t.setAttribute('data-role', 'title'); g.appendChild(t); }
       }
-      // picture 는 안의 img 한 장으로 줄인다 (picture 안 img 를 따로 또 모으지 않음)
+      // picture 는 안의 img 한 장으로 줄인다 (picture 안 img 를 따로 또 모으지 않음). 제목 안 이미지는 제목과 함께 이미 옮겼다
       node.querySelectorAll('img, picture').forEach((el) => {
-        if (el.tagName === 'IMG' && el.closest('picture')) return;
+        if ((el.tagName === 'IMG' && el.closest('picture')) || keptTitle?.contains(el)) return;
         const r = Sanitizer.#blockImage(el);
         if (r) g.appendChild(r);
       });
@@ -640,7 +844,7 @@ export class Sanitizer {
     if (tag === 'div' && node.getAttribute('data-type') === 'slider') {
       const b = document.createElement('div');
       b.setAttribute('data-type', 'slider');
-      const iv = parseInt(node.getAttribute('data-interval'), 10);
+      const iv = /^\d{1,5}$/.test(node.getAttribute('data-interval')) ? +node.getAttribute('data-interval') : -1; // 1e3·1.5 처럼 정수가 아닌 값은 기본값
       b.setAttribute('data-interval', String(iv >= 0 && iv <= 60000 ? iv : 3000));
       const ratio = node.getAttribute('data-ratio');
       b.setAttribute('data-ratio', ['16:9', '4:3', '1:1', '21:9'].includes(ratio) ? ratio : '16:9');
@@ -880,7 +1084,9 @@ export class Sanitizer {
   /** 글 감싸기 이미지: data-float 는 left/right, style 은 width 10~100% 만 */
   static #cleanImage(img) {
     if (!['left', 'right'].includes(img.getAttribute('data-float'))) img.removeAttribute('data-float');
-    const m = (img.getAttribute('style') || '').match(/(?:^|;)\s*width:\s*(\d{1,3})%/);
+    // 같은 속성이 여러 번이면 브라우저처럼 마지막 값으로 판단
+    const last = (img.getAttribute('style') || '').split(';').map((d) => d.trim()).filter((d) => d.startsWith('width')).pop() || '';
+    const m = /^width:\s*(\d{1,3})%$/.exec(last);
     const w = m ? +m[1] : 0;
     if (w >= 10 && w <= 100) img.setAttribute('style', `width: ${w}%`);
     else img.removeAttribute('style');

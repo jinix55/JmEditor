@@ -7,7 +7,7 @@
  *   const editor = new JmEditor(el, { onChange: html => ..., uploadImage: file => Promise<url> });
  *   editor.exec('bold');  editor.getHTML();  editor.setHTML(html);  editor.destroy();
  */
-import { SelectionUtil, hasInlineContent } from './SelectionUtil.js';
+import { SelectionUtil, hasInlineContent, isBlankInline } from './SelectionUtil.js';
 import { Commands } from './Commands.js';
 import { TableCommands, TABLE_LAYER_CLASS } from '../plugins/table/TableCommands.js';
 import { ContextMenu } from '../ui/ContextMenu.js';
@@ -195,7 +195,16 @@ export class JmEditor {
 
   /** 저장용 HTML 반환 (ZWSP·표 레이어 제거, picture 안 img 뒤 글은 picture 밖으로) */
   getHTML() {
-    let html = JmEditor.#dropEmptyInlines(this.root.innerHTML).replace(new RegExp(ZWSP, 'g'), '');
+    return this.#toSaved(this.root.innerHTML);
+  }
+
+  /**
+   * 편집 DOM 의 HTML 을 저장 형태로 (레이어·보관 속성·ZWSP·편집 표시 제거). 전체 저장과 에디터 안 복사가 같이 쓴다
+   * @param {string} source 편집 DOM 의 HTML
+   * @returns {string}
+   */
+  #toSaved(source) {
+    let html = JmEditor.#dropEmptyInlines(source).replace(new RegExp(ZWSP, 'g'), '');
     html = TableCommands.unwrapHTML(html);
     html = GalleryCommands.unwrapHTML(html);
     html = EmbedCommands.unwrapHTML(html);
@@ -207,7 +216,7 @@ export class JmEditor {
     html = JmEditor.#restoreLinks(html);
     html = JmEditor.#restoreIds(html);
     html = JmEditor.#dropAutoParagraphs(html);
-    return BlockDrag.cleanHTML(html);
+    return this.#normalizeAttrs(BlockDrag.cleanHTML(html));
   }
 
   /** HTML 로드 (sanitize 후) */
@@ -237,9 +246,11 @@ export class JmEditor {
    */
   #loadContent(html) {
     this.#clearAllSelected();
+    this.table.clearSelection(); // 이전 내용의 표를 가리키지 않게
     this.image?.clear();
     this.slider?.stopAll(); // 이전 내용의 슬라이드 타이머 정리
-    this.root.innerHTML = Sanitizer.clean(html || '', this.structure, this.fontFamilies);
+    this.#restoring = true;
+    try { this.root.innerHTML = Sanitizer.clean(html || '', this.structure, this.fontFamilies); } finally { this.#restoring = false; }
     this.table.wrapAll();
     this.gallery.wrapAll();
     this.embed.wrapAll();
@@ -351,6 +362,7 @@ export class JmEditor {
 
   /** 변경 확정: 히스토리 기록 + onChange 호출. Commands 가 명령 끝에 호출한다. */
   commit() {
+    if (this.#restoring) return; // 내용을 바꾸는 중 사라지는 칸의 blur 가 기록하면 다시 실행 목록이 지워진다
     this.table.wrapAll(); // 붙여넣기 등으로 들어온 표도 레이어로
     this.gallery.wrapAll();
     this.embed.wrapAll();
@@ -416,6 +428,16 @@ export class JmEditor {
     };
     const onCopy = (e) => this.#handleCopy(e, false);
     const onCut = (e) => this.#handleCopy(e, true);
+    // 표 칸 범위·클릭한 이미지는 문서 선택이 없어 복사·키 이벤트가 편집 영역이 아니라 페이지에서 일어나기도 한다
+    const fromPage = (e) => {
+      if (r.contains(e.target) || e.target.closest?.('input, textarea, select')) return false;
+      const s = document.getSelection();
+      return !s || s.isCollapsed || r.contains(s.anchorNode);
+    };
+    const onDocCopy = (e) => { if ((this.table.selection || this.image.img) && fromPage(e)) this.#handleCopy(e, false); };
+    const onDocCut = (e) => { if ((this.table.selection || this.image.img) && fromPage(e)) this.#handleCopy(e, true); };
+    const onDocPaste = (e) => { if (this.table.selection && fromPage(e)) this.#handlePaste(e); };
+    const onDocKey = (e) => { if (this.table.selection && fromPage(e)) this.#clearCellsByKey(e); };
     const onMouseDown = () => this.#clearAllSelected();
     const onCompEnd = () => { this.composing = false; onInput(); };
     const onKeydown = (e) => this.#handleKeydown(e);
@@ -462,6 +484,10 @@ export class JmEditor {
     r.addEventListener('drop', onDrop);
     r.addEventListener('copy', onCopy);
     r.addEventListener('cut', onCut);
+    document.addEventListener('copy', onDocCopy);
+    document.addEventListener('cut', onDocCut);
+    document.addEventListener('paste', onDocPaste);
+    document.addEventListener('keydown', onDocKey);
     r.addEventListener('mousedown', onMouseDown);
     r.addEventListener('dragstart', onDragStart);
     r.addEventListener('dragend', onDragEnd);
@@ -481,6 +507,10 @@ export class JmEditor {
       r.removeEventListener('drop', onDrop);
       r.removeEventListener('copy', onCopy);
       r.removeEventListener('cut', onCut);
+      document.removeEventListener('copy', onDocCopy);
+      document.removeEventListener('cut', onDocCut);
+      document.removeEventListener('paste', onDocPaste);
+      document.removeEventListener('keydown', onDocKey);
       r.removeEventListener('mousedown', onMouseDown);
       r.removeEventListener('dragstart', onDragStart);
       r.removeEventListener('dragend', onDragEnd);
@@ -495,6 +525,8 @@ export class JmEditor {
   #unbind = null;
   /** 에디터 안에서 시작한 끌기 중인지 */
   #innerDrag = false;
+  /** 되돌리기 복원·내용 불러오기 중인지 */
+  #restoring = false;
   /** 전체 선택 때의 범위 (그대로면 삭제가 앞뒤 블록까지 지운다) */
   #allSelected = null;
   /** 단락 삽입기 이벤트 해제 */
@@ -602,6 +634,7 @@ export class JmEditor {
     const hr = this.#adjacentHr(forward);
     if (hr) { hr.remove(); this.commit(); return true; }
     const block = this.#blockAtEdge(forward);
+    if (block?.closest('[data-role="title"]')) return true; // 갤러리·슬라이드 제목은 한 줄 칸: 앞뒤 블록과 합치지 않는다 (WebKit 은 뒤 문단을 제목으로 끌어온다)
     if (!block || block.closest('[contenteditable="false"]')) return false; // 표 칸·배치 글 칸 안은 그 영역의 동작대로
     if (!this.sel.adjacentLayer(block, forward)) return false;
     const isEmpty = (el) => !el.textContent.replace(new RegExp(ZWSP, 'g'), '').trim() && !el.querySelector('img');
@@ -695,17 +728,145 @@ export class JmEditor {
   }
 
   /**
-   * 복사·잘라내기: 전체 선택이면 앞뒤 블록까지 저장 HTML 전체를 클립보드로 (화면 선택은 글 범위뿐이라 브라우저 기본은 블록을 빠뜨린다)
+   * 복사·잘라내기: 클릭한 이미지·표 칸 범위·전체 선택·선택 범위를 저장 HTML 로 클립보드에
+   * (브라우저 기본은 계산된 스타일을 인라인으로 넣어 다시 붙이면 글꼴·색이 바뀐다). 입력란 안은 브라우저 기본
    * @param {ClipboardEvent} e
    * @param {boolean} cut
    */
   #handleCopy(e, cut) {
-    if (!this.#isAllSelected(this.sel.getRange()) || !e.clipboardData) return;
+    if (!e.clipboardData || e.target.closest?.('input, textarea, select')) return;
+    const { img } = this.image;
+    if (img?.isConnected && this.sel.getRange()?.collapsed !== false) { // 선택을 글로 넓혔으면 그 글을 복사
+      this.#writeClipboard(e, this.#toSaved((img.parentElement?.tagName === 'PICTURE' ? img.parentElement : img).outerHTML));
+      if (cut) this.image.remove(img);
+      return;
+    }
+    if (this.table.selection) {
+      this.#writeClipboard(e, this.#toSaved(this.table.selectionHTML()));
+      if (cut) this.table.clearSelectedCells();
+      return;
+    }
+    const range = this.sel.getRange();
+    if (this.#isAllSelected(range)) {
+      this.#writeClipboard(e, this.getHTML());
+      if (cut) this.#replaceAll();
+      return;
+    }
+    if (!range || range.collapsed) return;
+    this.#writeClipboard(e, this.#selectionHTML(range));
+    if (!cut) return;
+    if (this.commands.crossesStructure(range)) { // 구조를 넘는 선택은 Delete 키와 같게 (execCommand 는 beforeinput 을 내지 않는다)
+      this.commands.deleteRange(range);
+      this.commit();
+    } else document.execCommand('delete'); // 그 밖은 브라우저 기본 삭제 그대로 (블록 합치기, input 으로 이력·변경 알림)
+  }
+
+  /**
+   * 저장 HTML 을 클립보드에: text/html 은 주소를 절대 주소로, text/plain 은 plainText 규칙으로
+   * @param {ClipboardEvent} e
+   * @param {string} html
+   */
+  #writeClipboard(e, html) {
     e.preventDefault();
-    const html = this.getHTML();
-    e.clipboardData.setData('text/html', html);
-    e.clipboardData.setData('text/plain', new DOMParser().parseFromString(html, 'text/html').body.textContent || '');
-    if (cut) this.#replaceAll();
+    e.clipboardData.setData('text/html', Sanitizer.absoluteUrls(html));
+    e.clipboardData.setData('text/plain', JmEditor.plainText(html));
+  }
+
+  /**
+   * 표 칸 범위 위 Delete·Backspace: 칸 비우기
+   * @param {KeyboardEvent} e
+   * @returns {boolean} 처리했으면 true
+   */
+  #clearCellsByKey(e) {
+    if (!this.table.selection || (e.key !== 'Delete' && e.key !== 'Backspace')) return false;
+    e.preventDefault();
+    this.table.clearSelectedCells();
+    return true;
+  }
+
+  /**
+   * 저장 HTML 의 글자 (클립보드·외부 전달 공통): 블록·br·li·tr 은 줄바꿈, td·th 는 탭, 플러그인 블록은 제목·버튼·배치 글 칸의 글자만
+   * @param {string} html 저장 HTML
+   * @returns {string}
+   */
+  static plainText(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    let buf = '';
+    const newline = () => { if (buf && !/[\n\t]$/.test(buf)) buf += '\n'; };
+    const walkKids = (n) => n.childNodes.forEach(walk);
+    function walk(n) {
+      if (n.nodeType === Node.TEXT_NODE) {
+        const t = n.data.replace(/\u200B/g, '');
+        if (t.trim() || !/[\r\n]/.test(t)) buf += t.replace(/\s*[\r\n]\s*/g, ' ');
+        return;
+      }
+      if (n.nodeType !== Node.ELEMENT_NODE) return;
+      if (n.tagName === 'BR') { buf += '\n'; return; }
+      if (n.tagName === 'DIV' && n.hasAttribute('data-type')) {
+        newline();
+        n.querySelectorAll(':scope > p[data-role="title"], :scope > a, :scope > div[data-cell="text"]').forEach((part) => { walkKids(part); newline(); });
+        return;
+      }
+      if (n.tagName === 'TR') {
+        newline();
+        Array.from(n.cells).forEach((cell, i) => {
+          if (i) buf += '\t';
+          const start = buf.length;
+          walkKids(cell);
+          while (buf.length > start && buf.endsWith('\n')) buf = buf.slice(0, -1);
+        });
+        newline();
+        return;
+      }
+      const block = SelectionUtil.isBlockTag(n);
+      if (block) newline();
+      walkKids(n);
+      if (block) newline();
+    }
+    walkKids(tpl.content);
+    return buf.replace(/\n+$/, '');
+  }
+
+  /**
+   * 내용 없는 플러그인 블록을 뺀다 (범위가 블록에 조금 걸쳐 빈 껍데기만 복제된 경우)
+   * @param {string} html 저장 HTML
+   * @returns {string}
+   */
+  static #dropHollowBlocks(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll('div[data-type]').forEach((b) => {
+      if (!b.textContent.trim() && !b.querySelector('img, iframe') && !b.hasAttribute('data-key')) b.remove();
+    });
+    return tpl.innerHTML;
+  }
+
+  /**
+   * 선택 범위의 저장 HTML. 한 블록 안 선택은 글자·인라인만 (붙일 때 문단이 생기지 않게), 인라인 안 선택은 그 조상으로 감싸 서식을 유지. 여러 블록이면 블록째
+   * @param {Range} range
+   * @returns {string}
+   */
+  #selectionHTML(range) {
+    const box = document.createElement('div');
+    box.appendChild(range.cloneContents());
+    Array.from(box.querySelectorAll('*')).reverse().forEach((el) => { if (isBlankInline(el)) el.remove(); }); // 경계에 걸려 비어서 복제된 서식
+    // 선택 끝이 다음 블록 맨 앞이면(세 번 클릭 등) 비어서 복제된 블록은 뺀다
+    [box.lastElementChild, box.firstElementChild].forEach((el) => {
+      if (el && box.children.length > 1 && SelectionUtil.isBlockTag(el) && !el.textContent.replace(new RegExp(ZWSP, 'g'), '').trim() && !el.querySelector('img, table, hr')) el.remove();
+    });
+    const common = range.commonAncestorContainer;
+    let html = box.innerHTML;
+    for (let n = common.nodeType === Node.ELEMENT_NODE ? common : common.parentElement; n && n !== this.root; n = n.parentElement) {
+      // 인라인 조상과 목록·표 구조는 감싸야 뜻이 유지되고(li·td 만으로는 파서가 버린다), 글 블록을 만나면 그만
+      const acrossCells = n.tagName === 'TABLE' && /^<(tbody|thead|tfoot|tr)[\s>]/i.test(html); // 칸을 넘는 선택은 표로 감싼다
+      if (!acrossCells && (this.sel.isTextBlock(n) || (SelectionUtil.isBlockTag(n) && !/^(UL|OL|DL)$/.test(n.tagName)) || n.hasAttribute('contenteditable'))) break;
+      const shell = n.cloneNode(false);
+      shell.removeAttribute('contenteditable');
+      shell.innerHTML = html;
+      html = shell.outerHTML;
+    }
+    return JmEditor.#dropHollowBlocks(this.#toSaved(html));
   }
 
   /** 전체 선택 표시를 풀고 잊는다 */
@@ -787,6 +948,7 @@ export class JmEditor {
     }
 
     if (e.key === 'Escape' && this.table.selection) { this.table.clearSelection(); return; }
+    if (this.#clearCellsByKey(e)) return;
     // 표 셀 안에서 Tab → 셀 이동
     if (e.key === 'Tab' && this.table.handleTab(e.shiftKey)) { e.preventDefault(); return; }
     // 목록 항목에서 Tab → 중첩, Shift+Tab → 해제 (목록·표 밖은 브라우저 기본)
@@ -816,7 +978,7 @@ export class JmEditor {
         return;
       }
       // 빈 li 에서 Enter → 목록 탈출
-      if (block?.tagName === 'LI' && block.textContent.replace(ZWSP, '') === '') {
+      if (block?.tagName === 'LI' && block.textContent.replace(new RegExp(ZWSP, 'g'), '') === '') {
         e.preventDefault();
         if (!this.commands.outdentEmptyItem(block)) this.commands.toggleList(block.parentNode.tagName.toLowerCase()); // 중첩 항목은 상위 목록의 새 항목으로
         return;
@@ -828,7 +990,7 @@ export class JmEditor {
           const atEnd = (() => {
             const test = range.cloneRange();
             test.setEnd(block, block.childNodes.length);
-            return test.toString().replace(ZWSP, '') === '';
+            return test.toString().replace(new RegExp(ZWSP, 'g'), '') === '';
           })();
           if (atEnd) {
             e.preventDefault();
@@ -849,6 +1011,12 @@ export class JmEditor {
     if (e.target.closest?.('input, textarea, select')) return;
     e.preventDefault();
     const cd = e.clipboardData;
+    const firstCell = this.table.selection?.table.querySelector('.is-cell-selected');
+    if (firstCell) { // 표 칸 범위 위 붙여넣기: 첫 칸에
+      this.table.clearSelection();
+      this.root.focus();
+      this.sel.placeCursor(firstCell, true);
+    }
     if (this.#isAllSelected(this.sel.getRange())) {
       // 전체 선택 위 붙여넣기: 양끝 블록까지 비운 뒤 넣는다 (기록은 넣을 때 한 번)
       this.#replaceAll(null, false);
@@ -874,7 +1042,9 @@ export class JmEditor {
     // 카카오맵 「지도 퍼가기」 코드를 본문에 붙여 넣으면 지도 블록으로
     if (isRoughmapCode(text)) { this.map.insertFromCode(text); return; }
     if (html) {
-      this.commands.insertHTML(Sanitizer.stripPasteClasses(Sanitizer.clean(Sanitizer.inlineOfficeStyles(html), this.structure, this.fontFamilies), html));
+      const clean = Sanitizer.tidyPaste(Sanitizer.stripPasteClasses(Sanitizer.clean(Sanitizer.stripComputedStyles(Sanitizer.keepPreLines(Sanitizer.inlineOfficeStyles(Sanitizer.relativeUrls(html)))), this.structure, this.fontFamilies), html));
+      if (firstCell && /<table[\s>]/i.test(clean)) this.commands.insertBlockHTML(clean); // 표는 표 삽입과 같은 자리(표 뒤)에
+      else this.commands.insertHTML(clean);
     } else if (text) {
       // 한 줄이면 커서 위치에 글자로, 여러 줄이면 줄마다 단락으로 (현재 문단을 나눠 그 사이에)
       const lines = text.split(/\r?\n/);
@@ -1072,6 +1242,31 @@ export class JmEditor {
     return tpl.innerHTML;
   }
 
+  /**
+   * 저장 HTML 정규화: 빈 class 를 지우고 style 을 정제 규칙의 표기로 — 툴바 서식(브라우저가 `font-family: 돋움;` 으로 적음)과 다시 불러온 글(정제가 `font-family: "돋움"` 으로 적음)이 글자까지 같게.
+   * 편집 중에만 쓰는 style(표 경계의 cursor 등)도 여기서 빠진다. 버튼 링크·이미지는 정제에 전용 규칙이 있어 끝 세미콜론만 뺀다
+   * @param {string} html
+   * @returns {string}
+   */
+  #normalizeAttrs(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll('[class], [style]').forEach((el) => {
+      if (el.hasAttribute('class') && !el.getAttribute('class').trim()) el.removeAttribute('class');
+      const style = el.getAttribute('style');
+      if (style === null) return;
+      let clean = style;
+      if (el.tagName === 'A' || el.tagName === 'IMG') {
+        let end = style.length;
+        while (end > 0 && /[\s;]/.test(style[end - 1])) end--;
+        clean = style.slice(0, end);
+      } else clean = Sanitizer.cleanStyle(style, el.localName, this.fontFamilies);
+      if (!clean) el.removeAttribute('style');
+      else if (clean !== style) el.setAttribute('style', clean);
+    });
+    return tpl.innerHTML;
+  }
+
   /** 저장용 HTML 에서 보관 속성을 href 로 되돌린다. 허용되지 않는 주소(javascript: 등)는 href 없이 둔다 */
   static #restoreLinks(html) {
     const tpl = document.createElement('template');
@@ -1137,11 +1332,13 @@ export class JmEditor {
   /** 히스토리 복원 */
   #restore(html) {
     this.#clearAllSelected();
+    this.table.clearSelection(); // 복원하면 표를 새로 만들므로 이전 표를 가리키지 않게
     const before = this.#textMap();
     const caret = this.#caretOffset(before);
     this.image.clear();
     this.slider.stopAll();
-    this.root.innerHTML = html;
+    this.#restoring = true;
+    try { this.root.innerHTML = html; } finally { this.#restoring = false; }
     this.table.wrapAll();
     this.gallery.wrapAll();
     this.embed.wrapAll();

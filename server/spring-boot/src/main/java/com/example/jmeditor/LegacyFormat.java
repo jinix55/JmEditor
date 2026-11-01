@@ -80,7 +80,7 @@ final class LegacyFormat {
     private static final Set<String> BOLD_BLOCK_TAGS = Set.of("address", "article", "aside", "blockquote", "caption", "center", "dd", "details", "div", "dl", "dt", "fieldset", "figcaption", "figure", "footer", "form",
             "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "li", "main", "menu", "nav", "ol", "p", "pre", "section", "table", "ul");
     /** 내용을 통째로 버리는 태그 — 훑지 않는다 (클라이언트 DROP_TAGS 와 같음) */
-    private static final Set<String> SKIP_TAGS = Set.of("script", "style", "iframe", "object", "embed", "meta", "link", "title", "textarea", "select");
+    private static final Set<String> SKIP_TAGS = Set.of("script", "style", "iframe", "embed", "meta", "link", "title", "textarea", "select");
 
     /**
      * style 문자열을 선언 목록으로 나눈다. 따옴표·괄호 안의 ; : 는 구분자가 아니며, 첫 : 가 이름과 값을 나눈다.
@@ -392,6 +392,7 @@ final class LegacyFormat {
      * @param keepCaption caption 이 허용 태그인지 (아니면 표 앞 문단으로 — 벗기면 표 안에 글이 남아 다시 파싱할 때 달라진다)
      */
     static void normalize(Element root, FontPolicy fonts, boolean keepCaption) {
+        moveDecorations(root);
         Set<Element> withBlock = elementsWithBlock(root);
         Deque<Work> stack = new ArrayDeque<>();
         for (Element c : root.children()) stack.push(new Work(c, false, false, null));
@@ -431,6 +432,112 @@ final class LegacyFormat {
                 for (Element c : el.children()) stack.push(new Work(c, false, done || button, null));
             }
         }
+    }
+
+    /** font-style·text-decoration 을 태그로 옮길 때의 상태: 기울임·밑줄·취소선 */
+    private record Deco(boolean em, boolean u, boolean s) {
+        static final Deco NONE = new Deco(false, false, false);
+    }
+
+    /** 작업 하나: 요소, 감쌀 서식, 이미 안에 있는 서식 */
+    private record DecoWork(Element el, Deco want, Deco done) {}
+
+    /**
+     * font-style·text-decoration 을 em·u·s 로 옮긴다 (클라이언트 moveDecorations 와 같은 규칙: 블록과 표·목록 구조는 안쪽으로 넘기고 글 묶음을 감싼다).
+     * 이미 그 태그 안이면 감싸지 않고, a 자신의 밑줄은 옮기지 않으며, 버튼 링크·플러그인 블록 자신의 style 은 보지 않는다
+     * @param root body
+     */
+    private static void moveDecorations(Element root) {
+        boolean any = false;
+        for (Element e : root.select("[style]")) {
+            String st = e.attr("style").toLowerCase(java.util.Locale.ROOT);
+            if (st.contains("font-style") || st.contains("text-decoration")) { any = true; break; }
+        }
+        if (!any) return;
+        Set<Element> withBlock = elementsWithBlock(root);
+        Deque<DecoWork> stack = new ArrayDeque<>();
+        for (Element c : root.children()) stack.push(new DecoWork(c, Deco.NONE, Deco.NONE));
+        while (!stack.isEmpty()) {
+            DecoWork w = stack.pop();
+            Element el = w.el();
+            String tag = el.normalName();
+            if (SKIP_TAGS.contains(tag) || isButton(el)) continue;
+            if (tag.equals("div") && el.hasAttr("data-type")) {
+                for (Element c : el.children()) stack.push(new DecoWork(c, Deco.NONE, w.done()));
+                continue;
+            }
+            Boolean ownEm = italicState(el.attr("style"));
+            boolean[] line = lineState(el.attr("style"));
+            Deco next = new Deco(ownEm != null ? ownEm : w.want().em(), w.want().u() || (line[0] && !tag.equals("a")), w.want().s() || line[1]);
+            Deco done = new Deco(w.done().em() || tag.equals("em") || tag.equals("i"), w.done().u() || tag.equals("u"), w.done().s() || tag.equals("s") || tag.equals("strike"));
+            if (BOLD_PASS_TAGS.contains(tag)) {
+                for (Element c : el.children()) stack.push(new DecoWork(c, next, done));
+                continue;
+            }
+            Deco wrap = new Deco(next.em() && !done.em(), next.u() && !done.u(), next.s() && !done.s());
+            if (!wrap.em() && !wrap.u() && !wrap.s()) {
+                for (Element c : el.children()) stack.push(new DecoWork(c, Deco.NONE, done));
+                continue;
+            }
+            Deco inside = new Deco(done.em() || wrap.em(), done.u() || wrap.u(), done.s() || wrap.s());
+            List<Node> run = new ArrayList<>();
+            for (Node n : new ArrayList<>(el.childNodes())) {
+                if (n instanceof TextNode) { run.add(n); continue; }
+                if (!(n instanceof Element e)) continue;
+                String childTag = e.normalName();
+                if (BOLD_BLOCK_TAGS.contains(childTag) || withBlock.contains(e)) {
+                    flushDeco(run, wrap, inside, stack);
+                    stack.push(new DecoWork(e, next, done));
+                } else if (isButton(e)) {
+                    flushDeco(run, wrap, inside, stack);
+                } else if (wrap.em() && Boolean.FALSE.equals(italicState(e.attr("style")))) {
+                    flushDeco(run, wrap, inside, stack);
+                    stack.push(new DecoWork(e, new Deco(false, next.u(), next.s()), done));
+                } else run.add(n);
+            }
+            flushDeco(run, wrap, inside, stack);
+        }
+    }
+
+    /** 글 묶음을 em·u·s 로 감싸고 안쪽 요소를 작업에 넣는다. 글이 없으면 감싸지 않는다 */
+    private static void flushDeco(List<Node> run, Deco wrap, Deco inside, Deque<DecoWork> stack) {
+        if (run.stream().anyMatch(LegacyFormat::hasText)) {
+            Element outer = null, inner = null;
+            for (String[] t : new String[][] {{"em", String.valueOf(wrap.em())}, {"u", String.valueOf(wrap.u())}, {"s", String.valueOf(wrap.s())}}) {
+                if (!t[1].equals("true")) continue;
+                Element e = new Element(t[0]);
+                if (inner != null) inner.appendChild(e); else outer = e;
+                inner = e;
+            }
+            run.get(0).before(outer);
+            for (Node n : run) inner.appendChild(n);
+        }
+        for (Node n : run) if (n instanceof Element e) stack.push(new DecoWork(e, Deco.NONE, inside));
+        run.clear();
+    }
+
+    /** style 의 기울임: true, 해제: false, 지정 없음: null (마지막 값) */
+    private static Boolean italicState(String style) {
+        Boolean em = null;
+        for (String[] d : parseStyle(style)) {
+            if (!d[0].equals("font-style")) continue;
+            String v = d[1].toLowerCase(java.util.Locale.ROOT);
+            if (v.matches("(italic|oblique)\\b.*")) em = true;
+            else if (v.equals("normal")) em = false;
+        }
+        return em;
+    }
+
+    /** style 의 밑줄·취소선 (마지막 값) */
+    private static boolean[] lineState(String style) {
+        boolean[] out = {false, false};
+        for (String[] d : parseStyle(style)) {
+            if (!d[0].equals("text-decoration") && !d[0].equals("text-decoration-line")) continue;
+            String v = d[1].toLowerCase(java.util.Locale.ROOT);
+            out[0] = v.matches(".*\\bunderline\\b.*");
+            out[1] = v.matches(".*\\bline-through\\b.*");
+        }
+        return out;
     }
 
     /** 버튼 링크인지 */

@@ -170,7 +170,8 @@ export class ButtonsCommands {
     const submit = () => {
       const text = name.value.trim();
       if (!text) { name.focus(); return; }
-      this.addButton(block, text, url.value.trim() || '#');
+      const address = url.value.trim();
+      this.addButton(block, text, address && address !== 'https://' ? address : '#'); // 기본값만 있으면 주소를 넣지 않은 것
       row.hidden = true;
     };
     row.querySelector('.jm-buttons-addok').addEventListener('mousedown', (e) => e.preventDefault());

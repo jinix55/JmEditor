@@ -40,6 +40,7 @@ export class ColorPicker {
     this.anchor = null;
     this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.anchor?.contains(e.target)) this.close(); };
     this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
+    this.onScroll = (e) => { if (e.target !== this.el && !this.el.contains(e.target)) this.close(); }; // 화면에 고정돼 있어 바깥이 스크롤되면 버튼과 어긋난다
   }
 
   // ───────────── UI 구성 ─────────────
@@ -178,6 +179,7 @@ export class ColorPicker {
     this.el.style.top = `${Math.min(y, h - this.el.offsetHeight - 8)}px`;
     document.addEventListener('mousedown', this.onDocDown, true);
     document.addEventListener('keydown', this.onKey, true);
+    window.addEventListener('scroll', this.onScroll, true);
   }
 
   openAt(anchorEl, onPick, opts) {
@@ -198,6 +200,7 @@ export class ColorPicker {
     this.anchor = null;
     document.removeEventListener('mousedown', this.onDocDown, true);
     document.removeEventListener('keydown', this.onKey, true);
+    window.removeEventListener('scroll', this.onScroll, true);
   }
 
   destroy() { this.close(); this.el.remove(); }

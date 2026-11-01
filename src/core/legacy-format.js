@@ -58,7 +58,7 @@ const BOLD_PASS_TAGS = new Set(['table', 'thead', 'tbody', 'tfoot', 'tr', 'colgr
 const BOLD_BLOCK_TAGS = new Set(['address', 'article', 'aside', 'blockquote', 'caption', 'center', 'dd', 'details', 'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form',
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr', 'li', 'main', 'menu', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'ul']);
 /** 내용을 통째로 버리는 태그 — 훑지 않는다 (Sanitizer 의 DROP_TAGS 와 같음) */
-const LEGACY_SKIP_TAGS = new Set(['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link', 'title', 'textarea', 'select']);
+const LEGACY_SKIP_TAGS = new Set(['script', 'style', 'iframe', 'embed', 'meta', 'link', 'title', 'textarea', 'select']);
 
 /**
  * style 문자열을 선언 목록으로 나눈다. 따옴표·괄호 안의 `;`·`:` 는 구분자가 아니며, 첫 `:` 가 이름과 값을 나눈다.
@@ -369,6 +369,73 @@ function elementsWithBlock(root) {
 }
 
 /**
+ * style 의 기울임·밑줄·취소선
+ * @param {string|null} style
+ * @returns {{em: boolean|null, u: boolean, s: boolean}} em: 기울임 true, 해제 false, 지정 없음 null
+ */
+function decorationsOf(style) {
+  const out = { em: null, u: false, s: false };
+  if (style) parseStyle(style).forEach(([n, v]) => {
+    const value = v.toLowerCase();
+    if (n === 'font-style') { if (/^(italic|oblique)\b/.test(value)) out.em = true; else if (value === 'normal') out.em = false; }
+    else if (n === 'text-decoration' || n === 'text-decoration-line') { out.u = /\bunderline\b/.test(value); out.s = /\bline-through\b/.test(value); }
+  });
+  return out;
+}
+
+/**
+ * font-style·text-decoration 을 em·u·s 로 옮긴다 (굵기→strong 과 같은 방식: 블록과 표·목록 구조는 안쪽으로 넘기고 글 묶음을 감싼다).
+ * 이미 그 태그 안이면 감싸지 않고, a 자신의 밑줄은 옮기지 않으며, 버튼 링크·플러그인 블록 자신의 style 은 보지 않는다. 값은 정제에서 style 과 함께 지워진다
+ * @param {HTMLElement} root body
+ */
+function moveDecorations(root) {
+  if (!Array.from(root.querySelectorAll('[style]')).some((el) => /font-style|text-decoration/i.test(el.getAttribute('style')))) return;
+  const withBlock = elementsWithBlock(root);
+  const NONE = { em: false, u: false, s: false };
+  const stack = Array.from(root.children, (c) => [c, NONE, NONE]);
+  while (stack.length) {
+    const [el, want, doneBefore] = stack.pop();
+    const tag = el.tagName.toLowerCase();
+    if (LEGACY_SKIP_TAGS.has(tag) || (tag === 'a' && el.getAttribute('data-role') === 'button')) continue;
+    if (tag === 'div' && el.hasAttribute('data-type')) { for (const c of el.children) stack.push([c, NONE, doneBefore]); continue; }
+    const own = decorationsOf(el.getAttribute('style'));
+    const next = { em: own.em ?? want.em, u: want.u || (own.u && tag !== 'a'), s: want.s || own.s };
+    const done = { em: doneBefore.em || tag === 'em' || tag === 'i', u: doneBefore.u || tag === 'u', s: doneBefore.s || tag === 's' || tag === 'strike' };
+    if (BOLD_PASS_TAGS.has(tag)) { for (const c of el.children) stack.push([c, next, done]); continue; }
+    const wrap = { em: next.em && !done.em, u: next.u && !done.u, s: next.s && !done.s };
+    if (!wrap.em && !wrap.u && !wrap.s) { for (const c of el.children) stack.push([c, NONE, done]); continue; }
+    const inside = { em: done.em || wrap.em, u: done.u || wrap.u, s: done.s || wrap.s };
+    let run = [];
+    const flush = () => {
+      if (run.some((n) => n.textContent.trim())) {
+        let outer = null;
+        let inner = null;
+        [['em', wrap.em], ['u', wrap.u], ['s', wrap.s]].forEach(([name, on]) => {
+          if (!on) return;
+          const e = el.ownerDocument.createElement(name);
+          if (inner) inner.appendChild(e); else outer = e;
+          inner = e;
+        });
+        run[0].before(outer);
+        run.forEach((n) => inner.appendChild(n));
+      }
+      run.forEach((n) => { if (n.nodeType === Node.ELEMENT_NODE) stack.push([n, NONE, inside]); });
+      run = [];
+    };
+    Array.from(el.childNodes).forEach((n) => {
+      if (n.nodeType === Node.TEXT_NODE) { run.push(n); return; }
+      if (n.nodeType !== Node.ELEMENT_NODE) return;
+      const childTag = n.tagName.toLowerCase();
+      if (BOLD_BLOCK_TAGS.has(childTag) || withBlock.has(n)) { flush(); stack.push([n, next, done]); }
+      else if (childTag === 'a' && n.getAttribute('data-role') === 'button') flush();
+      else if (wrap.em && decorationsOf(n.getAttribute('style')).em === false) { flush(); stack.push([n, { ...next, em: false }, done]); }
+      else run.push(n);
+    });
+    flush();
+  }
+}
+
+/**
  * 파싱한 문서를 한 번 훑어 옛 형식을 바꾼다: font·표 옛 속성 → style, 굵은 요소의 내용 → strong,
  * 블록을 감싼 font·span → 속성을 지우고(뒤에서 벗겨짐) 안쪽 글자에 span 으로 내려줌(편집기는 블록을 감싼 span 을 다룰 수 없다).
  * 재귀 없이 스택으로 돌고, 감싸기는 묶음마다 한 번이라 선형이다. font 태그 이름은 Sanitizer 별칭이 span 으로 바꾼다.
@@ -377,6 +444,7 @@ function elementsWithBlock(root) {
  * @param {boolean} keepCaption caption 이 허용 태그인지 (아니면 표 앞 문단으로 — 벗기면 표 안에 글이 남아 다시 파싱할 때 달라진다)
  */
 export function normalizeLegacy(root, families, keepCaption) {
+  moveDecorations(root);
   const withBlock = elementsWithBlock(root);
   /** [요소, 굵게 해야 함, 이미 굵은 안쪽임, 내려줄 스타일] */
   const stack = [];
