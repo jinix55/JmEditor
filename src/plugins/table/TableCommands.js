@@ -176,7 +176,7 @@ export class TableCommands {
       this.#ensureColgroup(table);
       if (h.kind === 'col') {
         // 모든 열을 현재 렌더 폭(px)으로 고정한 뒤, 당기는 열과 오른쪽 이웃 열이 폭을 주고받는다 (표 전체 폭 유지)
-        const cols = Array.from(table.querySelectorAll('colgroup > col'));
+        const cols = Array.from(table.querySelectorAll(':scope > colgroup > col'));
         const widths = cols.map((_, i) => this.#colWidth(table, i));
         const tableWidth = table.getBoundingClientRect().width;
         if (table.style.width === 'auto') table.style.width = `${Math.round(tableWidth)}px`; // 내용 맞춤 표는 % 열 폭의 기준이 없어 폭이 튄다
@@ -229,8 +229,25 @@ export class TableCommands {
     };
   }
 
+  /**
+   * col 하나가 열 하나가 되게 정리한다 (옮겨 온 표의 col span·여러 colgroup 을 풀어 첫 colgroup 에 모음).
+   * 열 번호로 col 을 찾는 작업은 모두 이 형태를 전제로 한다. 안 풀면 span 만큼 빈 열이 더 생겨 칸이 표 폭을 못 채운다
+   * @param {HTMLTableElement} table
+   */
+  #flattenCols(table) {
+    const [cg, ...rest] = table.querySelectorAll(':scope > colgroup');
+    if (!cg) return;
+    rest.forEach((g) => { cg.append(...g.children); g.remove(); });
+    cg.querySelectorAll(':scope > col[span]').forEach((col) => {
+      const n = col.span;
+      col.removeAttribute('span');
+      for (let i = 1; i < n; i++) col.after(col.cloneNode());
+    });
+  }
+
   /** colgroup 이 없으면 현재 렌더 폭으로 만든다 (열 너비 저장용) */
   #ensureColgroup(table) {
+    this.#flattenCols(table);
     const n = this.#grid(table).colCount;
     let cg = table.querySelector(':scope > colgroup');
     if (!cg) { cg = document.createElement('colgroup'); table.insertBefore(cg, table.firstChild); }
@@ -409,6 +426,7 @@ export class TableCommands {
       if (!a || !b) continue;
       if (dir < 0) a.parentNode.insertBefore(a, b); else a.parentNode.insertBefore(b, a);
     }
+    this.#flattenCols(table);
     const cg = table.querySelector(':scope > colgroup');
     if (cg) { const a = cg.children[c], b = cg.children[t]; if (a && b) { if (dir < 0) cg.insertBefore(a, b); else cg.insertBefore(b, a); } }
     this.#afterChange(table, this.#grid(table).cellAt(rect.r1, t));
@@ -700,6 +718,7 @@ export class TableCommands {
 
   /** 열 추가 시: at 위치에 col 을 끼우고 평균 너비를 준 뒤 100% 로 재배분 */
   #colgroupInsert(table, at) {
+    this.#flattenCols(table);
     const cg = table.querySelector(':scope > colgroup');
     if (!cg) return;
     const pct = this.#colPercents(table);
@@ -711,6 +730,7 @@ export class TableCommands {
 
   /** 열 삭제 시: 해당 col 을 빼고 100% 로 재배분 */
   #colgroupRemove(table, c) {
+    this.#flattenCols(table);
     const cg = table.querySelector(':scope > colgroup');
     if (!cg) return;
     const pct = this.#colPercents(table);

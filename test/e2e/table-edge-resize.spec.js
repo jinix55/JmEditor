@@ -2,7 +2,7 @@
  * 표 오른쪽 끝(마지막 열) 끌기: 다른 열 폭을 유지한 채 표 폭이 바뀐다. 중간 경계는 표 폭을 유지한다
  */
 import { test, expect } from '@playwright/test';
-import { open, setHTML, html } from './helpers.js';
+import { open, setHTML, html, caret } from './helpers.js';
 
 const rows = '<tr><td>팀원</td><td>연결</td><td>523</td><td>13</td></tr>';
 
@@ -68,6 +68,53 @@ test.describe('표 끝 끌기', () => {
     near((await widths(page)).table, a.table);
     await dragEdge(page, 3, -50);
     near((await widths(page)).table, a.table - 50);
+  });
+
+  for (const [name, colgroup] of [
+    ['col span 하나', '<colgroup><col span="4" style="width:70px"></colgroup>'],
+    ['col span 섞임', '<colgroup><col style="width:70px"><col span="3" style="width:70px"></colgroup>'],
+    ['colgroup 여러 개', '<colgroup><col style="width:70px"><col style="width:70px"></colgroup><colgroup><col span="2" style="width:70px"></colgroup>'],
+  ]) {
+    test(`${name}: 끝을 끌어도 칸이 표 폭을 채운다`, async ({ page }) => {
+      await open(page);
+      await setHTML(page, `<table style="width:280px">${colgroup}${rows}</table>`);
+      const a = await widths(page);
+      await dragEdge(page, 3, 100);
+      const b = await widths(page);
+      near(b.table, a.table + 100);
+      a.cells.slice(0, 3).forEach((w, i) => near(b.cells[i], w));
+      near(b.cells.reduce((x, y) => x + y, 0), b.table);
+      const saved = await html(page);
+      expect(saved).not.toContain('span=');
+      expect(saved.match(/<col\b/g)).toHaveLength(4);
+    });
+  }
+
+  test('col span 표: 중간 경계를 끌어도 열이 어긋나지 않는다', async ({ page }) => {
+    await open(page);
+    await setHTML(page, `<table style="width:280px"><colgroup><col span="4" style="width:70px"></colgroup>${rows}</table>`);
+    const a = await widths(page);
+    await dragEdge(page, 0, 10);
+    const b = await widths(page);
+    near(b.table, a.table);
+    near(b.cells[0], a.cells[0] + 10);
+    near(b.cells[1], a.cells[1] - 10);
+    near(b.cells[2], a.cells[2]);
+  });
+
+  test('col span 표: 열 추가·삭제 뒤 col 수가 열 수와 같다', async ({ page }) => {
+    await open(page);
+    await setHTML(page, `<table style="width:280px"><colgroup><col span="4" style="width:70px"></colgroup>${rows}</table>`);
+    const count = () => page.evaluate(() => { const t = document.querySelector('.jm-editor table'); return { cols: t.querySelectorAll('col').length, span: t.querySelectorAll('col[span]').length, cells: t.rows[0].cells.length }; });
+    await caret(page, 'td', 0);
+    await page.evaluate(() => window.core.table.addColumn(true));
+    let c = await count();
+    expect(c.span).toBe(0);
+    expect(c.cols).toBe(c.cells);
+    await page.evaluate(() => window.core.table.deleteColumn());
+    c = await count();
+    expect(c.span).toBe(0);
+    expect(c.cols).toBe(c.cells);
   });
 
   test('저장·다시 불러오기, 되돌리기', async ({ page }) => {
