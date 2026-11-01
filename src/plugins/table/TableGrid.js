@@ -111,8 +111,8 @@ export class TableGrid {
     return (this.grid[r] || []).some((g) => g && (g.r0 !== r || (g.cell.rowSpan || 1) > 1));
   }
 
-  /** 열 c 를 가로지르는 병합 셀이 있는지 */
+  /** 열 c 에 병합 셀이 있는지 (열 이동 가능 여부 판단). 칸을 행마다 옮기므로 세로 병합이 있어도 옮길 수 없다 */
   colHasSpanAcross(c) {
-    return this.grid.some((row) => row[c] && (row[c].c0 !== c || (row[c].cell.colSpan || 1) > 1));
+    return this.grid.some((row) => row[c] && (row[c].c0 !== c || (row[c].cell.colSpan || 1) > 1 || (row[c].cell.rowSpan || 1) > 1));
   }
 }

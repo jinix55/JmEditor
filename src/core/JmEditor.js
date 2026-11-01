@@ -359,7 +359,12 @@ export class JmEditor {
       this.#emitChange();
     };
     const onCompStart = () => {
-      if (this.#isAllSelected(this.sel.getRange())) this.#replaceAll(); // 전체 선택 위 한글 입력: 비운 뒤 조합
+      const range = this.sel.getRange();
+      if (this.#isAllSelected(range)) this.#replaceAll(); // 전체 선택 위 한글 입력: 비운 뒤 조합
+      else if (this.structure && range && !range.collapsed && this.commands.crossesStructure(range)) { // 구조 경계를 넘는 선택: 영문 입력과 같이 구조를 지키며 지운 뒤 조합
+        this.commands.deleteRange(range);
+        this.commit();
+      }
       this.composing = true;
     };
     const onCopy = (e) => this.#handleCopy(e, false);
@@ -484,19 +489,64 @@ export class JmEditor {
    * @param {boolean} forward Delete 면 true
    */
   #blocksMerge(forward) {
-    const range = this.sel.getRange();
-    if (!range || !range.collapsed) return false; // 범위 삭제는 beforeinput 에서
-    const block = this.sel.getBlock();
+    const block = this.#blockAtEdge(forward);
     if (!block) return false;
+    const other = this.sel.adjacentTextBlock(block, forward);
+    return !!other && !this.sel.canMerge(block, other);
+  }
+
+  /**
+   * 접힌 커서가 글 블록의 처음(Backspace)·끝(Delete)에 있으면 그 블록
+   * @param {boolean} forward Delete 면 true
+   * @returns {HTMLElement|null}
+   */
+  #blockAtEdge(forward) {
+    const range = this.sel.getRange();
+    if (!range || !range.collapsed) return null; // 범위 삭제는 beforeinput 에서
+    const block = this.sel.getBlock();
+    if (!block) return null;
     const edge = document.createRange();
     if (forward) { edge.setStart(range.endContainer, range.endOffset); edge.setEnd(block, block.childNodes.length); }
     else { edge.setStart(block, 0); edge.setEnd(range.startContainer, range.startOffset); }
     const part = edge.cloneContents();
-    if (part.textContent.replace(new RegExp(ZWSP, 'g'), '') || part.querySelector('img')) return false; // 가장자리가 아님
+    // 화면에 없는 공백·줄바꿈만 남았으면 가장자리 (nbsp 는 보이는 글자)
+    if (part.textContent.replace(new RegExp(`[${ZWSP} \\t\\r\\n]`, 'g'), '') || part.querySelector('img')) return null; // 가장자리가 아님
     // 커서 앞(뒤)에 줄바꿈(br)이 있고 블록에 글이 있으면 그 줄바꿈을 지우는 것 — 빈 블록 자리표시 br 만 있는 경우는 가장자리
-    if (part.querySelector('br') && block.textContent.replace(new RegExp(ZWSP, 'g'), '').trim()) return false;
-    const other = this.sel.adjacentTextBlock(block, forward);
-    return !!other && !this.sel.canMerge(block, other);
+    if (part.querySelector('br') && block.textContent.replace(new RegExp(ZWSP, 'g'), '').trim()) return null;
+    return block;
+  }
+
+  /**
+   * 커서가 블록 레이어(표·유튜브·갤러리 등)와 맞닿은 가장자리에서 삭제 키를 누른 경우를 처리한다.
+   * 브라우저 기본은 레이어 경계에서 문단 글 전체나 레이어 자체를 지운다. 레이어 삭제는 블록 도구로만 하고,
+   * 빈 문단은 반대쪽에 글 블록이 있을 때만 지운다 (블록 사이의 커서 둘 자리는 남김).
+   * @param {boolean} forward Delete 면 true
+   * @returns {boolean} 처리했으면(기본 동작을 막아야 하면) true
+   */
+  #guardLayerEdge(forward) {
+    const block = this.#blockAtEdge(forward);
+    if (!block || block.closest('[contenteditable="false"]')) return false; // 표 칸·배치 글 칸 안은 그 영역의 동작대로
+    if (!this.sel.adjacentLayer(block, forward)) return false;
+    const isEmpty = (el) => !el.textContent.replace(new RegExp(ZWSP, 'g'), '').trim() && !el.querySelector('img');
+    // 글과 레이어 사이의 빈 문단은 브라우저처럼 지운다 (글 끝 Delete·글 앞 Backspace)
+    const between = forward ? block.nextElementSibling : block.previousElementSibling;
+    if (between && /^(P|H[1-6])$/.test(between.tagName) && between.getAttribute('contenteditable') !== 'false' && isEmpty(between)) {
+      between.remove();
+      this.commit();
+      return true;
+    }
+    if (!isEmpty(block)) return true;
+    // 빈 목록 항목·인용: Backspace 로 빠져나온다
+    if (!forward && block.tagName === 'LI') { this.commands.toggleList(block.parentNode.tagName.toLowerCase()); return true; }
+    if (!forward && block.tagName === 'BLOCKQUOTE') { this.commands.setBlock('p'); this.commit(); return true; }
+    if (!/^(P|H[1-6])$/.test(block.tagName) || block.parentElement.children.length < 2) return true; // 컨테이너의 마지막 칸이면 커서 자리로 남김
+    const other = this.sel.adjacentTextBlock(block, !forward);
+    if (other && this.sel.canMerge(block, other)) {
+      block.remove();
+      this.sel.placeCursor(other, forward); // 앞 블록이면 끝, 뒤 블록이면 처음
+      this.commit();
+    }
+    return true;
   }
 
   /**
@@ -512,13 +562,15 @@ export class JmEditor {
       this.#replaceAll(e.inputType.startsWith('insertText') || e.inputType === 'insertReplacementText' ? e.data : null);
       return;
     }
+    // 키 없이 오는 삭제(모바일 가상 키보드 등)도 블록 레이어 경계는 같은 규칙으로
+    if (/^delete(Content|Word|(Soft|Hard)Line)?(Backward|Forward)?$/.test(e.inputType) && this.#guardLayerEdge(/Forward$/.test(e.inputType))) { e.preventDefault(); return; }
     if (!this.structure) return;
     if (!/^(delete|insertText|insertReplacementText|insertParagraph|insertLineBreak)/.test(e.inputType)) return;
     const range = this.sel.getRange();
     if (!range) return;
     // 접힌 커서: 키보드(keydown)가 처리하지 못한 입력(모바일 가상 키보드 등)도 같은 규칙으로
     if (range.collapsed) {
-      if (/^delete(Content|Word|Soft|Hard)?(Backward|Forward)?$/.test(e.inputType) && this.#blocksMerge(/Forward$/.test(e.inputType))) { e.preventDefault(); return; }
+      if (/^delete(Content|Word|(Soft|Hard)Line)?(Backward|Forward)?$/.test(e.inputType) && this.#blocksMerge(/Forward$/.test(e.inputType))) { e.preventDefault(); return; }
       if (e.inputType === 'insertParagraph' && this.sel.isSoftBreakBlock(this.sel.getBlock())) { e.preventDefault(); this.commands.insertLineBreak(); }
       return;
     }
@@ -658,6 +710,11 @@ export class JmEditor {
     if (e.key === 'Escape' && this.table.selection) { this.table.clearSelection(); return; }
     // 표 셀 안에서 Tab → 셀 이동
     if (e.key === 'Tab' && this.table.handleTab(e.shiftKey)) { e.preventDefault(); return; }
+
+    if ((e.key === 'Backspace' || e.key === 'Delete') && !this.composing && this.#guardLayerEdge(e.key === 'Delete')) {
+      e.preventDefault();
+      return;
+    }
 
     // 구조 모드: Backspace·Delete 가 다른 구조 컨테이너나 dt·dd 경계를 넘어 합치지 않게
     if ((e.key === 'Backspace' || e.key === 'Delete') && this.structure && !this.composing && this.#blocksMerge(e.key === 'Delete')) {

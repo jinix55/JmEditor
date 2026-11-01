@@ -410,7 +410,7 @@ export class TableCommands {
       if (cs > 1) g.cell.colSpan = cs - 1;
       else g.cell.remove();
     }
-    Array.from(table.rows).forEach((tr) => { if (!tr.cells.length) tr.remove(); });
+    this.#dropEmptyRows(table);
     this.#normalizeRowSpans(table);
   }
 
@@ -460,7 +460,7 @@ export class TableCommands {
     first.colSpan = s.c2 - s.c1 + 1;
     if (first.rowSpan === 1) first.removeAttribute('rowspan');
     if (first.colSpan === 1) first.removeAttribute('colspan');
-    Array.from(s.table.rows).forEach((tr) => { if (!tr.cells.length) tr.remove(); });
+    this.#dropEmptyRows(s.table);
     this.#normalizeRowSpans(s.table);
     this.clearSelection();
     this.#afterChange(s.table, first);
@@ -618,7 +618,11 @@ export class TableCommands {
     const rect = this.#targetRect();
     const sel = !!this.selection;
     const rowMovable = (d) => rect && grid && !grid.rowHasSpanAcross(rect.r1) && (d < 0 ? rect.r1 > 0 : rect.r2 < grid.rowCount - 1);
-    const colMovable = (d) => rect && grid && !grid.colHasSpanAcross(rect.c1) && (d < 0 ? rect.c1 > 0 : rect.c2 < grid.colCount - 1);
+    const colMovable = (d) => {
+      if (!rect || !grid) return false;
+      const c = d < 0 ? rect.c1 : rect.c2, t = c + d;
+      return t >= 0 && t < grid.colCount && !grid.colHasSpanAcross(c) && !grid.colHasSpanAcross(t);
+    };
     const colorItems = pickColor ? [
       { label: '셀 배경색…', action: () => pickColor((c) => this.setCellBackground(c)) },
       { label: '행 배경색…', action: () => pickColor((c) => this.setRowBackground(c)) },
@@ -681,7 +685,18 @@ export class TableCommands {
     if (!el.getAttribute('style')?.trim()) el.removeAttribute('style');
   }
 
-  /** rowspan 이 표 끝을 넘지 않도록 보정 */
+  /** 칸이 없는 행을 지우고, 그 행을 지나던 세로 병합 칸을 한 줄 줄인다 (안 줄이면 아래 행이 밀린다) */
+  #dropEmptyRows(table) {
+    const grid = this.#grid(table);
+    for (let r = grid.rowCount - 1; r >= 0; r--) {
+      const tr = grid.rows[r];
+      if (!tr || tr.cells.length) continue;
+      new Set((grid.grid[r] || []).map((g) => g?.cell)).forEach((cell) => { if (cell) cell.rowSpan = Math.max(1, (cell.rowSpan || 1) - 1); });
+      tr.remove();
+    }
+  }
+
+  /** rowspan 이 표 끝을 넘지 않도록 보정하고 값이 1 인 병합 속성을 지운다 */
   #normalizeRowSpans(table) {
     const n = table.rows.length;
     Array.from(table.rows).forEach((tr, r) => Array.from(tr.cells).forEach((c) => {

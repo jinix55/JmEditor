@@ -169,7 +169,30 @@ export class SelectionUtil {
    * @returns {Element|null}
    */
   adjacentTextBlock(block, forward = false) {
-    const isLayer = (n) => n.nodeType === Node.ELEMENT_NODE && n.getAttribute('contenteditable') === 'false' && !n.contains(block);
+    const n = this.#adjacentNode(block, forward);
+    if (!n || this.#isOuterLayer(n, block)) return null; // 이웃이 블록 레이어면 합칠 글 블록이 아님
+    return this.textBlockOf(n);
+  }
+
+  /**
+   * 문서 순서로 block 바로 앞(또는 뒤)이 블록 레이어(표·유튜브·갤러리 등 편집 불가 묶음)면 그 레이어
+   * @param {Element} block
+   * @param {boolean} [forward=false] true 면 뒤
+   * @returns {Element|null}
+   */
+  adjacentLayer(block, forward = false) {
+    const n = this.#adjacentNode(block, forward);
+    return n && this.#isOuterLayer(n, block) ? n : null;
+  }
+
+  /** block 을 품지 않은 편집 불가 레이어인지 */
+  #isOuterLayer(n, block) {
+    return n.nodeType === Node.ELEMENT_NODE && n.getAttribute('contenteditable') === 'false' && !n.contains(block);
+  }
+
+  /** block 바로 앞(뒤)의 이웃 노드: 글자·이미지·줄바꿈, 또는 블록 레이어 통째 */
+  #adjacentNode(block, forward) {
+    const isLayer = (n) => this.#isOuterLayer(n, block);
     const walker = document.createTreeWalker(this.root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
       acceptNode: (n) => {
         if (block.contains(n)) return NodeFilter.FILTER_SKIP;
@@ -181,9 +204,7 @@ export class SelectionUtil {
       },
     });
     walker.currentNode = block;
-    const n = forward ? walker.nextNode() : walker.previousNode();
-    if (!n || isLayer(n)) return null; // 이웃이 블록 레이어면 합칠 글 블록이 아님 (브라우저 기본 동작)
-    return this.textBlockOf(n);
+    return forward ? walker.nextNode() : walker.previousNode();
   }
 
   /**
