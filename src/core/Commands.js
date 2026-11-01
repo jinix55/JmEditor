@@ -5,6 +5,8 @@
  */
 import { SelectionUtil, TRANSFORMABLE_BLOCK } from './SelectionUtil.js';
 import { Sanitizer } from './Sanitizer.js';
+import { notify } from '../plugins/gallery/gallery-upload.js';
+import { fontFamilyName } from './font-policy.js';
 
 const ZWSP = '​'; // 빈 인라인 태그에 커서를 두기 위한 zero-width space
 
@@ -202,7 +204,7 @@ export class Commands {
 
   /**
    * 선택 영역에 색상 스타일 적용/해제
-   * @param {'color'|'background-color'} prop
+   * @param {'color'|'background-color'|'font-size'|'font-family'} prop
    * @param {string|null} value null 이면 해제
    */
   setStyle(prop, value) {
@@ -338,11 +340,12 @@ export class Commands {
   /** 현재 커서 위치의 글자색/배경색 */
   getStyleState() {
     const r = this.sel.getRange();
-    if (!r) return { color: null, bg: null, fontSize: null };
+    if (!r) return { color: null, bg: null, fontSize: null, fontFamily: null };
     return {
       color: this.#findStyledAncestor(r.startContainer, 'color')?.style.color || null,
       bg: this.#findStyledAncestor(r.startContainer, 'background-color')?.style.backgroundColor || null,
       fontSize: this.#findStyledAncestor(r.startContainer, 'font-size')?.style.fontSize || null,
+      fontFamily: fontFamilyName(this.#findStyledAncestor(r.startContainer, 'font-family')?.style.fontFamily, this.editor.fontFamilies),
     };
   }
 
@@ -549,6 +552,10 @@ export class Commands {
    * @param {string} alt
    */
   insertImage(src, alt = '') {
+    if (!Sanitizer.isSafeUrl(src)) {
+      notify(this.editor.options, '이미지 주소를 쓸 수 없습니다');
+      return;
+    }
     const img = document.createElement('img');
     img.src = src;
     img.alt = alt;

@@ -10,6 +10,8 @@
  *   POST   /api/editor/upload/image         ← multipart file       → { url }
  *   GET    /api/editor/formats              → [{ id, name, description, html }]
  */
+import { Sanitizer } from '../core/Sanitizer.js';
+
 export class JmEditorApi {
   /**
    * @param {object} [options]
@@ -23,17 +25,22 @@ export class JmEditorApi {
     this.headers = headers;
     this.fetch = fetchImpl || ((...a) => window.fetch(...a));
     this.endpoints = {
-      get: (id) => `/api/editor/contents/${id}`,
+      get: (id) => `/api/editor/contents/${encodeURIComponent(id)}`,
       create: '/api/editor/contents',
-      update: (id) => `/api/editor/contents/${id}`,
+      update: (id) => `/api/editor/contents/${encodeURIComponent(id)}`,
       uploadImage: '/api/editor/upload/image',
       formats: '/api/editor/formats',
       ...endpoints,
     };
   }
 
-  /** 엔드포인트 값이 함수면 id 를 넘겨 호출 */
+  /**
+   * 엔드포인트 값이 함수면 id 를 넘겨 호출.
+   * id 가 `.`·`..` 이면 인코딩해도 브라우저가 경로 이동으로 해석하므로 요청 전에 거부한다
+   * @throws {Error} id 가 `.`·`..` 일 때
+   */
   #url(key, id) {
+    if (['.', '..'].includes(String(id))) throw new Error(`콘텐츠 id 를 쓸 수 없습니다: ${id}`);
     const ep = this.endpoints[key];
     return this.baseUrl + (typeof ep === 'function' ? ep(id) : ep);
   }
@@ -57,19 +64,25 @@ export class JmEditorApi {
   }
 
   /** 콘텐츠 조회 */
-  get(id) { return this.#request(this.#url('get', id)); }
+  async get(id) { return this.#request(this.#url('get', id)); }
 
   /** 콘텐츠 등록 → 생성된 레코드(id 포함) */
   create(data) { return this.#request(this.#url('create'), { method: 'POST', body: data }); }
 
   /** 콘텐츠 수정 */
-  update(id, data) { return this.#request(this.#url('update', id), { method: 'PUT', body: data }); }
+  async update(id, data) { return this.#request(this.#url('update', id), { method: 'PUT', body: data }); }
 
-  /** 이미지 업로드 → url (JmEditor 의 uploadImage 옵션에 그대로 연결) */
+  /**
+   * 이미지 업로드 → url (JmEditor 의 uploadImage 옵션에 그대로 연결)
+   * @param {File} file
+   * @returns {Promise<string>} 업로드된 주소
+   * @throws {Error} 서버가 돌려준 주소가 이미지 주소 규칙(Sanitizer.isSafeUrl)에 맞지 않을 때
+   */
   async uploadImage(file) {
     const fd = new FormData();
     fd.append('file', file);
     const { url } = await this.#request(this.#url('uploadImage'), { method: 'POST', body: fd, json: false });
+    if (!Sanitizer.isSafeUrl(url)) throw new Error('서버가 돌려준 이미지 주소를 쓸 수 없습니다');
     return url;
   }
 

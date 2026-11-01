@@ -13,11 +13,13 @@ export class FormatPicker {
    * @param {() => Promise<Array<{id: string|number, name: string, description?: string, html: string}>>} options.loadFormats
    * @param {(format: object) => void} options.onPick
    * @param {() => object|null} [options.policy] 미리보기 정리에 쓸 퍼블 구조 정책 (에디터와 같게)
+   * @param {() => string[]|undefined} [options.families] 미리보기 정리에 쓸 글꼴 허용 목록 (에디터와 같게)
    */
-  constructor({ loadFormats, onPick, policy }) {
+  constructor({ loadFormats, onPick, policy, families }) {
     this.loadFormats = loadFormats;
     this.onPick = onPick;
     this.policy = policy || (() => null);
+    this.families = families || (() => undefined);
     this.formats = null; // 캐시
 
     this.el = document.createElement('div');
@@ -122,7 +124,7 @@ export class FormatPicker {
       const preview = document.createElement('div');
       preview.className = 'jm-formatpicker-preview jm-editor';
       preview.contentEditable = 'false';
-      preview.innerHTML = Sanitizer.clean(f.html || '', this.policy()); // 서식 HTML 은 외부(서버·연동 코드)에서 오므로 미리보기도 거름
+      preview.innerHTML = Sanitizer.clean(f.html || '', this.policy(), this.families()); // 서식 HTML 은 외부(서버·연동 코드)에서 오므로 미리보기도 거름
       Sanitizer.hideIds(preview); // 서식 본문 id 가 관리자 페이지 DOM 에 id 로 붙지 않게
 
       item.append(name, desc, preview);

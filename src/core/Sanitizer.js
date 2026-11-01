@@ -6,6 +6,9 @@
 import { normalizeLayout, normalizeSplit, cellsOf, isImageRole } from '../plugins/layout/layout-presets.js';
 import { SHAPE_VALUES, COLOR_VALUES, ICON_VALUES, normalizeHex, toneOf } from '../plugins/buttons/button-theme.js';
 import { ARIA_ATTRS } from './structure-policy.js';
+import { SAFE_COLOR, parseStyle, cleanLegacyDecl, normalizeLegacy } from './legacy-format.js';
+import { normalizeFamilies } from './font-policy.js';
+import { resolveConfig } from '../config.js';
 
 /** 허용 태그와 각 태그에서 허용하는 속성 */
 const ALLOWED = {
@@ -15,30 +18,54 @@ const ALLOWED = {
   blockquote: ['style', 'data-style'], // 인용 스타일: box·quote (세로선은 기본값이라 속성 없음)
   a: ['href', 'target', 'rel', 'data-role', 'data-style', 'data-size', 'data-color', 'data-tone', 'data-icon', 'data-icon-pos'], // data-role=button → 버튼 모양 링크 (값 검사는 #cleanButton)
   img: ['src', 'alt', 'width', 'height', 'data-float', 'style', 'loading'], // 글 감싸기: 방향 + 폭(%) — 값 검사는 #cleanImage, loading 은 lazy·eager 만
-  table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style'],
+  table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style', 'span'],
   tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
   span: ['style'],
 };
 
-/** 색상 값 형식: #hex, rgb(a)(), 색 이름 */
-const SAFE_COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|[a-z]+)$/i;
-/** style 속성에서 허용하는 CSS 속성과 값 검사 */
+/** style 속성에서 허용하는 CSS 속성과 값 검사 (글꼴·글자 크기·테두리·background 는 먼저 cleanLegacyDecl 이 처리) */
 const ALLOWED_STYLE = {
   'color': (v) => SAFE_COLOR.test(v),
   'background-color': (v) => SAFE_COLOR.test(v),
   'text-align': (v) => /^(left|center|right|justify)$/i.test(v),
   'vertical-align': (v) => /^(top|middle|bottom)$/i.test(v),
-  'width': (v) => /^\d+(\.\d+)?(px|%)$/i.test(v) || v === 'auto',
+  'width': (v) => /^(\d+(\.\d+)?(px|%)|auto)$/i.test(v),
   'height': (v) => /^\d+(\.\d+)?px$/i.test(v),
-  'font-size': (v) => { const m = v.match(/^(\d+)px$/i); return !!m && +m[1] >= 8 && +m[1] <= 96; },
   'list-style-type': (v) => /^(disc|circle|square|decimal|decimal-leading-zero|lower-alpha|upper-alpha|lower-roman|upper-roman|hangul|hangul-consonant|none)$/i.test(v),
 };
 
 /** 태그 이름 치환 (레거시/외부 태그 → 표준 태그) */
-const TAG_ALIAS = { b: 'strong', i: 'em', strike: 's', div: 'p' };
+const TAG_ALIAS = { b: 'strong', i: 'em', strike: 's', div: 'p', font: 'span' };
 
-/** src 에 허용하는 주소: http(s)·/ 경로·이미지 data:(base64). img 안의 svg 는 스크립트가 실행되지 않아 허용 (서버 HtmlSanitizer 와 같은 규칙) */
-const SAFE_URL = /^(https?:|\/|data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,)/i;
+/** src·srcset 에 허용하는 주소: http(s)://, / 로 시작하는 내부 경로(// 와 /\ 제외), 이미지 data:(base64). img 안의 svg 는 스크립트가 실행되지 않아 허용 (서버 HtmlSanitizer 와 같은 규칙) */
+const SAFE_URL = /^(https?:\/\/|\/(?![/\\])|data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,)/i;
+/** 주소에 들어가면 안 되는 제어 문자 */
+const URL_CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+/** href·srcset(data: 제외) 값 길이 상한 — 넘으면 그 속성(srcset 은 그 source)을 버린다 (서버 URL_MAX 와 같음) */
+const URL_MAX = 8192;
+/** 자식까지 통째로 버리는 위험 태그 */
+const DROP_TAGS = ['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link'];
+/** 요소 중첩 깊이 상한 — 그보다 깊은 요소는 벗기고 글만 남긴다 (서버 DEPTH_MAX 와 같음) */
+const DEPTH_MAX = 256;
+/** 파싱 전 입력에서 허용하는 태그 순 열림(이름별 열림 − 닫힘의 합계) — 넘은 뒤의 여는 태그는 파싱 전에 지운다 */
+const PARSE_OPEN_MAX = 20000;
+/** 닫는 태그를 생략할 수 있어 순 열림에 세지 않는 태그 (파서가 저절로 닫아 중첩이 쌓이지 않음) */
+const IMPLIED_END_TAGS = new Set(['p', 'li', 'td', 'th', 'tr', 'dt', 'dd', 'option', 'optgroup', 'thead', 'tbody', 'tfoot', 'colgroup', 'caption', 'body', 'html', 'head']);
+/** 이 안에서 연 서식 태그를 자기 닫는 태그가 함께 닫는 생략 가능 태그 */
+const FORMAT_CLOSERS = new Set(['p', 'li', 'td', 'th', 'dt', 'dd']);
+/** 서식 태그: 바깥 블록이 닫히면 함께 닫히고 파서가 재구성해도 중첩이 쌓이지 않는다 */
+const FORMAT_TAGS = new Set(['a', 'b', 'big', 'code', 'em', 'font', 'i', 'nobr', 's', 'small', 'strike', 'strong', 'tt', 'u']);
+/** 여는 순간 열린 p 를 닫는 블록 태그 — 그 뒤의 닫는 p 는 서식 태그를 닫지 못한다 */
+const P_CLOSING_TAGS = new Set(['address', 'article', 'aside', 'blockquote', 'center', 'details', 'dialog', 'dir', 'div', 'dl', 'fieldset', 'figcaption', 'figure', 'footer', 'form',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hgroup', 'listing', 'main', 'menu', 'nav', 'ol', 'plaintext', 'pre', 'search', 'section', 'summary', 'table', 'ul', 'xmp']);
+/** table 하나의 순 열림 값: 파서가 tbody·tr·td 까지 함께 쌓고 표 중첩은 깊이도 줄이지 않는다 */
+const TABLE_WEIGHT = 4;
+/** 서식 태그의 순 열림 값: 닫지 않고 쌓으면 파서 깊이를 줄이지 못한 채 형제 노드까지 늘어 느리다 */
+const FORMAT_WEIGHT = 2;
+/** 안이 열려 있으면 다른 이름의 닫는 태그가 먹지 않는 태그 — 그 닫는 태그는 순 열림에서 빼지 않는다 ("<div><object></div>" 반복이 한도를 빠져나가지 못하게) */
+const SCOPE_BARRIERS = new Set(['object', 'applet', 'marquee']);
+/** 순 열림에 세지 않는 빈 태그 */
+const VOID_TAGS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
 /** 이미지 loading 속성 허용 값 */
 const IMG_LOADING = ['lazy', 'eager'];
 /** source[type] 허용 값 (이미지 형식만) */
@@ -66,15 +93,27 @@ const TH_SCOPES = ['row', 'col', 'rowgroup', 'colgroup'];
 export class Sanitizer {
   /** 지금 정리 중인 구조 정책 (clean 호출 동안만, null 이면 기본 규칙) */
   static #policy = null;
+  /** 지금 정리 중인 요소의 깊이 (clean 호출 동안만) */
+  static #depth = 0;
+  /** 지금 정리에 쓰는 글꼴 허용 목록 (clean 호출 동안만, null 이면 설정값) */
+  static #fonts = null;
 
   /**
    * HTML 문자열을 정리하여 반환
    * @param {string} html
    * @param {ReturnType<typeof import('./structure-policy.js').makeStructurePolicy>} [policy] 퍼블 구조 정책 (없으면 기본 규칙)
+   * @param {string[]} [families] 글꼴 허용 목록 (없으면 window.JmEditorConfig.font > 기본값)
    * @returns {string}
    */
-  static clean(html, policy = null) {
-    return Sanitizer.#withPolicy(policy, () => Sanitizer.#cleanRoot(html));
+  static clean(html, policy = null, families = null) {
+    const prev = Sanitizer.#fonts;
+    Sanitizer.#fonts = Sanitizer.#families(families);
+    try { return Sanitizer.#withPolicy(policy, () => Sanitizer.#cleanRoot(html)); } finally { Sanitizer.#fonts = prev; }
+  }
+
+  /** 글꼴 허용 목록 정리 (인자 > 설정) */
+  static #families(families) {
+    return normalizeFamilies(families ?? resolveConfig('font').families);
   }
 
   /** 정책을 잠시 바꿔 실행 (중첩 호출에도 원래대로 복구) */
@@ -85,7 +124,9 @@ export class Sanitizer {
   }
 
   static #cleanRoot(html) {
-    const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+    Sanitizer.#depth = 0;
+    const doc = new DOMParser().parseFromString(`<body>${Sanitizer.#limitOpenTags(String(html))}</body>`, 'text/html');
+    normalizeLegacy(doc.body, Sanitizer.#fonts, !!Sanitizer.#policy?.tags.has('caption'));
     const frag = document.createDocumentFragment();
     Array.from(doc.body.childNodes).forEach((n) => {
       if (n.nodeType === Node.TEXT_NODE && !n.textContent.trim()) return; // 최상위 공백 텍스트(블록 사이 줄바꿈) 제거
@@ -96,6 +137,88 @@ export class Sanitizer {
     wrap.appendChild(frag);
     Sanitizer.dedupeIds(wrap);
     return wrap.innerHTML;
+  }
+
+  /**
+   * 브라우저 파서가 깊은 중첩에서 이차 시간이라, 파싱 전에 입력을 한 번 훑어 태그 순 열림을 제한한다.
+   * 주석·따옴표는 해석하지 않고 이름별 (열림 − 닫힘) 합계만 세며, 합계가 PARSE_OPEN_MAX 에 이르면 그 뒤의 태그를 지운다 (빈 태그·글은 그대로).
+   * 저절로 닫히는 태그는 세지 않고, 블록 안에서 연 서식 태그는 그 블록이 닫히면 뺀다 — 큰 정상 문서가 한도에 닿지 않게.
+   * 닫는 태그까지 지우는 까닭: 한도에 이른 뒤 남은 닫는 태그만으로도 Chromium 파서가 수십 초 걸린다.
+   * 정상 문서는 이 한도에 닿지 않아 그대로 돌아온다. 결과는 다시 파서·정제를 거치므로 보안 경계가 아니다.
+   * 서버(HtmlSanitizer)는 jsoup 이 이런 입력을 빠르게 처리해 이 단계가 없다 — 순 열림 2만 초과의 극단 입력에서만 양쪽 결과가 달라질 수 있다(허용).
+   * @param {string} html
+   * @returns {string}
+   */
+  static #limitOpenTags(html) {
+    const tagStart = /<(\/?)([a-z][^\s/>]*)/gi;
+    const open = new Map();
+    const parts = [];
+    /** 지금 블록을 연 뒤 열어 아직 닫지 않은 서식 태그 (이름별 개수) */
+    const formatsInBlock = new Map();
+    /** 열려 있다고 보는 FORMAT_CLOSERS */
+    const openClosers = new Set();
+    let total = 0;
+    let barriers = 0; // 열려 있는 SCOPE_BARRIERS 수
+    let copied = 0;
+    /** 지금 블록 안에서 연 서식 태그를 순 열림에서 뺀다 (블록과 함께 닫혔으므로) */
+    const closeFormats = () => {
+      formatsInBlock.forEach((c, f) => { open.set(f, open.get(f) - c); total -= c * FORMAT_WEIGHT; });
+      formatsInBlock.clear();
+    };
+    let m;
+    while ((m = tagStart.exec(html))) {
+      const name = m[2].toLowerCase();
+      if (VOID_TAGS.has(name)) continue;
+      if (total >= PARSE_OPEN_MAX) {
+        const end = html.indexOf('>', tagStart.lastIndex);
+        if (end < 0) break;
+        parts.push(html.slice(copied, m.index));
+        copied = end + 1;
+        tagStart.lastIndex = copied;
+        continue;
+      }
+      if (IMPLIED_END_TAGS.has(name)) {
+        if (FORMAT_CLOSERS.has(name)) {
+          if (!m[1]) { openClosers.add(name); formatsInBlock.clear(); }
+          else if (openClosers.delete(name)) closeFormats();
+        }
+        continue;
+      }
+      const count = open.get(name) || 0;
+      const barrier = SCOPE_BARRIERS.has(name);
+      const format = FORMAT_TAGS.has(name);
+      const weight = name === 'table' ? TABLE_WEIGHT : (format ? FORMAT_WEIGHT : 1);
+      if (!m[1]) {
+        open.set(name, count + 1);
+        total += weight;
+        if (barrier) barriers++;
+        if (format) formatsInBlock.set(name, (formatsInBlock.get(name) || 0) + 1);
+        else formatsInBlock.clear();
+        if (P_CLOSING_TAGS.has(name)) openClosers.delete('p');
+      } else if (count > 0 && (barrier || !barriers)) {
+        open.set(name, count - 1);
+        total -= weight;
+        if (barrier) barriers--;
+        if (!format) closeFormats();
+        else if (formatsInBlock.get(name) > 0) formatsInBlock.set(name, formatsInBlock.get(name) - 1);
+      }
+    }
+    if (!parts.length) return html;
+    parts.push(html.slice(copied));
+    return parts.join('');
+  }
+
+  /**
+   * 앞뒤 스페이스(U+0020)만 자른다 — 정규식(^ +| +$)은 공백이 길면 이차 시간이라 인덱스로 찾는다
+   * @param {string} s
+   * @returns {string}
+   */
+  static #trimSpaces(s) {
+    let from = 0;
+    let to = s.length;
+    while (from < to && s[from] === ' ') from++;
+    while (to > from && s[to - 1] === ' ') to--;
+    return s.slice(from, to);
   }
 
   /**
@@ -162,13 +285,24 @@ export class Sanitizer {
   }
 
   /**
-   * 링크 주소가 허용 형식인지 (javascript:·data: 등 차단, 제어 문자 포함 시 차단)
+   * 링크 주소가 허용 형식인지 (javascript:·data: 등 차단, 제어 문자 포함 시 차단, 8192자 초과 차단)
    * @param {string} url
    * @returns {boolean}
    */
   static isSafeHref(url) {
+    const raw = String(url ?? '');
+    const v = raw.trim();
+    return raw.length <= URL_MAX && !!v && !URL_CONTROL_CHARS.test(v) && SAFE_HREF.test(v);
+  }
+
+  /**
+   * 이미지 주소(src)가 허용 형식인지: http(s)://, 내부 경로, 이미지 data: 만. 제어 문자 포함 시 차단
+   * @param {string} url
+   * @returns {boolean}
+   */
+  static isSafeUrl(url) {
     const v = String(url ?? '').trim();
-    return !!v && !/[\u0000-\u001f\u007f]/.test(v) && SAFE_HREF.test(v);
+    return !!v && !URL_CONTROL_CHARS.test(v) && SAFE_URL.test(v);
   }
 
   /**
@@ -205,33 +339,90 @@ export class Sanitizer {
   }
 
   /**
-   * style 문자열에서 color / background-color 만 남긴다
+   * style 문자열 정리: 옛 형식 변환 후 허용 속성·값만 남긴다 (값은 파서가 나눈 그대로 검사하고 다시 조립)
    * @param {string} style
+   * @param {string} [tag='span'] 그 style 을 가진 요소의 태그 (표 길이·background·테두리는 표 요소에서만)
+   * @param {string[]} [families] 글꼴 허용 목록 (없으면 지금 정리 중인 목록 또는 설정)
    * @returns {string}
    */
-  static cleanStyle(style) {
-    return style.split(';')
-      .map((d) => d.split(':').map((x) => x.trim()))
-      .filter(([k, v]) => k && v && ALLOWED_STYLE[k.toLowerCase()]?.(v))
-      .map(([k, v]) => `${k.toLowerCase()}: ${v}`)
-      .join('; ');
+  static cleanStyle(style, tag = 'span', families = null) {
+    const fonts = families ? normalizeFamilies(families) : (Sanitizer.#fonts || Sanitizer.#families());
+    const out = [];
+    parseStyle(style).forEach(([name, value]) => {
+      const legacy = cleanLegacyDecl(name, value, tag, fonts);
+      if (legacy) out.push(`${legacy[0]}: ${legacy[1]}`);
+      else if (legacy === undefined && ALLOWED_STYLE[name]?.(value)) out.push(`${name}: ${value}`);
+    });
+    return out.join('; ');
   }
 
   /**
    * 노드 단위 재귀 정리
    * - 허용되지 않은 태그는 제거하되 자식 텍스트는 유지(언래핑)
    * - script/style 등 위험 태그는 자식까지 통째로 제거
+   * - 깊이 상한(DEPTH_MAX)보다 깊은 요소는 벗기고 글만 남긴다
    */
   static #cleanNode(node) {
     // 텍스트 노드는 그대로
     if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent);
     if (node.nodeType !== Node.ELEMENT_NODE) return null;
 
+    if (DROP_TAGS.includes(node.tagName.toLowerCase())) return null;
+    if (Sanitizer.#depth >= DEPTH_MAX) return Sanitizer.#textOnly(node);
+    Sanitizer.#depth++;
+    try { return Sanitizer.#cleanElement(node); } finally { Sanitizer.#depth--; }
+  }
+
+  /**
+   * 깊이 상한을 넘은 요소: 글만 모은다. 표 중첩처럼 파서가 깊이를 줄이지 않는 입력도 있어 재귀 없이 훑는다 (호출 스택 넘침 방지).
+   * @param {Element} node
+   * @returns {DocumentFragment}
+   */
+  static #textOnly(node) {
+    const frag = document.createDocumentFragment();
+    const walker = node.ownerDocument.createTreeWalker(node, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.nodeType === Node.ELEMENT_NODE && DROP_TAGS.includes(n.tagName.toLowerCase()) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+    });
+    while (walker.nextNode()) {
+      if (walker.currentNode.nodeType === Node.TEXT_NODE) frag.appendChild(document.createTextNode(walker.currentNode.textContent));
+    }
+    return frag;
+  }
+
+  /**
+   * 요소를 벗기고 자식만 정리해 돌려준다. 결과에 남지 않는 요소이므로 깊이에 세지 않는다.
+   * @param {Element} node
+   * @returns {DocumentFragment}
+   */
+  static #unwrap(node) {
+    Sanitizer.#depth--;
+    try { return Sanitizer.#cleanChildren(node); } finally { Sanitizer.#depth++; }
+  }
+
+  /**
+   * 자식 노드를 정리해 조각으로 모은다
+   * @param {Element} node
+   * @returns {DocumentFragment}
+   */
+  static #cleanChildren(node) {
+    const frag = document.createDocumentFragment();
+    Array.from(node.childNodes).forEach((c) => {
+      const r = Sanitizer.#cleanNode(c);
+      if (r) frag.appendChild(r);
+    });
+    return frag;
+  }
+
+  /**
+   * 요소 하나 정리 (#cleanNode 가 깊이 검사 후 호출)
+   * @param {Element} node
+   * @returns {Node|null}
+   */
+  static #cleanElement(node) {
     let tag = node.tagName.toLowerCase();
-    if (['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link'].includes(tag)) return null;
     const pol = Sanitizer.#policy;
     // 플러그인 블록 안은 구조 정책 없이 (지금 규칙 그대로)
-    if (pol && tag === 'div' && PLUGIN_TYPES.includes(node.getAttribute('data-type'))) return Sanitizer.#withPolicy(null, () => Sanitizer.#cleanNode(node));
+    if (pol && tag === 'div' && PLUGIN_TYPES.includes(node.getAttribute('data-type'))) return Sanitizer.#withPolicy(null, () => Sanitizer.#cleanElement(node));
 
     // 이미지 갤러리 블록: div[data-type=gallery] 만 예외 허용, 자식은 img 만
     if (tag === 'div' && node.getAttribute('data-type') === 'gallery') {
@@ -334,14 +525,7 @@ export class Sanitizer {
     const allowed = ALLOWED[tag] || (pol?.tags.has(tag) ? STRUCTURE_ATTRS : null);
 
     // 허용되지 않은 태그 → 자식만 모아서 반환(언래핑)
-    if (!allowed) {
-      const frag = document.createDocumentFragment();
-      Array.from(node.childNodes).forEach((c) => {
-        const r = Sanitizer.#cleanNode(c);
-        if (r) frag.appendChild(r);
-      });
-      return frag;
-    }
+    if (!allowed) return Sanitizer.#unwrap(node);
 
     const el = document.createElement(tag);
     // 구조 모드: class 는 허용 토큰만, th[scope] 는 허용 값만, id·aria 는 정책 검사 통과분만
@@ -356,25 +540,19 @@ export class Sanitizer {
       const v = node.getAttribute(attr);
       if (v == null) return;
       if (attr === 'href' && !Sanitizer.isSafeHref(v)) return;
-      if (attr === 'src' && !SAFE_URL.test(v.trim())) return;
+      if (attr === 'src' && !Sanitizer.isSafeUrl(v)) return;
       if (attr === 'start' && !/^\d{1,4}$/.test(v)) return;
+      if (attr === 'span' && !(/^[1-9]\d{0,3}$/.test(v) && +v <= 1000)) return;
       if (attr === 'loading' && !IMG_LOADING.includes(v)) return;
       if (attr === 'style') {
-        const clean = Sanitizer.cleanStyle(v);
+        const clean = Sanitizer.cleanStyle(v, tag);
         if (clean) el.setAttribute('style', clean);
         return;
       }
       el.setAttribute(attr, v);
     });
     // 속성이 하나도 남지 않은 span 은 의미가 없으므로 언래핑 (구조 모드에서 class·id·aria 가 있으면 남김 — 아이콘·앵커 등)
-    if (tag === 'span' && !el.attributes.length) {
-      const frag = document.createDocumentFragment();
-      Array.from(node.childNodes).forEach((c) => {
-        const r = Sanitizer.#cleanNode(c);
-        if (r) frag.appendChild(r);
-      });
-      return frag;
-    }
+    if (tag === 'span' && !el.attributes.length) return Sanitizer.#unwrap(node);
     // 링크는 새창 + noopener 강제(#·tel:·mailto: 제외). 버튼 링크 속성은 허용 값만
     if (tag === 'a') {
       Sanitizer.applyLinkTarget(el, el.getAttribute('href') || '');
@@ -435,6 +613,7 @@ export class Sanitizer {
     const imgAt = kids.findIndex((c) => c.tagName === 'IMG');
     if (imgAt < 0) return null;
     const img = Sanitizer.#cleanNode(kids[imgAt]);
+    if (img.nodeType !== Node.ELEMENT_NODE) return null; // 깊이 상한으로 img 가 벗겨지면 picture 도 버린다
     const sources = [];
     for (const c of kids.slice(0, imgAt)) {
       if (sources.length >= PICTURE_SOURCE_MAX) break;
@@ -473,22 +652,23 @@ export class Sanitizer {
   /**
    * srcset 값 검사·정규화: 후보 1~4개(`, ` 로 구분), 후보 = 주소 + 선택 서술자(`640w`·`2x`).
    * 주소는 img src 와 같은 SAFE_URL 이어야 하고, data: 주소는 후보가 1개일 때만 허용한다(쉼표 구분이 모호해짐).
-   * 제어 문자·앞뒤 공백·대문자 프로토콜까지 고려하며, 하나라도 어긋나면 null.
+   * 제어 문자·앞뒤 공백·대문자 프로토콜까지 고려하며, 하나라도 어긋나면 null. data: 가 아닌 값은 8192자까지.
    * @param {string|null} value
    * @returns {string|null} 후보를 `, ` 로 이은 정규화 문자열, 아니면 null
    */
   static cleanSrcset(value) {
     const raw = String(value ?? '');
-    if (/[\u0000-\u001f\u007f]/.test(raw)) return null;
-    const v = raw.replace(/^ +| +$/g, '');
+    if (URL_CONTROL_CHARS.test(raw)) return null;
+    const v = Sanitizer.#trimSpaces(raw);
     if (!v) return null;
+    if (raw.length > URL_MAX && !/^data:/i.test(v)) return null;
     // data: 주소는 통째로 후보 1개 (그 안의 쉼표는 base64 구분자 하나뿐이어야 함)
     if (/^data:/i.test(v)) {
       const m = v.match(/^([^ ]+)(?: (\d+w|\d+(?:\.\d+)?x))?$/);
       if (!m || !SAFE_URL.test(m[1]) || m[1].split(',').length !== 2) return null;
       return m[2] ? `${m[1]} ${m[2]}` : m[1];
     }
-    const cands = v.split(/, +/).map((c) => c.replace(/^ +| +$/g, ''));
+    const cands = v.split(/, +/).map((c) => Sanitizer.#trimSpaces(c));
     if (cands.length > SRCSET_MAX) return null;
     const out = [];
     for (const c of cands) {
@@ -558,6 +738,7 @@ export class Sanitizer {
     const cells = Array.from(node.children).filter((c) => c.tagName === 'DIV');
     const images = cells.filter((c) => c.getAttribute('data-cell') === 'image');
     const texts = cells.filter((c) => c.getAttribute('data-cell') === 'text');
+    Sanitizer.#depth++; // 칸(div) 자체를 깊이에 센다
     cellsOf(preset, variant).forEach((role) => {
       const isImg = isImageRole(role);
       const src = isImg ? images.shift() : texts.shift();
@@ -573,6 +754,7 @@ export class Sanitizer {
       }
       box.appendChild(cell);
     });
+    Sanitizer.#depth--;
     return box;
   }
 }

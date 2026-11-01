@@ -6,7 +6,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 
 ## 기능
 
-- 굵게 / 기울임 / 밑줄 / 취소선, 글자 크기(10~48px), 글자색 / 배경색 (견본 + HSV 팔레트 + HEX 입력 + 스포이드)
+- 굵게 / 기울임 / 밑줄 / 취소선, 글자 크기(10~48px), 글꼴(설정 목록), 글자색 / 배경색 (견본 + HSV 팔레트 + HEX 입력 + 스포이드)
 - 제목(본문·제목 1~3 셀렉트), 인용(세로선·박스·따옴표 — 인용 버튼 목록에서 선택·해제), 가로 정렬(왼쪽/가운데/오른쪽)·세로 정렬(표 셀) 드롭다운, 순서 / 비순서 목록(● ○ ■, 1. 01. a. A. i. I. 가.), 링크, 버튼 그룹 블록(서식 — 이름·주소 입력으로 추가, 모양(채움·외곽선·연한색)·색(테마 7색 또는 직접 선택 — 고른 색 하나로 테두리·오버·연한 배경·글자색 자동)·크기·아이콘 16종(글자 앞/뒤), 그립 드래그로 순서, 정렬)
 - 이미지 삽입 (버튼, 드래그 앤 드롭, 붙여넣기)
 - 글 감싸기 — 본문 이미지를 클릭하면 도구 막대가 뜹니다. 왼쪽·오른쪽 감싸기(이미지 옆으로 글이 흐르고 아래로 이어짐), 폭 30·40·50·100% 또는 모서리 손잡이로 본문 폭 대비 % 조절, 교체·삭제, ⠿ 로 다른 문단 앞뒤로 이동. 휴대폰 폭(640px 이하)에서는 감싸기를 풀고 꽉 차게
@@ -103,6 +103,9 @@ window.JmEditorConfig = {
   },
   image: {
     mobileMedia: '(max-width: 767px)', // 이미지 도구 막대「모바일 추가」가 source 에 쓰는 media (200자 이하)
+  },
+  font: {
+    families: ['맑은 고딕', 'Noto Sans KR', 'Noto Sans', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', 'HY헤드라인M', 'Arial', 'Times New Roman'], // 글꼴 도구 목록이자 허용 목록
   },
 };
 ```
@@ -229,6 +232,41 @@ import { initSliders } from '/js/jm-editor/plugins/slider/slider-runtime.js';
 initSliders(document.querySelector('.jm-content'));
 ```
 
+### 옛 글 이관·붙여넣기
+
+`setHTML`·붙여넣기·서버 저장에서 옛 형식을 지금 형식으로 바꿉니다 (구조 모드 켬·끔 모두, 서버 `HtmlSanitizer` 도 같은 결과).
+
+| 입력 | 저장 |
+|---|---|
+| `<font color size face>` | `span style` — size 1~7 은 10·13·16·18·24·32·48px, 남는 값이 없으면 벗김 |
+| 블록·표를 감싼 `font`·`span` | 벗기고 글자색·크기·글꼴·배경을 안쪽 글자의 `span` 으로 내려줌 (블록이 직접 지정한 항목은 블록 우선, class·id 는 사라짐) |
+| `font-size` 의 `pt`·`mm`·`cm`·소수 `px` | 정수 `px`(1pt=1.333px, 1mm=3.78px, 1cm=37.8px, 반올림), 8~96 안으로 맞춤. `em`·`%` 는 지움 |
+| `font-weight: bold·bolder·700~900` | 내용을 `strong` 으로. `normal` 등은 지움. `th` 는 원래 굵어서 감싸지 않음. 바로 아래 자식이 굵기를 해제하면 strong 밖에 둠. 버튼·플러그인 블록은 건드리지 않음 |
+| 표(table·tr·td·th·col) `width`·`height` 의 `pt`·`mm`·`cm` | `px` |
+| 표·`span` 의 `background` 단축값 | 색만 `background-color` 로 (주소 등은 버림, 색이 없으면 지움) |
+| 표 `bgcolor`·`align`·`valign`·`width`·`height` 속성 | `style` (style 에 같은 항목이 있으면 style 우선) |
+| `table align=center` | `margin-left·right: auto` (표 위치, left·right 는 지움) |
+| `table border=0` | `data-border="0"` |
+| `p`·`div`·제목 `align` | `text-align` |
+| `col span` | 1~1000 정수만 유지 |
+| 구조 모드를 끈 `caption` | 표 앞 `p` |
+| td·th `border`, `border-top` 등, `border-*-width·style·color`, table `border-collapse` | 값 검사 후 `1px solid windowtext` 꼴로 정규화 (폭 0~20px·pt·mm·cm·thin·medium·thick, 토큰 순서 무관, 스타일 none·solid·dashed·dotted·double, 색. 0 초과 1 미만은 1px) |
+| `font-family` | 허용 목록의 첫 이름만 `font-family: "맑은 고딕"` 으로. 없으면 지움 |
+| `mso-*` 등 그 밖의 속성 | 지움 |
+
+엑셀·파워포인트는 표·글과 함께 그림 미리보기도 클립보드에 넣으므로, `text/html`·`text/plain` 이 있으면 그림은 무시하고 파일만 있을 때 이미지로 넣습니다. 엑셀이 문서 머리의 `<style>`(`.xl65{…}`)에 둔 서식은 옮기지 않습니다.
+
+**글꼴** — 허용 목록은 `font.families` 입니다 (생성 옵션 `font` > `window.JmEditorConfig.font` > 기본값). 툴바 글꼴 목록과 정제가 같이 씁니다. 서버는 `jm-editor.font.families` 로 같은 값을 주세요. 대소문자는 무시하고 `Malgun Gothic`·`HCR Batang`·`Gulim`·`Dotum`·`Batang` 은 한글 이름으로 바꿉니다.
+
+웹폰트는 번들에 넣지 않습니다. 없는 글꼴은 사이트 CSS 에서 대체할 수 있습니다. 라이선스는 사이트에서 확인하세요.
+
+```css
+/* 함초롬바탕 → Noto Serif KR (글꼴 파일은 사이트에 둠) */
+@font-face { font-family: "함초롬바탕"; src: local("함초롬바탕"), local("HCR Batang"), url("/fonts/NotoSerifKR-Regular.woff2") format("woff2"); }
+/* HY헤드라인M → Noto Sans KR 700 (보통 굵기로 등록해 제목처럼 보이게) */
+@font-face { font-family: "HY헤드라인M"; font-weight: 400; src: local("HY헤드라인M"), url("/fonts/NotoSansKR-Bold.woff2") format("woff2"); }
+```
+
 ### 색 테마
 
 에디터 화면의 색은 CSS 변수로 바꿉니다. [데모](https://jinix55.github.io/JmEditor/)의 「색 테마」 막대에서 미리 정한 테마를 고르거나 주요 색을 직접 바꿔 보고, 「CSS 보기」로 그 값을 복사할 수 있습니다. 메뉴·색 선택·서식 목록 같은 팝업은 페이지(body)에 붙으므로 **`:root` 에서** 덮어쓰세요. 기본값은 지금 색 그대로입니다.
@@ -321,6 +359,10 @@ window.JmEditorConfig = {
 
 **링크**: href 가 `#`·`tel:`·`mailto:` 로 시작하면 `target`·`rel` 을 붙이지 않고(들어온 target 도 지움), 그 밖(`http(s)://`, `/…`)은 `target="_blank" rel="noopener noreferrer"` 가 붙습니다. 버튼 링크도 같습니다.
 
+**이미지 주소**: `src`·`srcset` 은 `http(s)://`, `/` 로 시작하는 내부 경로, 이미지 `data:` 만 남습니다. 프로토콜 상대 주소(`//cdn…`)·상대 경로(`a.png`)는 지워지니 `https://` 를 붙여 주세요.
+
+**기존 글 이관**: `//…` 주소와 상대 주소(`a.png`, `foo/bar`)는 저장할 때 지워집니다(링크 `href` 의 `//…` 포함). 이관 전에 `https://…` 또는 `/` 로 시작하는 절대 경로로 바꿔 두세요.
+
 **이전 버전과 달라진 점** (퍼블 HTML 보존 2차)
 
 1. `#`·`tel:`·`mailto:` 링크에 새 창 속성이 더 이상 붙지 않습니다.
@@ -376,7 +418,7 @@ window.JmEditorConfig = {
 
 ```
 src/
-  core/      JmEditor.js(진입점), Commands.js, SelectionUtil.js, History.js, Sanitizer.js
+  core/      JmEditor.js(진입점), Commands.js, SelectionUtil.js, History.js, Sanitizer.js, legacy-format.js(옛 형식 변환), font-policy.js(글꼴 허용 목록)
   plugins/   table/, gallery/, embed/(유튜브), buttons/, slider/(SliderCommands, slider-runtime), layout/(이미지 + 글 배치), map/(MapCommands, map-runtime — 카카오 지도) — 블록형 기능. 편집 중에만 쓰는 레이어를 씌우고 저장 시 벗김
              image/(본문 이미지 글 감싸기·크기 조절 도구)
   ui/        JmToolbarEditor.js(툴바), ColorPicker, TableGridPicker, FormatPicker, ContextMenu

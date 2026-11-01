@@ -89,6 +89,8 @@ const BUTTONS = [
   ['color', 'A', (s) => !!s.color, false, { tip: '글자색' }],     // 버튼 하단 색 띠로 현재 색 표시
   ['bgColor', 'A', (s) => !!s.bg, false, { tip: '글자 배경색' }],
   ['fontSize', '크기', () => false, false, { tip: '글자 크기', select: FONT_SIZES.map((n) => [`${n}px`, `${n}px`]), selectDefault: ['', '기본'] }],
+  // 글꼴: 목록은 에디터 설정(font.families)에서
+  ['fontFamily', '글꼴', () => false, false, { tip: '글꼴', select: (editor) => editor.fontFamilies.map((n) => [n, n]), selectDefault: ['', '기본'] }],
   null, // 구분선
   // 제목: 셀렉트 (본문 / 제목 1~3). 값 선택 시 exec('heading', 'p'|'h1'|'h2'|'h3')
   ['heading', '제목', () => false, false, { tip: '제목 단계', select: [['h1', '제목 1'], ['h2', '제목 2'], ['h3', '제목 3']], selectDefault: ['p', '본문'] }],
@@ -196,6 +198,7 @@ export class JmToolbarEditor {
     this.formatPicker = new FormatPicker({
       loadFormats: options.loadFormats || (async () => SAMPLE_FORMATS),
       onPick: (f) => this.editor.exec('format', f.html),
+      families: () => this.editor?.fontFamilies,
       policy: () => this.editor?.structure, // 미리보기도 본문과 같은 정리 규칙 (에디터는 아래에서 만들어짐)
     });
 
@@ -211,6 +214,7 @@ export class JmToolbarEditor {
       onSelectionChange: () => this.#refreshState(),
       pickColor: (x, y, cb) => this.colorPicker.open(x, y, cb, { sampleMode: 'background' }),
     });
+    if (!this.editor.fontFamilies.length) this.buttons.fontFamily.hidden = true; // 글꼴 목록을 비우면 도구도 숨김
     if (options.initialHTML) this.editor.setHTML(options.initialHTML);
     this.dirty = false;
     // 수정 화면: id 가 있으면 API 로 조회해서 채움
@@ -332,15 +336,24 @@ export class JmToolbarEditor {
   /**
    * 값 고르기 버튼(글자 크기·제목)의 목록 열기. 현재 값은 강조, 고르면 exec(cmd, 값)
    * @param {string} cmd
-   * @param {{select: Array<[string,string]>, selectDefault?: [string,string]}} opts
+   * @param {{select: Array<[string,string]>|((editor: JmEditor) => Array<[string,string]>), selectDefault?: [string,string]}} opts
    */
   #openSelectMenu(cmd, opts) {
     const btn = this.buttons[cmd];
     const r = btn.getBoundingClientRect();
     this.editor.sel.save();
-    this.listMenu.open(r.left, r.bottom + 4, [opts.selectDefault, ...opts.select].filter(Boolean).map(([v, text]) => ({
+    this.listMenu.open(r.left, r.bottom + 4, [opts.selectDefault, ...this.#selectItems(opts)].filter(Boolean).map(([v, text]) => ({
       label: text, checked: v === btn.dataset.value, action: () => this.editor.exec(cmd, v || null),
     })));
+  }
+
+  /**
+   * 값 고르기 목록 (설정에 따라 달라지는 목록은 함수로 둔다)
+   * @param {{select: Array<[string,string]>|((editor: JmEditor) => Array<[string,string]>)}} opts
+   * @returns {Array<[string,string]>}
+   */
+  #selectItems(opts) {
+    return typeof opts.select === 'function' ? opts.select(this.editor) : opts.select;
   }
 
   /**
@@ -352,7 +365,7 @@ export class JmToolbarEditor {
     const btn = this.buttons[cmd];
     const opts = BUTTONS.find((d) => d?.[0] === cmd)?.[4];
     if (!btn || !opts) return;
-    const [v, text] = opts.select.find(([x]) => x === value) || opts.selectDefault;
+    const [v, text] = this.#selectItems(opts).find(([x]) => x === value) || opts.selectDefault;
     btn.dataset.value = v;
     btn.firstChild.textContent = text;
   }
@@ -446,6 +459,7 @@ export class JmToolbarEditor {
     // 현재 글자 크기 표시
     this.#setSelectValue('heading', state.block);
     this.#setSelectValue('fontSize', state.fontSize);
+    this.#setSelectValue('fontFamily', state.fontFamily);
     // 현재 색을 버튼 하단 띠로 표시
     this.buttons.color.style.setProperty('--jm-swatch', state.color || 'transparent');
     this.buttons.bgColor.style.setProperty('--jm-swatch', state.bg || 'transparent');
@@ -527,13 +541,13 @@ export class JmToolbarEditor {
   #stopPreviewLayout = null;
 
   /** 저장할 HTML. HTML 모드에서는 입력 중인 소스를 Sanitizer 로 거른 결과 */
-  getHTML() { return this.mode === 'html' ? Sanitizer.clean(this.source.value, this.editor.structure) : this.editor.getHTML(); }
+  getHTML() { return this.mode === 'html' ? Sanitizer.clean(this.source.value, this.editor.structure, this.editor.fontFamilies) : this.editor.getHTML(); }
   setHTML(html) { this.editor.setHTML(html); if (this.mode === 'html') this.source.value = JmToolbarEditor.prettify(html); if (this.mode === 'preview') this.#renderPreview(); }
 
   /** 미리보기 그리기: 이전 런타임(갤러리 배치 감시·슬라이드 타이머)을 정리하고 Sanitizer 를 거친 HTML 로 다시 그림 */
   #renderPreview() {
     this.#stopPreviewLayout?.();
-    this.previewPane.innerHTML = Sanitizer.clean(this.editor.getHTML(), this.editor.structure);
+    this.previewPane.innerHTML = Sanitizer.clean(this.editor.getHTML(), this.editor.structure, this.editor.fontFamilies);
     Sanitizer.hideIds(this.previewPane); // 본문 id 가 관리자 페이지 DOM 에 id 로 붙지 않게 (미리보기 안 #앵커 이동은 하지 않음)
     const stopGalleries = observeGalleries(this.previewPane); // 갤러리 저스티파이드 배치 (뷰어와 동일)
     const stopSliders = initSliders(this.previewPane);       // 슬라이드 자동 전환

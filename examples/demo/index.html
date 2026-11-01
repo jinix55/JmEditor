@@ -77,6 +77,7 @@
 .jm-btn-dropdown svg:last-child { opacity: .6; }
 /* 값 고르기 버튼 (글자 크기·제목): 값이 바뀌어도 툴바가 흔들리지 않게 최소 폭 */
 .jm-btn-select { display: inline-flex; align-items: center; justify-content: space-between; min-width: 64px; padding-left: 8px; border-color: var(--jm-border); }
+.jm-btn[data-cmd="fontFamily"] .jm-btn-select-label { max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* 긴 글꼴 이름이 툴바를 밀지 않게 */
 
 /* 스플릿 버튼 (목록 + 유형 꺾쇠) */
 .jm-btn-split-main { border-radius: 4px 0 0 4px; border-color: var(--jm-border); }
@@ -870,6 +871,443 @@ function toneOf(hex) {
 }
 
 /**
+ * font-policy — 글꼴 허용 목록 (style font-family 값 정규화)
+ * - 쉼표 목록에서 허용 목록에 있는 첫 이름만 남긴다. 없으면 지운다 (serif 같은 일반 패밀리만 있어도 지워짐).
+ * - 서버 FontPolicy.java 와 같은 규칙이어야 한다 (application.yml jm-editor.font.families).
+ *
+ * 설정 (생성 옵션 font > window.JmEditorConfig.font > 기본값): { families: ['맑은 고딕', 'Arial'] }
+ */
+
+/** 기본 글꼴 목록 */
+const FONT_DEFAULTS = Object.freeze({
+  families: Object.freeze(['맑은 고딕', 'Noto Sans KR', 'Noto Sans', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', 'HY헤드라인M', 'Arial', 'Times New Roman']),
+});
+
+/** 영문 별칭 → 목록 이름 (소문자로 비교) */
+const FONT_ALIASES = Object.freeze({ 'malgun gothic': '맑은 고딕', 'hcr batang': '함초롬바탕', gulim: '굴림', dotum: '돋움', batang: '바탕' });
+/** 설정 목록에 쓸 수 있는 이름 형식 (따옴표·세미콜론 등이 style 로 나가지 않게) */
+const FONT_NAME_OK = /^[\p{L}\p{N} _-]{1,64}$/u;
+
+/**
+ * 설정 목록 정리: 배열이 아니면 기본 목록, 형식에 어긋난 이름은 버린다
+ * @param {unknown} list
+ * @returns {string[]}
+ */
+function normalizeFamilies(list) {
+  if (!Array.isArray(list)) return [...FONT_DEFAULTS.families];
+  return [...new Set(list.map((n) => String(n).trim()).filter((n) => FONT_NAME_OK.test(n)))];
+}
+
+/**
+ * 쉼표 목록을 따옴표를 지켜 이름별로 나눈다
+ * @param {string} value
+ * @returns {string[]} 앞뒤 공백·감싼 따옴표를 뺀 이름들
+ */
+function splitFontNames(value) {
+  const names = [];
+  let quote = '';
+  let start = 0;
+  const flush = (end) => {
+    let n = value.slice(start, end).trim();
+    if (n.length >= 2 && (n[0] === '"' || n[0] === "'") && n[n.length - 1] === n[0]) n = n.slice(1, -1).trim();
+    if (n) names.push(n);
+  };
+  for (let i = 0; i < value.length; i++) {
+    const c = value[i];
+    if (quote) { if (c === quote) quote = ''; }
+    else if (c === '"' || c === "'") quote = c;
+    else if (c === ',') { flush(i); start = i + 1; }
+  }
+  flush(value.length);
+  return names;
+}
+
+/**
+ * font-family 값에서 허용 목록의 첫 이름을 찾는다 (대소문자 무시, 영문 별칭 변환)
+ * @param {string} value 쉼표 목록
+ * @param {string[]} families 허용 목록 (normalizeFamilies 결과)
+ * @returns {string|null} 목록에 적힌 이름, 없으면 null
+ */
+function fontFamilyName(value, families) {
+  const lower = families.map((f) => f.toLowerCase());
+  for (const name of splitFontNames(String(value ?? ''))) {
+    const key = name.toLowerCase();
+    let at = lower.indexOf(key);
+    if (at < 0 && Object.hasOwn(FONT_ALIASES, key)) at = lower.indexOf(FONT_ALIASES[key].toLowerCase());
+    if (at >= 0) return families[at];
+  }
+  return null;
+}
+
+/**
+ * legacy-format — 옛 글·워드·한글·엑셀 HTML 변환 (Sanitizer 허용 검사 전 단계)
+ * - normalizeLegacy: font 태그·표 옛 속성을 style 로, font-weight 를 strong 으로 (파싱한 DOM 을 한 번 훑음)
+ * - parseStyle·cleanLegacyDecl: style 선언 파싱과 값 변환(pt→px, background→색, 테두리·글꼴 정규화)
+ * 서버 LegacyFormat.java 와 같은 규칙이어야 한다 (사례 파일 test/fixtures/legacy/cases.txt). 정규식은 모두 앵커가 있어 선형이고, 값 길이는 STYLE_VALUE_MAX 로 묶인다.
+ */
+
+/** 색상 값 형식: #hex, rgb(a)(), 색 이름 */
+const SAFE_COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d \t\n\f\r.,%]+\)|[a-z]+)$/i;
+/** style 선언 값 길이 상한 */
+const STYLE_VALUE_MAX = 256;
+/** 단위별 px 값 (1pt=1.333px, 1mm=3.78px, 1cm=37.8px) */
+const PX_PER_UNIT = { px: 1, pt: 1.333, mm: 3.78, cm: 37.8 };
+/** font 태그 size 1~7 의 px */
+const FONT_TAG_SIZES = [10, 13, 16, 18, 24, 32, 48];
+const FONT_PX_MIN = 8;
+const FONT_PX_MAX = 96;
+/** 테두리 폭 상한(px) */
+const BORDER_PX_MAX = 20;
+/** 길이 값: px·pt·mm·cm (소수 허용, 지수 표기 불가) */
+const PX_PT_LENGTH = /^(\d{0,6}(?:\.\d{1,6})?)(px|pt|mm|cm)$/i;
+/** width·height 속성 값: 숫자(px)·px·pt·% */
+const LENGTH_ATTR = /^\d{1,6}(?:\.\d{1,6})?(?:px|pt|%)?$/i;
+const BORDER_WIDTH_WORD = /^(thin|medium|thick)$/i;
+const BORDER_STYLE_WORD = /^(none|solid|dashed|dotted|double)$/i;
+/** 테두리 단축값 속성 */
+const BORDER_SHORTHAND = /^border(-(top|right|bottom|left))?$/;
+/** 테두리 낱개 속성: [이름 전체, 종류] */
+const BORDER_PART = /^border(?:-(?:top|right|bottom|left))?-(width|style|color)$/;
+/** background 단축값에서 색으로 보지 않는 낱말 (색 이름 형식에 맞아도) */
+const BG_KEYWORDS = new Set(['none', 'repeat', 'space', 'round', 'scroll', 'fixed', 'local', 'left', 'right', 'top', 'bottom', 'center', 'auto', 'cover', 'contain', 'inherit', 'initial', 'unset', 'revert']);
+/** width·height pt 변환, background 변환, 옛 속성을 적용하는 표 요소 */
+const LEGACY_TABLE_TAGS = new Set(['table', 'tr', 'td', 'th', 'col']);
+/** align 을 text-align 으로 옮기는 블록 (table 은 표 위치라 따로) */
+const ALIGN_BLOCK_TAGS = new Set(['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
+/** 블록을 감싼 font·span 이 안쪽 글자로 내려주는 속성 (배경은 단축값·낱개를 한 항목으로) */
+const PENDING_KEYS = { color: 'color', 'font-size': 'font-size', 'font-family': 'font-family', 'background-color': 'background-color', background: 'background-color' };
+/** 굵게 판정 값 */
+const BOLD_VALUE = /^(bold|bolder|[7-9]00)$/i;
+/** 굵기 해제 값 */
+const NOT_BOLD_VALUE = /^(normal|lighter|[1-6]00)$/i;
+/** 내용을 바로 감쌀 수 없어 굵기를 자식에게 넘기는 요소 */
+const BOLD_PASS_TAGS = new Set(['table', 'thead', 'tbody', 'tfoot', 'tr', 'colgroup', 'col', 'ul', 'ol', 'dl', 'menu', 'picture']);
+/** strong 으로 감싸지 않고 따로 처리하는 블록 요소 */
+const BOLD_BLOCK_TAGS = new Set(['address', 'article', 'aside', 'blockquote', 'caption', 'center', 'dd', 'details', 'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr', 'li', 'main', 'menu', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'ul']);
+/** 내용을 통째로 버리는 태그 — 훑지 않는다 (Sanitizer 의 DROP_TAGS 와 같음) */
+const LEGACY_SKIP_TAGS = new Set(['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link']);
+
+/**
+ * style 문자열을 선언 목록으로 나눈다. 따옴표·괄호 안의 `;`·`:` 는 구분자가 아니며, 첫 `:` 가 이름과 값을 나눈다.
+ * 이름은 소문자, 값이 비었거나 STYLE_VALUE_MAX 를 넘으면 버린다.
+ * @param {string} style
+ * @returns {Array<[string, string]>}
+ */
+function parseStyle(style) {
+  const out = [];
+  let quote = '';
+  let depth = 0;
+  let start = 0;
+  let colon = -1;
+  const flush = (end) => {
+    if (colon < 0) return;
+    const name = style.slice(start, colon).trim().toLowerCase();
+    const value = style.slice(colon + 1, end).trim();
+    if (name && value && value.length <= STYLE_VALUE_MAX) out.push([name, value]);
+  };
+  for (let i = 0; i < style.length; i++) {
+    const c = style[i];
+    if (c === '\\') i++;
+    else if (quote) { if (c === quote) quote = ''; }
+    else if (c === '"' || c === "'") quote = c;
+    else if (c === '(') depth++;
+    else if (c === ')') { if (depth > 0) depth--; }
+    else if (depth === 0 && c === ':' && colon < 0) colon = i;
+    else if (depth === 0 && c === ';') { flush(i); start = i + 1; colon = -1; }
+  }
+  flush(style.length);
+  return out;
+}
+
+/**
+ * 값을 공백으로 나눈다 (괄호 안 공백은 나누지 않음 — rgb(0, 0, 0))
+ * @param {string} value
+ * @returns {string[]}
+ */
+function splitTokens(value) {
+  const out = [];
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < value.length; i++) {
+    const c = value[i];
+    const space = c === ' ' || c === '\t' || c === '\n' || c === '\f' || c === '\r';
+    if (space && depth === 0) {
+      if (start >= 0) { out.push(value.slice(start, i)); start = -1; }
+    } else {
+      if (start < 0) start = i;
+      if (c === '(') depth++;
+      else if (c === ')' && depth > 0) depth--;
+    }
+  }
+  if (start >= 0) out.push(value.slice(start));
+  return out;
+}
+
+/**
+ * px·pt·mm·cm 길이를 px 숫자로 (반올림 전)
+ * @param {string} value
+ * @returns {number|null} 형식이 다르면 null
+ */
+function lengthPx(value) {
+  const m = value.match(PX_PT_LENGTH);
+  if (!m || !m[1]) return null;
+  return Number(m[1]) * PX_PER_UNIT[m[2].toLowerCase()];
+}
+
+/** 테두리 폭 정규화: 키워드, 0, px·pt·mm·cm (0~20px, 0 초과 1 미만은 1px). 어긋나면 null */
+function borderWidth(value) {
+  if (BORDER_WIDTH_WORD.test(value)) return value.toLowerCase();
+  if (value === '0') return '0px';
+  const px = lengthPx(value);
+  if (px == null || px > BORDER_PX_MAX) return null;
+  return `${px > 0 && px < 1 ? 1 : Math.round(px)}px`;
+}
+
+/** 테두리 단축값 정규화: 토큰 3개 이하, 폭·스타일·색 각 하나까지. 어긋나면 null */
+function borderShorthand(value) {
+  const tokens = splitTokens(value);
+  if (!tokens.length || tokens.length > 3) return null;
+  let width = null;
+  let style = null;
+  let color = null;
+  for (const t of tokens) {
+    const w = borderWidth(t);
+    if (w) { if (width) return null; width = w; }
+    else if (BORDER_STYLE_WORD.test(t)) { if (style) return null; style = t.toLowerCase(); }
+    else if (SAFE_COLOR.test(t)) { if (color) return null; color = t; }
+    else return null;
+  }
+  return [width, style, color].filter(Boolean).join(' ');
+}
+
+/** background 단축값에서 첫 색을 찾는다. 없으면 null */
+function backgroundColor(value) {
+  return splitTokens(value).find((t) => SAFE_COLOR.test(t) && !BG_KEYWORDS.has(t.toLowerCase())) || null;
+}
+
+/**
+ * style 선언 하나를 옛 형식 규칙으로 변환한다
+ * @param {string} name 소문자 속성 이름
+ * @param {string} value
+ * @param {string} tag 그 style 을 가진 요소의 태그 (소문자)
+ * @param {string[]} families 글꼴 허용 목록
+ * @returns {[string, string]|null|undefined} 변환 결과, null 이면 지움, undefined 면 이 규칙 대상이 아님(일반 허용 검사로)
+ */
+function cleanLegacyDecl(name, value, tag, families) {
+  const cell = tag === 'td' || tag === 'th';
+  if (name === 'font-family') {
+    const family = fontFamilyName(value, families);
+    return family ? [name, `"${family}"`] : null;
+  }
+  if (name === 'font-size') {
+    const px = lengthPx(value);
+    return px == null ? null : [name, `${Math.min(FONT_PX_MAX, Math.max(FONT_PX_MIN, Math.round(px)))}px`];
+  }
+  if ((name === 'width' || name === 'height') && LEGACY_TABLE_TAGS.has(tag) && /(pt|mm|cm)$/i.test(value)) {
+    const px = lengthPx(value);
+    return px == null ? null : [name, `${Math.round(px)}px`];
+  }
+  if (name === 'background') {
+    const color = LEGACY_TABLE_TAGS.has(tag) || tag === 'span' ? backgroundColor(value) : null;
+    return color ? ['background-color', color] : null;
+  }
+  if (name === 'margin-left' || name === 'margin-right') { // 표 가운데 정렬(align=center)의 값만
+    return tag === 'table' && /^auto$/i.test(value) ? [name, 'auto'] : null;
+  }
+  if (name === 'border-collapse') {
+    return tag === 'table' && /^(collapse|separate)$/i.test(value) ? [name, value.toLowerCase()] : null;
+  }
+  if (BORDER_SHORTHAND.test(name)) {
+    const v = cell ? borderShorthand(value) : null;
+    return v ? [name, v] : null;
+  }
+  const part = name.match(BORDER_PART);
+  if (part) {
+    if (!cell) return null;
+    if (part[1] === 'width') { const w = borderWidth(value); return w ? [name, w] : null; }
+    if (part[1] === 'style') return BORDER_STYLE_WORD.test(value) ? [name, value.toLowerCase()] : null;
+    return SAFE_COLOR.test(value) ? [name, value] : null;
+  }
+  return undefined;
+}
+
+/**
+ * 옛 속성을 style 선언으로 옮긴다. style 에 이미 있는 속성은 style 이 우선. 값은 검사를 통과한 것만 쓴다(세미콜론 주입 방지).
+ * @param {Element} el
+ * @param {string} tag
+ * @param {string[]} families
+ */
+function moveLegacyAttrs(el, tag, families) {
+  const pairs = [];
+  const attr = (name) => (el.getAttribute(name) ?? '').trim();
+  if (tag === 'font') {
+    if (SAFE_COLOR.test(attr('color'))) pairs.push(['color', attr('color')]);
+    if (/^[1-7]$/.test(attr('size'))) pairs.push(['font-size', `${FONT_TAG_SIZES[+attr('size') - 1]}px`]);
+    const family = fontFamilyName(attr('face'), families);
+    if (family) pairs.push(['font-family', `"${family}"`]);
+  } else if (LEGACY_TABLE_TAGS.has(tag)) {
+    if (SAFE_COLOR.test(attr('bgcolor'))) pairs.push(['background-color', attr('bgcolor')]);
+    if (tag === 'table') {
+      if (/^center$/i.test(attr('align'))) pairs.push(['margin-left', 'auto'], ['margin-right', 'auto']); // 표 위치 — text-align 으로 옮기면 칸 글자가 가운데로 간다. left·right 는 지움
+      if (attr('border') === '0' && !el.hasAttribute('data-border')) el.setAttribute('data-border', '0');
+    } else if (/^(left|center|right|justify)$/i.test(attr('align'))) pairs.push(['text-align', attr('align').toLowerCase()]);
+    if (/^(top|middle|bottom)$/i.test(attr('valign'))) pairs.push(['vertical-align', attr('valign').toLowerCase()]);
+    ['width', 'height'].forEach((n) => {
+      const v = attr(n);
+      if (LENGTH_ATTR.test(v)) pairs.push([n, /\d$/.test(v) ? `${v}px` : v]);
+    });
+  } else if (ALIGN_BLOCK_TAGS.has(tag) && /^(left|center|right|justify)$/i.test(attr('align'))) {
+    pairs.push(['text-align', attr('align').toLowerCase()]);
+  }
+  if (!pairs.length) return;
+  const style = el.getAttribute('style') || '';
+  const has = new Set(parseStyle(style).map(([n]) => (n === 'background' ? 'background-color' : n)));
+  const add = pairs.filter(([n]) => !has.has(n)).map(([n, v]) => `${n}: ${v}`);
+  if (add.length) el.setAttribute('style', style ? `${add.join('; ')}; ${style}` : add.join('; '));
+}
+
+/**
+ * style 의 마지막 유효 font-weight 판정
+ * @param {string|null} style
+ * @returns {boolean|null} 굵게 true, 해제 false, 지정 없음 null
+ */
+function boldState(style) {
+  let bold = null;
+  if (style) parseStyle(style).forEach(([n, v]) => { if (n === 'font-weight') { if (BOLD_VALUE.test(v)) bold = true; else if (NOT_BOLD_VALUE.test(v)) bold = false; } });
+  return bold;
+}
+
+/**
+ * 내려줄 스타일에 요소의 style 을 더한다 (같은 항목은 안쪽이 이김)
+ * @param {Map<string,string>|null} pending 항목 → 선언 문자열
+ * @param {string|null} style
+ * @returns {Map<string,string>|null}
+ */
+function addPending(pending, style) {
+  const out = new Map(pending || []);
+  if (style) parseStyle(style).forEach(([n, v]) => { if (PENDING_KEYS[n]) out.set(PENDING_KEYS[n], `${n}: ${v}`); });
+  return out.size ? out : null;
+}
+
+/**
+ * 블록이 직접 지정한 항목은 내려받지 않는다 (블록의 값이 이긴다)
+ * @param {Map<string,string>|null} pending
+ * @param {string|null} style
+ * @returns {Map<string,string>|null}
+ */
+function dropDeclared(pending, style) {
+  if (!pending || !style) return pending;
+  const out = new Map(pending);
+  parseStyle(style).forEach(([n]) => { if (PENDING_KEYS[n]) out.delete(PENDING_KEYS[n]); });
+  return out.size ? out : null;
+}
+
+/**
+ * 블록을 품은 요소 집합: 블록에서 위로 올라가며 표시한다 (이미 표시한 곳에서 멈춰 선형)
+ * @param {HTMLElement} root
+ * @returns {Set<Element>}
+ */
+function elementsWithBlock(root) {
+  const marked = new Set();
+  root.querySelectorAll([...BOLD_BLOCK_TAGS].join(',')).forEach((b) => {
+    for (let a = b.parentElement; a && a !== root && !marked.has(a); a = a.parentElement) marked.add(a);
+  });
+  return marked;
+}
+
+/**
+ * 파싱한 문서를 한 번 훑어 옛 형식을 바꾼다: font·표 옛 속성 → style, 굵은 요소의 내용 → strong,
+ * 블록을 감싼 font·span → 속성을 지우고(뒤에서 벗겨짐) 안쪽 글자에 span 으로 내려줌(편집기는 블록을 감싼 span 을 다룰 수 없다).
+ * 재귀 없이 스택으로 돌고, 감싸기는 묶음마다 한 번이라 선형이다. font 태그 이름은 Sanitizer 별칭이 span 으로 바꾼다.
+ * @param {HTMLElement} root body
+ * @param {string[]} families 글꼴 허용 목록
+ * @param {boolean} keepCaption caption 이 허용 태그인지 (아니면 표 앞 문단으로 — 벗기면 표 안에 글이 남아 다시 파싱할 때 달라진다)
+ */
+function normalizeLegacy(root, families, keepCaption) {
+  const withBlock = elementsWithBlock(root);
+  /** [요소, 굵게 해야 함, 이미 굵은 안쪽임, 내려줄 스타일] */
+  const stack = [];
+  const pushKids = (el, want, done, pending) => { for (const c of el.children) stack.push([c, want, done, pending]); };
+  pushKids(root, false, false, null);
+  while (stack.length) {
+    const [el, inherited, within, down] = stack.pop();
+    const tag = el.tagName.toLowerCase();
+    if (LEGACY_SKIP_TAGS.has(tag)) continue;
+    if (tag === 'caption' && !keepCaption && el.parentElement?.tagName === 'TABLE') {
+      const p = el.ownerDocument.createElement('p');
+      if (el.hasAttribute('style')) p.setAttribute('style', el.getAttribute('style'));
+      while (el.firstChild) p.appendChild(el.firstChild);
+      const table = el.parentElement;
+      table.parentNode.insertBefore(p, table);
+      el.remove();
+      stack.push([p, inherited, within, down]);
+      continue;
+    }
+    moveLegacyAttrs(el, tag, families);
+    const button = tag === 'a' && el.getAttribute('data-role') === 'button';
+    const plugin = tag === 'div' && el.hasAttribute('data-type');
+    const host = (tag === 'font' || tag === 'span') && withBlock.has(el);
+    const style = el.getAttribute('style');
+    const want = !plugin && !button && (inherited || boldState(style) === true);
+    const done = within || tag === 'strong' || tag === 'b' || tag === 'th';
+    let pending = plugin || button ? null : down;
+    if (host) {
+      pending = addPending(pending, style);
+      Array.from(el.attributes).forEach((a) => el.removeAttribute(a.name));
+    } else pending = dropDeclared(pending, style);
+    if (BOLD_PASS_TAGS.has(tag)) pushKids(el, want, done, pending);
+    else if ((want && !done) || pending || host) wrapRuns(el, { bold: want && !done, done, pending, host, withBlock, stack });
+    else pushKids(el, false, done || button, null);
+  }
+}
+
+/**
+ * 요소의 인라인 자식 묶음을 strong·span 으로 감싼다. 블록 자식에는 넘기고, 글자 없는 묶음은 감싸지 않는다.
+ * 버튼 링크·플러그인 블록은 건드리지 않고, 굵기를 해제한 자식과 이미 strong 인 자식은 strong 밖에 둔다.
+ * @param {Element} el
+ * @param {{bold: boolean, done: boolean, pending: Map<string,string>|null, host: boolean, withBlock: Set<Element>, stack: Array}} o host 면 벗겨질 요소라 빈 글자도 버린다
+ */
+function wrapRuns(el, { bold, done, pending, host, withBlock, stack }) {
+  let run = [];
+  const flush = (before) => {
+    if (run.some((n) => n.textContent.trim())) {
+      let outer = null;
+      let inner = null;
+      if (pending) {
+        outer = el.ownerDocument.createElement('span');
+        outer.setAttribute('style', [...pending.values()].join('; '));
+        inner = outer;
+      }
+      if (bold) {
+        const strong = el.ownerDocument.createElement('strong');
+        if (inner) inner.appendChild(strong); else outer = strong;
+        inner = strong;
+      }
+      el.insertBefore(outer, before);
+      run.forEach((n) => inner.appendChild(n));
+    } else if (host) run.forEach((n) => { if (n.nodeType === Node.TEXT_NODE) n.remove(); });
+    run.forEach((n) => { if (n.nodeType === Node.ELEMENT_NODE) stack.push([n, false, done || bold, null]); });
+    run = [];
+  };
+  Array.from(el.childNodes).forEach((n) => {
+    if (n.nodeType !== Node.ELEMENT_NODE && n.nodeType !== Node.TEXT_NODE) return;
+    const tag = n.nodeType === Node.ELEMENT_NODE ? n.tagName.toLowerCase() : '';
+    if (BOLD_BLOCK_TAGS.has(tag) || (tag && withBlock.has(n))) {
+      flush(n);
+      stack.push([n, bold, done, pending]);
+    } else if ((tag === 'a' && n.getAttribute('data-role') === 'button')) {
+      flush(n);
+      stack.push([n, false, done, null]);
+    } else if (bold && (tag === 'strong' || tag === 'b' || (tag && boldState(n.getAttribute('style')) === false))) {
+      flush(n);
+      stack.push([n, false, true, pending]);
+    } else run.push(n);
+  });
+  flush(null);
+}
+
+/**
  * Sanitizer
  * - 외부에서 들어오는 HTML(붙여넣기, setHTML)을 허용 태그/속성만 남기고 정리한다.
  * - XSS 1차 방어. 서버 저장 시에도 반드시 별도 sanitize(jsoup 등) 할 것.
@@ -883,30 +1321,54 @@ const ALLOWED = {
   blockquote: ['style', 'data-style'], // 인용 스타일: box·quote (세로선은 기본값이라 속성 없음)
   a: ['href', 'target', 'rel', 'data-role', 'data-style', 'data-size', 'data-color', 'data-tone', 'data-icon', 'data-icon-pos'], // data-role=button → 버튼 모양 링크 (값 검사는 #cleanButton)
   img: ['src', 'alt', 'width', 'height', 'data-float', 'style', 'loading'], // 글 감싸기: 방향 + 폭(%) — 값 검사는 #cleanImage, loading 은 lazy·eager 만
-  table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style'],
+  table: ['style', 'data-border'], tbody: [], thead: [], colgroup: [], col: ['style', 'span'],
   tr: ['style'], td: ['style', 'colspan', 'rowspan'], th: ['style', 'colspan', 'rowspan'],
   span: ['style'],
 };
 
-/** 색상 값 형식: #hex, rgb(a)(), 색 이름 */
-const SAFE_COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|[a-z]+)$/i;
-/** style 속성에서 허용하는 CSS 속성과 값 검사 */
+/** style 속성에서 허용하는 CSS 속성과 값 검사 (글꼴·글자 크기·테두리·background 는 먼저 cleanLegacyDecl 이 처리) */
 const ALLOWED_STYLE = {
   'color': (v) => SAFE_COLOR.test(v),
   'background-color': (v) => SAFE_COLOR.test(v),
   'text-align': (v) => /^(left|center|right|justify)$/i.test(v),
   'vertical-align': (v) => /^(top|middle|bottom)$/i.test(v),
-  'width': (v) => /^\d+(\.\d+)?(px|%)$/i.test(v) || v === 'auto',
+  'width': (v) => /^(\d+(\.\d+)?(px|%)|auto)$/i.test(v),
   'height': (v) => /^\d+(\.\d+)?px$/i.test(v),
-  'font-size': (v) => { const m = v.match(/^(\d+)px$/i); return !!m && +m[1] >= 8 && +m[1] <= 96; },
   'list-style-type': (v) => /^(disc|circle|square|decimal|decimal-leading-zero|lower-alpha|upper-alpha|lower-roman|upper-roman|hangul|hangul-consonant|none)$/i.test(v),
 };
 
 /** 태그 이름 치환 (레거시/외부 태그 → 표준 태그) */
-const TAG_ALIAS = { b: 'strong', i: 'em', strike: 's', div: 'p' };
+const TAG_ALIAS = { b: 'strong', i: 'em', strike: 's', div: 'p', font: 'span' };
 
-/** src 에 허용하는 주소: http(s)·/ 경로·이미지 data:(base64). img 안의 svg 는 스크립트가 실행되지 않아 허용 (서버 HtmlSanitizer 와 같은 규칙) */
-const SAFE_URL = /^(https?:|\/|data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,)/i;
+/** src·srcset 에 허용하는 주소: http(s)://, / 로 시작하는 내부 경로(// 와 /\ 제외), 이미지 data:(base64). img 안의 svg 는 스크립트가 실행되지 않아 허용 (서버 HtmlSanitizer 와 같은 규칙) */
+const SAFE_URL = /^(https?:\/\/|\/(?![/\\])|data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,)/i;
+/** 주소에 들어가면 안 되는 제어 문자 */
+const URL_CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+/** href·srcset(data: 제외) 값 길이 상한 — 넘으면 그 속성(srcset 은 그 source)을 버린다 (서버 URL_MAX 와 같음) */
+const URL_MAX = 8192;
+/** 자식까지 통째로 버리는 위험 태그 */
+const DROP_TAGS = ['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link'];
+/** 요소 중첩 깊이 상한 — 그보다 깊은 요소는 벗기고 글만 남긴다 (서버 DEPTH_MAX 와 같음) */
+const DEPTH_MAX = 256;
+/** 파싱 전 입력에서 허용하는 태그 순 열림(이름별 열림 − 닫힘의 합계) — 넘은 뒤의 여는 태그는 파싱 전에 지운다 */
+const PARSE_OPEN_MAX = 20000;
+/** 닫는 태그를 생략할 수 있어 순 열림에 세지 않는 태그 (파서가 저절로 닫아 중첩이 쌓이지 않음) */
+const IMPLIED_END_TAGS = new Set(['p', 'li', 'td', 'th', 'tr', 'dt', 'dd', 'option', 'optgroup', 'thead', 'tbody', 'tfoot', 'colgroup', 'caption', 'body', 'html', 'head']);
+/** 이 안에서 연 서식 태그를 자기 닫는 태그가 함께 닫는 생략 가능 태그 */
+const FORMAT_CLOSERS = new Set(['p', 'li', 'td', 'th', 'dt', 'dd']);
+/** 서식 태그: 바깥 블록이 닫히면 함께 닫히고 파서가 재구성해도 중첩이 쌓이지 않는다 */
+const FORMAT_TAGS = new Set(['a', 'b', 'big', 'code', 'em', 'font', 'i', 'nobr', 's', 'small', 'strike', 'strong', 'tt', 'u']);
+/** 여는 순간 열린 p 를 닫는 블록 태그 — 그 뒤의 닫는 p 는 서식 태그를 닫지 못한다 */
+const P_CLOSING_TAGS = new Set(['address', 'article', 'aside', 'blockquote', 'center', 'details', 'dialog', 'dir', 'div', 'dl', 'fieldset', 'figcaption', 'figure', 'footer', 'form',
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hgroup', 'listing', 'main', 'menu', 'nav', 'ol', 'plaintext', 'pre', 'search', 'section', 'summary', 'table', 'ul', 'xmp']);
+/** table 하나의 순 열림 값: 파서가 tbody·tr·td 까지 함께 쌓고 표 중첩은 깊이도 줄이지 않는다 */
+const TABLE_WEIGHT = 4;
+/** 서식 태그의 순 열림 값: 닫지 않고 쌓으면 파서 깊이를 줄이지 못한 채 형제 노드까지 늘어 느리다 */
+const FORMAT_WEIGHT = 2;
+/** 안이 열려 있으면 다른 이름의 닫는 태그가 먹지 않는 태그 — 그 닫는 태그는 순 열림에서 빼지 않는다 ("<div><object></div>" 반복이 한도를 빠져나가지 못하게) */
+const SCOPE_BARRIERS = new Set(['object', 'applet', 'marquee']);
+/** 순 열림에 세지 않는 빈 태그 */
+const VOID_TAGS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
 /** 이미지 loading 속성 허용 값 */
 const IMG_LOADING = ['lazy', 'eager'];
 /** source[type] 허용 값 (이미지 형식만) */
@@ -934,15 +1396,27 @@ const TH_SCOPES = ['row', 'col', 'rowgroup', 'colgroup'];
 class Sanitizer {
   /** 지금 정리 중인 구조 정책 (clean 호출 동안만, null 이면 기본 규칙) */
   static #policy = null;
+  /** 지금 정리 중인 요소의 깊이 (clean 호출 동안만) */
+  static #depth = 0;
+  /** 지금 정리에 쓰는 글꼴 허용 목록 (clean 호출 동안만, null 이면 설정값) */
+  static #fonts = null;
 
   /**
    * HTML 문자열을 정리하여 반환
    * @param {string} html
    * @param {ReturnType<typeof import('./structure-policy.js').makeStructurePolicy>} [policy] 퍼블 구조 정책 (없으면 기본 규칙)
+   * @param {string[]} [families] 글꼴 허용 목록 (없으면 window.JmEditorConfig.font > 기본값)
    * @returns {string}
    */
-  static clean(html, policy = null) {
-    return Sanitizer.#withPolicy(policy, () => Sanitizer.#cleanRoot(html));
+  static clean(html, policy = null, families = null) {
+    const prev = Sanitizer.#fonts;
+    Sanitizer.#fonts = Sanitizer.#families(families);
+    try { return Sanitizer.#withPolicy(policy, () => Sanitizer.#cleanRoot(html)); } finally { Sanitizer.#fonts = prev; }
+  }
+
+  /** 글꼴 허용 목록 정리 (인자 > 설정) */
+  static #families(families) {
+    return normalizeFamilies(families ?? resolveConfig('font').families);
   }
 
   /** 정책을 잠시 바꿔 실행 (중첩 호출에도 원래대로 복구) */
@@ -953,7 +1427,9 @@ class Sanitizer {
   }
 
   static #cleanRoot(html) {
-    const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+    Sanitizer.#depth = 0;
+    const doc = new DOMParser().parseFromString(`<body>${Sanitizer.#limitOpenTags(String(html))}</body>`, 'text/html');
+    normalizeLegacy(doc.body, Sanitizer.#fonts, !!Sanitizer.#policy?.tags.has('caption'));
     const frag = document.createDocumentFragment();
     Array.from(doc.body.childNodes).forEach((n) => {
       if (n.nodeType === Node.TEXT_NODE && !n.textContent.trim()) return; // 최상위 공백 텍스트(블록 사이 줄바꿈) 제거
@@ -964,6 +1440,88 @@ class Sanitizer {
     wrap.appendChild(frag);
     Sanitizer.dedupeIds(wrap);
     return wrap.innerHTML;
+  }
+
+  /**
+   * 브라우저 파서가 깊은 중첩에서 이차 시간이라, 파싱 전에 입력을 한 번 훑어 태그 순 열림을 제한한다.
+   * 주석·따옴표는 해석하지 않고 이름별 (열림 − 닫힘) 합계만 세며, 합계가 PARSE_OPEN_MAX 에 이르면 그 뒤의 태그를 지운다 (빈 태그·글은 그대로).
+   * 저절로 닫히는 태그는 세지 않고, 블록 안에서 연 서식 태그는 그 블록이 닫히면 뺀다 — 큰 정상 문서가 한도에 닿지 않게.
+   * 닫는 태그까지 지우는 까닭: 한도에 이른 뒤 남은 닫는 태그만으로도 Chromium 파서가 수십 초 걸린다.
+   * 정상 문서는 이 한도에 닿지 않아 그대로 돌아온다. 결과는 다시 파서·정제를 거치므로 보안 경계가 아니다.
+   * 서버(HtmlSanitizer)는 jsoup 이 이런 입력을 빠르게 처리해 이 단계가 없다 — 순 열림 2만 초과의 극단 입력에서만 양쪽 결과가 달라질 수 있다(허용).
+   * @param {string} html
+   * @returns {string}
+   */
+  static #limitOpenTags(html) {
+    const tagStart = /<(\/?)([a-z][^\s/>]*)/gi;
+    const open = new Map();
+    const parts = [];
+    /** 지금 블록을 연 뒤 열어 아직 닫지 않은 서식 태그 (이름별 개수) */
+    const formatsInBlock = new Map();
+    /** 열려 있다고 보는 FORMAT_CLOSERS */
+    const openClosers = new Set();
+    let total = 0;
+    let barriers = 0; // 열려 있는 SCOPE_BARRIERS 수
+    let copied = 0;
+    /** 지금 블록 안에서 연 서식 태그를 순 열림에서 뺀다 (블록과 함께 닫혔으므로) */
+    const closeFormats = () => {
+      formatsInBlock.forEach((c, f) => { open.set(f, open.get(f) - c); total -= c * FORMAT_WEIGHT; });
+      formatsInBlock.clear();
+    };
+    let m;
+    while ((m = tagStart.exec(html))) {
+      const name = m[2].toLowerCase();
+      if (VOID_TAGS.has(name)) continue;
+      if (total >= PARSE_OPEN_MAX) {
+        const end = html.indexOf('>', tagStart.lastIndex);
+        if (end < 0) break;
+        parts.push(html.slice(copied, m.index));
+        copied = end + 1;
+        tagStart.lastIndex = copied;
+        continue;
+      }
+      if (IMPLIED_END_TAGS.has(name)) {
+        if (FORMAT_CLOSERS.has(name)) {
+          if (!m[1]) { openClosers.add(name); formatsInBlock.clear(); }
+          else if (openClosers.delete(name)) closeFormats();
+        }
+        continue;
+      }
+      const count = open.get(name) || 0;
+      const barrier = SCOPE_BARRIERS.has(name);
+      const format = FORMAT_TAGS.has(name);
+      const weight = name === 'table' ? TABLE_WEIGHT : (format ? FORMAT_WEIGHT : 1);
+      if (!m[1]) {
+        open.set(name, count + 1);
+        total += weight;
+        if (barrier) barriers++;
+        if (format) formatsInBlock.set(name, (formatsInBlock.get(name) || 0) + 1);
+        else formatsInBlock.clear();
+        if (P_CLOSING_TAGS.has(name)) openClosers.delete('p');
+      } else if (count > 0 && (barrier || !barriers)) {
+        open.set(name, count - 1);
+        total -= weight;
+        if (barrier) barriers--;
+        if (!format) closeFormats();
+        else if (formatsInBlock.get(name) > 0) formatsInBlock.set(name, formatsInBlock.get(name) - 1);
+      }
+    }
+    if (!parts.length) return html;
+    parts.push(html.slice(copied));
+    return parts.join('');
+  }
+
+  /**
+   * 앞뒤 스페이스(U+0020)만 자른다 — 정규식(^ +| +$)은 공백이 길면 이차 시간이라 인덱스로 찾는다
+   * @param {string} s
+   * @returns {string}
+   */
+  static #trimSpaces(s) {
+    let from = 0;
+    let to = s.length;
+    while (from < to && s[from] === ' ') from++;
+    while (to > from && s[to - 1] === ' ') to--;
+    return s.slice(from, to);
   }
 
   /**
@@ -1030,13 +1588,24 @@ class Sanitizer {
   }
 
   /**
-   * 링크 주소가 허용 형식인지 (javascript:·data: 등 차단, 제어 문자 포함 시 차단)
+   * 링크 주소가 허용 형식인지 (javascript:·data: 등 차단, 제어 문자 포함 시 차단, 8192자 초과 차단)
    * @param {string} url
    * @returns {boolean}
    */
   static isSafeHref(url) {
+    const raw = String(url ?? '');
+    const v = raw.trim();
+    return raw.length <= URL_MAX && !!v && !URL_CONTROL_CHARS.test(v) && SAFE_HREF.test(v);
+  }
+
+  /**
+   * 이미지 주소(src)가 허용 형식인지: http(s)://, 내부 경로, 이미지 data: 만. 제어 문자 포함 시 차단
+   * @param {string} url
+   * @returns {boolean}
+   */
+  static isSafeUrl(url) {
     const v = String(url ?? '').trim();
-    return !!v && !/[\u0000-\u001f\u007f]/.test(v) && SAFE_HREF.test(v);
+    return !!v && !URL_CONTROL_CHARS.test(v) && SAFE_URL.test(v);
   }
 
   /**
@@ -1073,33 +1642,90 @@ class Sanitizer {
   }
 
   /**
-   * style 문자열에서 color / background-color 만 남긴다
+   * style 문자열 정리: 옛 형식 변환 후 허용 속성·값만 남긴다 (값은 파서가 나눈 그대로 검사하고 다시 조립)
    * @param {string} style
+   * @param {string} [tag='span'] 그 style 을 가진 요소의 태그 (표 길이·background·테두리는 표 요소에서만)
+   * @param {string[]} [families] 글꼴 허용 목록 (없으면 지금 정리 중인 목록 또는 설정)
    * @returns {string}
    */
-  static cleanStyle(style) {
-    return style.split(';')
-      .map((d) => d.split(':').map((x) => x.trim()))
-      .filter(([k, v]) => k && v && ALLOWED_STYLE[k.toLowerCase()]?.(v))
-      .map(([k, v]) => `${k.toLowerCase()}: ${v}`)
-      .join('; ');
+  static cleanStyle(style, tag = 'span', families = null) {
+    const fonts = families ? normalizeFamilies(families) : (Sanitizer.#fonts || Sanitizer.#families());
+    const out = [];
+    parseStyle(style).forEach(([name, value]) => {
+      const legacy = cleanLegacyDecl(name, value, tag, fonts);
+      if (legacy) out.push(`${legacy[0]}: ${legacy[1]}`);
+      else if (legacy === undefined && ALLOWED_STYLE[name]?.(value)) out.push(`${name}: ${value}`);
+    });
+    return out.join('; ');
   }
 
   /**
    * 노드 단위 재귀 정리
    * - 허용되지 않은 태그는 제거하되 자식 텍스트는 유지(언래핑)
    * - script/style 등 위험 태그는 자식까지 통째로 제거
+   * - 깊이 상한(DEPTH_MAX)보다 깊은 요소는 벗기고 글만 남긴다
    */
   static #cleanNode(node) {
     // 텍스트 노드는 그대로
     if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent);
     if (node.nodeType !== Node.ELEMENT_NODE) return null;
 
+    if (DROP_TAGS.includes(node.tagName.toLowerCase())) return null;
+    if (Sanitizer.#depth >= DEPTH_MAX) return Sanitizer.#textOnly(node);
+    Sanitizer.#depth++;
+    try { return Sanitizer.#cleanElement(node); } finally { Sanitizer.#depth--; }
+  }
+
+  /**
+   * 깊이 상한을 넘은 요소: 글만 모은다. 표 중첩처럼 파서가 깊이를 줄이지 않는 입력도 있어 재귀 없이 훑는다 (호출 스택 넘침 방지).
+   * @param {Element} node
+   * @returns {DocumentFragment}
+   */
+  static #textOnly(node) {
+    const frag = document.createDocumentFragment();
+    const walker = node.ownerDocument.createTreeWalker(node, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.nodeType === Node.ELEMENT_NODE && DROP_TAGS.includes(n.tagName.toLowerCase()) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+    });
+    while (walker.nextNode()) {
+      if (walker.currentNode.nodeType === Node.TEXT_NODE) frag.appendChild(document.createTextNode(walker.currentNode.textContent));
+    }
+    return frag;
+  }
+
+  /**
+   * 요소를 벗기고 자식만 정리해 돌려준다. 결과에 남지 않는 요소이므로 깊이에 세지 않는다.
+   * @param {Element} node
+   * @returns {DocumentFragment}
+   */
+  static #unwrap(node) {
+    Sanitizer.#depth--;
+    try { return Sanitizer.#cleanChildren(node); } finally { Sanitizer.#depth++; }
+  }
+
+  /**
+   * 자식 노드를 정리해 조각으로 모은다
+   * @param {Element} node
+   * @returns {DocumentFragment}
+   */
+  static #cleanChildren(node) {
+    const frag = document.createDocumentFragment();
+    Array.from(node.childNodes).forEach((c) => {
+      const r = Sanitizer.#cleanNode(c);
+      if (r) frag.appendChild(r);
+    });
+    return frag;
+  }
+
+  /**
+   * 요소 하나 정리 (#cleanNode 가 깊이 검사 후 호출)
+   * @param {Element} node
+   * @returns {Node|null}
+   */
+  static #cleanElement(node) {
     let tag = node.tagName.toLowerCase();
-    if (['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link'].includes(tag)) return null;
     const pol = Sanitizer.#policy;
     // 플러그인 블록 안은 구조 정책 없이 (지금 규칙 그대로)
-    if (pol && tag === 'div' && PLUGIN_TYPES.includes(node.getAttribute('data-type'))) return Sanitizer.#withPolicy(null, () => Sanitizer.#cleanNode(node));
+    if (pol && tag === 'div' && PLUGIN_TYPES.includes(node.getAttribute('data-type'))) return Sanitizer.#withPolicy(null, () => Sanitizer.#cleanElement(node));
 
     // 이미지 갤러리 블록: div[data-type=gallery] 만 예외 허용, 자식은 img 만
     if (tag === 'div' && node.getAttribute('data-type') === 'gallery') {
@@ -1202,14 +1828,7 @@ class Sanitizer {
     const allowed = ALLOWED[tag] || (pol?.tags.has(tag) ? STRUCTURE_ATTRS : null);
 
     // 허용되지 않은 태그 → 자식만 모아서 반환(언래핑)
-    if (!allowed) {
-      const frag = document.createDocumentFragment();
-      Array.from(node.childNodes).forEach((c) => {
-        const r = Sanitizer.#cleanNode(c);
-        if (r) frag.appendChild(r);
-      });
-      return frag;
-    }
+    if (!allowed) return Sanitizer.#unwrap(node);
 
     const el = document.createElement(tag);
     // 구조 모드: class 는 허용 토큰만, th[scope] 는 허용 값만, id·aria 는 정책 검사 통과분만
@@ -1224,25 +1843,19 @@ class Sanitizer {
       const v = node.getAttribute(attr);
       if (v == null) return;
       if (attr === 'href' && !Sanitizer.isSafeHref(v)) return;
-      if (attr === 'src' && !SAFE_URL.test(v.trim())) return;
+      if (attr === 'src' && !Sanitizer.isSafeUrl(v)) return;
       if (attr === 'start' && !/^\d{1,4}$/.test(v)) return;
+      if (attr === 'span' && !(/^[1-9]\d{0,3}$/.test(v) && +v <= 1000)) return;
       if (attr === 'loading' && !IMG_LOADING.includes(v)) return;
       if (attr === 'style') {
-        const clean = Sanitizer.cleanStyle(v);
+        const clean = Sanitizer.cleanStyle(v, tag);
         if (clean) el.setAttribute('style', clean);
         return;
       }
       el.setAttribute(attr, v);
     });
     // 속성이 하나도 남지 않은 span 은 의미가 없으므로 언래핑 (구조 모드에서 class·id·aria 가 있으면 남김 — 아이콘·앵커 등)
-    if (tag === 'span' && !el.attributes.length) {
-      const frag = document.createDocumentFragment();
-      Array.from(node.childNodes).forEach((c) => {
-        const r = Sanitizer.#cleanNode(c);
-        if (r) frag.appendChild(r);
-      });
-      return frag;
-    }
+    if (tag === 'span' && !el.attributes.length) return Sanitizer.#unwrap(node);
     // 링크는 새창 + noopener 강제(#·tel:·mailto: 제외). 버튼 링크 속성은 허용 값만
     if (tag === 'a') {
       Sanitizer.applyLinkTarget(el, el.getAttribute('href') || '');
@@ -1303,6 +1916,7 @@ class Sanitizer {
     const imgAt = kids.findIndex((c) => c.tagName === 'IMG');
     if (imgAt < 0) return null;
     const img = Sanitizer.#cleanNode(kids[imgAt]);
+    if (img.nodeType !== Node.ELEMENT_NODE) return null; // 깊이 상한으로 img 가 벗겨지면 picture 도 버린다
     const sources = [];
     for (const c of kids.slice(0, imgAt)) {
       if (sources.length >= PICTURE_SOURCE_MAX) break;
@@ -1341,22 +1955,23 @@ class Sanitizer {
   /**
    * srcset 값 검사·정규화: 후보 1~4개(`, ` 로 구분), 후보 = 주소 + 선택 서술자(`640w`·`2x`).
    * 주소는 img src 와 같은 SAFE_URL 이어야 하고, data: 주소는 후보가 1개일 때만 허용한다(쉼표 구분이 모호해짐).
-   * 제어 문자·앞뒤 공백·대문자 프로토콜까지 고려하며, 하나라도 어긋나면 null.
+   * 제어 문자·앞뒤 공백·대문자 프로토콜까지 고려하며, 하나라도 어긋나면 null. data: 가 아닌 값은 8192자까지.
    * @param {string|null} value
    * @returns {string|null} 후보를 `, ` 로 이은 정규화 문자열, 아니면 null
    */
   static cleanSrcset(value) {
     const raw = String(value ?? '');
-    if (/[\u0000-\u001f\u007f]/.test(raw)) return null;
-    const v = raw.replace(/^ +| +$/g, '');
+    if (URL_CONTROL_CHARS.test(raw)) return null;
+    const v = Sanitizer.#trimSpaces(raw);
     if (!v) return null;
+    if (raw.length > URL_MAX && !/^data:/i.test(v)) return null;
     // data: 주소는 통째로 후보 1개 (그 안의 쉼표는 base64 구분자 하나뿐이어야 함)
     if (/^data:/i.test(v)) {
       const m = v.match(/^([^ ]+)(?: (\d+w|\d+(?:\.\d+)?x))?$/);
       if (!m || !SAFE_URL.test(m[1]) || m[1].split(',').length !== 2) return null;
       return m[2] ? `${m[1]} ${m[2]}` : m[1];
     }
-    const cands = v.split(/, +/).map((c) => c.replace(/^ +| +$/g, ''));
+    const cands = v.split(/, +/).map((c) => Sanitizer.#trimSpaces(c));
     if (cands.length > SRCSET_MAX) return null;
     const out = [];
     for (const c of cands) {
@@ -1426,6 +2041,7 @@ class Sanitizer {
     const cells = Array.from(node.children).filter((c) => c.tagName === 'DIV');
     const images = cells.filter((c) => c.getAttribute('data-cell') === 'image');
     const texts = cells.filter((c) => c.getAttribute('data-cell') === 'text');
+    Sanitizer.#depth++; // 칸(div) 자체를 깊이에 센다
     cellsOf(preset, variant).forEach((role) => {
       const isImg = isImageRole(role);
       const src = isImg ? images.shift() : texts.shift();
@@ -1441,6 +2057,7 @@ class Sanitizer {
       }
       box.appendChild(cell);
     });
+    Sanitizer.#depth--;
     return box;
   }
 }
@@ -2051,7 +2668,7 @@ class Commands {
 
   /**
    * 선택 영역에 색상 스타일 적용/해제
-   * @param {'color'|'background-color'} prop
+   * @param {'color'|'background-color'|'font-size'|'font-family'} prop
    * @param {string|null} value null 이면 해제
    */
   setStyle(prop, value) {
@@ -2187,11 +2804,12 @@ class Commands {
   /** 현재 커서 위치의 글자색/배경색 */
   getStyleState() {
     const r = this.sel.getRange();
-    if (!r) return { color: null, bg: null, fontSize: null };
+    if (!r) return { color: null, bg: null, fontSize: null, fontFamily: null };
     return {
       color: this.#findStyledAncestor(r.startContainer, 'color')?.style.color || null,
       bg: this.#findStyledAncestor(r.startContainer, 'background-color')?.style.backgroundColor || null,
       fontSize: this.#findStyledAncestor(r.startContainer, 'font-size')?.style.fontSize || null,
+      fontFamily: fontFamilyName(this.#findStyledAncestor(r.startContainer, 'font-family')?.style.fontFamily, this.editor.fontFamilies),
     };
   }
 
@@ -2398,6 +3016,10 @@ class Commands {
    * @param {string} alt
    */
   insertImage(src, alt = '') {
+    if (!Sanitizer.isSafeUrl(src)) {
+      notify(this.editor.options, '이미지 주소를 쓸 수 없습니다');
+      return;
+    }
     const img = document.createElement('img');
     img.src = src;
     img.alt = alt;
@@ -3735,11 +4357,13 @@ const DEFAULT_CONFIG = Object.freeze({
   structure: STRUCTURE_DEFAULTS,
   // 본문 이미지 — 모바일 이미지(picture > source)의 media 값
   image: Object.freeze({ mobileMedia: '(max-width: 767px)' }),
+  // 글꼴 허용 목록 — 툴바 글꼴 목록이자 정제 허용 목록. 서버 jm-editor.font.families 도 같은 값으로 (core/font-policy.js)
+  font: FONT_DEFAULTS,
 });
 
 /**
  * 설정 파일(window.JmEditorConfig)의 한 영역을 읽는다
- * @param {'gallery'|'structure'|'image'} section
+ * @param {'gallery'|'structure'|'image'|'font'} section
  * @returns {object} 없으면 빈 객체
  */
 function fileConfig(section) {
@@ -3749,7 +4373,7 @@ function fileConfig(section) {
 
 /**
  * 기본값 < 설정 파일 < 생성 옵션 순으로 합친 영역 설정
- * @param {'gallery'|'structure'|'image'} section
+ * @param {'gallery'|'structure'|'image'|'font'} section
  * @param {object} [override] 에디터 생성 옵션으로 넘긴 값
  * @returns {object}
  */
@@ -4661,8 +5285,14 @@ class ButtonsCommands {
     this.root = editor.root;
   }
 
+  /**
+   * 버튼 그룹 블록 HTML. 정렬은 허용 값만 쓰고 어긋나면 가운데 (exec 입력이 속성에 그대로 들어가지 않게)
+   * @param {string} [align] left·center·right
+   * @returns {string}
+   */
   static template(align = 'center') {
-    return `<div data-type="buttons" data-align="${align}">${ButtonsCommands.buttonHTML('버튼', 'https://example.com', 'primary')}</div>`;
+    const safeAlign = ['left', 'center', 'right'].includes(align) ? align : 'center';
+    return `<div data-type="buttons" data-align="${safeAlign}">${ButtonsCommands.buttonHTML('버튼', 'https://example.com', 'primary')}</div>`;
   }
 
   static buttonHTML(text, href, style) {
@@ -5219,8 +5849,17 @@ class SliderCommands {
     });
   }
 
+  /**
+   * 슬라이드 블록 HTML. 값은 허용 범위만 쓰고 어긋나면 기본값 (exec 입력이 속성에 그대로 들어가지 않게 — Sanitizer 와 같은 범위)
+   * @param {number} [interval] 넘김 간격(ms) 0~60000
+   * @param {string} [ratio] 16:9·4:3·1:1·21:9
+   * @returns {string}
+   */
   static template(interval = 3000, ratio = '16:9') {
-    return `<div data-type="slider" data-interval="${interval}" data-ratio="${ratio}" data-indicator="dots" data-indicator-pos="bottom-center" data-width="100" data-align="center"></div>`;
+    const iv = Number(interval);
+    const safeInterval = Number.isInteger(iv) && iv >= 0 && iv <= 60000 ? iv : 3000;
+    const safeRatio = ['16:9', '4:3', '1:1', '21:9'].includes(ratio) ? ratio : '16:9';
+    return `<div data-type="slider" data-interval="${safeInterval}" data-ratio="${safeRatio}" data-indicator="dots" data-indicator-pos="bottom-center" data-width="100" data-align="center"></div>`;
   }
 
   // ───────────── 레이어 ─────────────
@@ -5393,9 +6032,15 @@ class SliderCommands {
 
   async addFiles(block, files) {
     for (const file of files) {
-      const src = this.editor.options.uploadImage
-        ? await this.editor.options.uploadImage(file)
-        : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+      let src;
+      try {
+        src = this.editor.options.uploadImage
+          ? await this.editor.options.uploadImage(file)
+          : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+      } catch (err) {
+        notify(this.editor.options, `이미지를 올리지 못했습니다: ${err?.message || err}`);
+        break;
+      }
       const img = document.createElement('img');
       img.alt = file.name;
       await new Promise((resolve) => { img.onload = () => { stampSize(img); resolve(); }; img.onerror = resolve; img.src = src; });
@@ -5590,6 +6235,7 @@ class ImageCommands {
   async replace(img, file) {
     if (!file.type.startsWith('image/')) return;
     const src = await this.#upload(file);
+    if (!src) return;
     img.removeAttribute('width');
     img.removeAttribute('height');
     img.alt = file.name;
@@ -5599,14 +6245,19 @@ class ImageCommands {
   }
 
   /**
-   * 파일 → 주소: uploadImage 옵션이 있으면 업로드, 없으면 base64(data:)
+   * 파일 → 주소: uploadImage 옵션이 있으면 업로드, 없으면 base64(data:). 실패하면 알리고 null
    * @param {File} file
-   * @returns {Promise<string>}
+   * @returns {Promise<string|null>}
    */
   async #upload(file) {
-    return this.editor.options.uploadImage
-      ? this.editor.options.uploadImage(file)
-      : new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+    try {
+      return await (this.editor.options.uploadImage
+        ? this.editor.options.uploadImage(file)
+        : new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); }));
+    } catch (err) {
+      notify(this.editor.options, `이미지를 올리지 못했습니다: ${err?.message || err}`);
+      return null;
+    }
   }
 
   /**
@@ -5652,7 +6303,8 @@ class ImageCommands {
    */
   async addMobile(img, file) {
     if (!file.type.startsWith('image/')) return;
-    const srcset = this.#mobileSrcset(await this.#upload(file));
+    const url = await this.#upload(file);
+    const srcset = url && this.#mobileSrcset(url);
     if (!srcset) return;
     let pic = img.parentElement;
     if (pic?.tagName !== 'PICTURE') {
@@ -5675,7 +6327,8 @@ class ImageCommands {
   async replaceMobile(img, file) {
     const source = ImageCommands.mobileSource(img);
     if (!source || !file.type.startsWith('image/')) return;
-    const srcset = this.#mobileSrcset(await this.#upload(file));
+    const url = await this.#upload(file);
+    const srcset = url && this.#mobileSrcset(url);
     if (!srcset) return;
     source.setAttribute('srcset', srcset);
     if (source.getAttribute('type') !== file.type) source.removeAttribute('type');
@@ -6764,15 +7417,18 @@ class JmEditor {
    * @param {(message: string) => void} [options.notify] 업로드 제한 등 안내 문구 표시. 없으면 alert
    * @param {string} [options.placeholder]
    * @param {object} [options.structure] 퍼블 구조 보존 정책 (window.JmEditorConfig.structure 보다 우선, core/structure-policy.js)
+   * @param {{families?: string[]}} [options.font] 글꼴 허용 목록 (window.JmEditorConfig.font 보다 우선, core/font-policy.js)
    * @param {(x: number, y: number, cb: (color: string|null) => void) => void} [options.pickColor]
    *        색상 선택 UI 를 띄우는 콜백 (표 셀/행 배경색 메뉴에서 사용). 래퍼가 주입한다.
    */
   constructor(root, options = {}) {
     this.root = root;
-    this.options = options;
+    this.options = JmEditor.#guardOptions(options);
     this.composing = false; // 한글 IME 조합 중 여부
     /** 퍼블 구조 정책 (꺼져 있으면 null — 지금 정리 규칙). 생성 시 확정 */
     this.structure = makeStructurePolicy(resolveConfig('structure', options.structure));
+    /** 글꼴 허용 목록 (툴바 목록·정제 공통). 생성 시 확정 */
+    this.fontFamilies = normalizeFamilies(resolveConfig('font', options.font).families);
 
     this.root.contentEditable = 'true';
     this.root.classList.add('jm-editor');
@@ -6808,6 +7464,7 @@ class JmEditor {
    *                      |table|tableRowBelow|tableRowAbove|tableColRight|tableColLeft|tableDeleteRow|tableDeleteCol|tableDelete
    *                      |color|bgColor (value: 색상 문자열, null 이면 해제)
    *                      |fontSize (value: '14px' 등, null 이면 해제)
+   *                      |fontFamily (value: 허용 목록의 글꼴 이름, null 이면 해제. 목록 밖이면 무시)
    *                      |alignLeft|alignCenter|alignRight (블록 가로 정렬)
    *                      |valignTop|valignMiddle|valignBottom (표 셀 세로 정렬)
    *                      |format (value: 삽입할 HTML — 서식/템플릿. 내부에서 sanitize 후 블록 단위 삽입)
@@ -6841,7 +7498,7 @@ class JmEditor {
       link: () => c.setLink(value),
       unlink: () => c.setLink(null),
       image: () => c.insertImage(value?.src, value?.alt),
-      format: () => c.insertBlockHTML(Sanitizer.clean(value || '', this.structure)),
+      format: () => c.insertBlockHTML(Sanitizer.clean(value || '', this.structure, this.fontFamilies)),
       gallery: () => c.insertBlockHTML(GalleryCommands.template()),
       layout: () => c.insertBlockHTML(LayoutCommands.template(value?.preset ?? value, value?.variant)),
       youtube: () => this.embed.insertYouTube(value),
@@ -6851,6 +7508,10 @@ class JmEditor {
       color: () => c.setStyle('color', value ?? null),
       bgColor: () => c.setStyle('background-color', value ?? null),
       fontSize: () => c.setStyle('font-size', value ?? null),
+      fontFamily: () => {
+        const name = value ? fontFamilyName(value, this.fontFamilies) : null;
+        if (!value || name) c.setStyle('font-family', name ? `"${name}"` : null);
+      },
       // 정렬: 표 셀 범위 선택이 있으면 선택한 셀 전체에, 아니면 커서 블록(셀 포함)에
       alignLeft: () => (this.table.selection ? this.table.setAlign('left') : c.setAlign('left')),
       alignCenter: () => (this.table.selection ? this.table.setAlign('center') : c.setAlign('center')),
@@ -6893,7 +7554,7 @@ class JmEditor {
   setHTML(html) {
     this.image?.clear();
     this.slider?.stopAll(); // 이전 내용의 슬라이드 타이머 정리
-    this.root.innerHTML = Sanitizer.clean(html || '', this.structure);
+    this.root.innerHTML = Sanitizer.clean(html || '', this.structure, this.fontFamilies);
     this.table.wrapAll();
     this.gallery.wrapAll();
     this.embed.wrapAll();
@@ -6908,12 +7569,38 @@ class JmEditor {
     this.#emitChange();
   }
 
-  /** 이미지 파일 삽입 (툴바 파일 선택, 드롭, 붙여넣기 공통 경로) */
+  /**
+   * 옵션 보기를 만든다: 원본 옵션을 그대로 따르되 uploadImage 만 돌려준 주소를 검사하도록 감싼다
+   * (갤러리·슬라이드·배치·이미지 교체 등 모든 업로드 경로 공통). 생성 후 원본 옵션을 바꿔도 반영되고, 업로드 함수의 this 는 원본 옵션이다.
+   * @param {object} options 원본 옵션
+   * @returns {object} 주소가 규칙에 맞지 않으면 uploadImage 가 Error 로 거부하는 옵션
+   */
+  static #guardOptions(options) {
+    const guarded = async (file) => {
+      const url = await options.uploadImage.call(options, file);
+      if (!Sanitizer.isSafeUrl(url)) throw new Error('이미지 주소를 쓸 수 없습니다');
+      return url;
+    };
+    return Object.create(options, {
+      uploadImage: {
+        get: () => (options.uploadImage ? guarded : undefined),
+        set: (fn) => { options.uploadImage = fn; },
+      },
+    });
+  }
+
+  /** 이미지 파일 삽입 (툴바 파일 선택, 드롭, 붙여넣기 공통 경로). 올리지 못하면 알리고 넣지 않는다 */
   async insertImageFile(file) {
     if (!file || !file.type.startsWith('image/')) return;
-    const src = this.options.uploadImage
-      ? await this.options.uploadImage(file)
-      : await this.#toDataURL(file);
+    let src;
+    try {
+      src = this.options.uploadImage
+        ? await this.options.uploadImage(file)
+        : await this.#toDataURL(file);
+    } catch (err) {
+      notify(this.options, `이미지를 올리지 못했습니다: ${err?.message || err}`);
+      return;
+    }
     this.exec('image', { src, alt: file.name });
   }
 
@@ -7182,17 +7869,20 @@ class JmEditor {
     }
   }
 
-  /** 붙여넣기: 이미지 파일이면 업로드, HTML 이면 sanitize, 아니면 텍스트 */
+  /** 붙여넣기: HTML 이면 sanitize, 글이면 텍스트, 둘 다 없고 이미지 파일만 있으면 업로드 */
   async #handlePaste(e) {
     // 블록 헤더의 입력란(버튼 주소·지도 코드 등)에는 브라우저 기본 붙여넣기
     if (e.target.closest?.('input, textarea, select')) return;
     e.preventDefault();
     const cd = e.clipboardData;
-    const imageItem = Array.from(cd.items || []).find((i) => i.type.startsWith('image/'));
-    if (imageItem) { await this.insertImageFile(imageItem.getAsFile()); return; }
-
     const html = cd.getData('text/html');
     const text = cd.getData('text/plain');
+    // 글·HTML 이 함께 있으면 이미지는 무시 (엑셀·파워포인트는 표·글과 함께 그림 미리보기를 클립보드에 넣는다)
+    if (!html && !text) {
+      const imageItem = Array.from(cd.items || []).find((i) => i.type.startsWith('image/'));
+      if (imageItem) await this.insertImageFile(imageItem.getAsFile());
+      return;
+    }
     const escape = (s) => s.replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
     // 갤러리·슬라이드 제목, 버튼 글자처럼 한 줄짜리 편집 영역에는 서식 없이 글자만
     const start = this.sel.getRange()?.startContainer;
@@ -7205,7 +7895,7 @@ class JmEditor {
     // 카카오맵 「지도 퍼가기」 코드를 본문에 붙여 넣으면 지도 블록으로
     if (isRoughmapCode(text)) { this.map.insertFromCode(text); return; }
     if (html) {
-      this.commands.insertHTML(Sanitizer.clean(html, this.structure));
+      this.commands.insertHTML(Sanitizer.clean(html, this.structure, this.fontFamilies));
     } else if (text) {
       // 한 줄이면 커서 위치에 글자로, 여러 줄이면 줄마다 단락으로 (현재 문단을 나눠 그 사이에)
       const lines = text.split(/\r?\n/);
@@ -7293,7 +7983,7 @@ class JmEditor {
     block.querySelectorAll('span[style]').forEach((sp) => {
       // 속성 하나씩 검사해 허용되지 않는 것만 뺀다 (남은 style 의 표기는 브라우저 그대로)
       Array.from(sp.style).forEach((name) => {
-        if (!Sanitizer.cleanStyle(`${name}: ${sp.style.getPropertyValue(name)}`)) sp.style.removeProperty(name);
+        if (!Sanitizer.cleanStyle(`${name}: ${sp.style.getPropertyValue(name)}`, 'span', this.fontFamilies)) sp.style.removeProperty(name);
       });
       if (sp.style.length) return;
       sp.removeAttribute('style');
@@ -7915,11 +8605,13 @@ class FormatPicker {
    * @param {() => Promise<Array<{id: string|number, name: string, description?: string, html: string}>>} options.loadFormats
    * @param {(format: object) => void} options.onPick
    * @param {() => object|null} [options.policy] 미리보기 정리에 쓸 퍼블 구조 정책 (에디터와 같게)
+   * @param {() => string[]|undefined} [options.families] 미리보기 정리에 쓸 글꼴 허용 목록 (에디터와 같게)
    */
-  constructor({ loadFormats, onPick, policy }) {
+  constructor({ loadFormats, onPick, policy, families }) {
     this.loadFormats = loadFormats;
     this.onPick = onPick;
     this.policy = policy || (() => null);
+    this.families = families || (() => undefined);
     this.formats = null; // 캐시
 
     this.el = document.createElement('div');
@@ -8024,7 +8716,7 @@ class FormatPicker {
       const preview = document.createElement('div');
       preview.className = 'jm-formatpicker-preview jm-editor';
       preview.contentEditable = 'false';
-      preview.innerHTML = Sanitizer.clean(f.html || '', this.policy()); // 서식 HTML 은 외부(서버·연동 코드)에서 오므로 미리보기도 거름
+      preview.innerHTML = Sanitizer.clean(f.html || '', this.policy(), this.families()); // 서식 HTML 은 외부(서버·연동 코드)에서 오므로 미리보기도 거름
       Sanitizer.hideIds(preview); // 서식 본문 id 가 관리자 페이지 DOM 에 id 로 붙지 않게
 
       item.append(name, desc, preview);
@@ -8173,7 +8865,7 @@ const BUTTONS = [
   ['modeHtml','HTML',s=>mode==='html',false,{icon:CODE_ICON,group:'mode',row:'top'}],
   ['modePreview','미리보기',s=>mode==='preview',false,{icon:PREVIEW_ICON,group:'mode',segLast:true,row:'top'}],
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
-  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),selectDefault:['','기본']}],null,
+  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),selectDefault:['','기본']}],['fontFamily','글꼴',()=>false,false,{tip:'글꼴',select:()=>editor.fontFamilies.map(n=>[n,n]),selectDefault:['','기본']}],null,
   ['heading','제목',()=>false,false,{tip:'제목 단계',select:[['h1','제목 1'],['h2','제목 2'],['h3','제목 3']],selectDefault:['p','본문']}],['quote','인용',s=>s.block==='blockquote',false,{tip:'인용 (스타일 선택)',icon:QUOTE_ICON,iconOnly:true,dropdown:true}],null,
   ['alignMenu','가로 정렬',()=>false,false,{tip:'가로 정렬',icon:ALIGN_LEFT_ICON,iconOnly:true,dropdown:true}],['valignMenu','세로 정렬',()=>false,false,{tip:'세로 정렬 (표 셀)',icon:VALIGN_TOP_ICON,iconOnly:true,dropdown:true,tableEnabled:true}],null,
   ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true,splitMain:true}],['ulType','비순서 목록 유형',()=>false,false,{tip:'비순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true,splitMain:true}],['olType','순서 목록 유형',()=>false,false,{tip:'순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],null,
@@ -8277,9 +8969,11 @@ BUTTONS.forEach(def=>{
   btns[cmd]=b;
 });
 /** 값 고르기 버튼(글자 크기·제목)의 목록 열기. 현재 값은 강조 */
-function openSelectMenu(cmd,opts){const b=btns[cmd];const r=b.getBoundingClientRect();editor.sel.save();listMenu.open(r.left,r.bottom+4,[opts.selectDefault,...opts.select].filter(Boolean).map(([v,tx])=>({label:tx,checked:v===b.dataset.value,action:()=>editor.exec(cmd,v||null)})));}
+function openSelectMenu(cmd,opts){const b=btns[cmd];const r=b.getBoundingClientRect();editor.sel.save();listMenu.open(r.left,r.bottom+4,[opts.selectDefault,...selectItems(opts)].filter(Boolean).map(([v,tx])=>({label:tx,checked:v===b.dataset.value,action:()=>editor.exec(cmd,v||null)})));}
+/** 값 고르기 목록 (설정에 따라 달라지는 목록은 함수) */
+function selectItems(opts){return typeof opts.select==='function'?opts.select():opts.select;}
 /** 값 고르기 버튼에 현재 값 표시 (목록에 없으면 기본 값) */
-function setSelectValue(cmd,value){const b=btns[cmd];const opts=BUTTONS.find(d=>d?.[0]===cmd)?.[4];if(!b||!opts)return;const [v,tx]=opts.select.find(([x])=>x===value)||opts.selectDefault;b.dataset.value=v;b.firstChild.textContent=tx;}
+function setSelectValue(cmd,value){const b=btns[cmd];const opts=BUTTONS.find(d=>d?.[0]===cmd)?.[4];if(!b||!opts)return;const [v,tx]=selectItems(opts).find(([x])=>x===value)||opts.selectDefault;b.dataset.value=v;b.firstChild.textContent=tx;}
 function run(cmd){
   if(cmd==='link'){
     const a=editor.sel.closest('a');
@@ -8317,7 +9011,7 @@ fileInput.addEventListener('change',()=>{editor.insertImageFile(fileInput.files[
 function refresh(){if(mode!=='editor')return;const s=editor.getState();BUTTONS.forEach(d=>{if(!d)return;btns[d[0]].classList.toggle('is-active',!!d[2](s));if(d[3])btns[d[0]].hidden=!s.table;if(d[4]?.tableEnabled)btns[d[0]].disabled=!s.table;});
   const setIcon=(c,icon)=>{if(btns[c])btns[c].innerHTML=icon+CHEVRON_ICON;};
   setIcon('alignMenu',(ALIGN_ITEMS.find(([v])=>v===s.align)||ALIGN_ITEMS[0])[2]);setIcon('valignMenu',(VALIGN_ITEMS.find(([v])=>v===s.valign)||VALIGN_ITEMS[0])[2]);
-  setSelectValue('heading',s.block);setSelectValue('fontSize',s.fontSize);
+  setSelectValue('heading',s.block);setSelectValue('fontSize',s.fontSize);setSelectValue('fontFamily',s.fontFamily);
   btns.color.style.setProperty('--jm-swatch',s.color||'transparent');btns.bgColor.style.setProperty('--jm-swatch',s.bg||'transparent');}
 
 /* 모드 전환: editor / html / preview. html 모드에서 나갈 때 textarea 내용을 setHTML 로 반영 */
@@ -8331,7 +9025,7 @@ function setMode(m){
   area.hidden=m!=='editor';sourceEl.hidden=m!=='html';previewEl.hidden=m!=='preview';
   if(m==='html'){sourceEl.value=prettify(editor.getHTML());sourceEl.focus();}
   if(m!=='preview'){stopPreview?.();stopPreview=null;} // 미리보기 런타임(슬라이드 타이머 등) 정리
-  if(m==='preview'){stopPreview?.();previewEl.innerHTML=Sanitizer.clean(editor.getHTML(),editor.structure);Sanitizer.hideIds(previewEl);const g=observeGalleries(previewEl),sl=initSliders(previewEl),mp=initMaps(previewEl);stopPreview=()=>{g();sl();mp();};}
+  if(m==='preview'){stopPreview?.();previewEl.innerHTML=Sanitizer.clean(editor.getHTML(),editor.structure,editor.fontFamilies);Sanitizer.hideIds(previewEl);const g=observeGalleries(previewEl),sl=initSliders(previewEl),mp=initMaps(previewEl);stopPreview=()=>{g();sl();mp();};}
   else area.focus();
   BUTTONS.forEach(d=>{if(!d)return;const [c,,act,,o={}]=d;if(o.group==='mode')btns[c].classList.toggle('is-active',!!act());else btns[c].disabled=m!=='editor';});
   toolbar.hidden=m!=='editor';

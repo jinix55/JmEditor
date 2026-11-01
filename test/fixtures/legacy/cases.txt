@@ -1,0 +1,207 @@
+# 옛 글 변환 공통 사례 — 클라이언트(legacy-format.spec.js)와 서버(LegacyFormatTest)가 같은 파일로 비교한다.
+# "< 입력" 다음 줄 "> 기대". 구조 모드 켬·끔 모두 같은 결과이고, 두 번 정제해도 같아야 한다. div 는 켬·끔이 달라 여기 쓰지 않는다.
+
+# ── font 태그
+< <font color="red" size="5" face="굴림">a</font>
+> <span style='color: red; font-size: 24px; font-family: "굴림"'>a</span>
+< <font size="1">a</font><font size="2">b</font><font size="3">c</font><font size="4">d</font><font size="6">e</font><font size="7">f</font>
+> <span style="font-size: 10px">a</span><span style="font-size: 13px">b</span><span style="font-size: 16px">c</span><span style="font-size: 18px">d</span><span style="font-size: 32px">e</span><span style="font-size: 48px">f</span>
+< <font>a</font>
+> a
+< <font size="8" face="Comic Sans MS" color="url(x)">a</font>
+> a
+< <font size="+1" color="red;background:url(x)">a</font>
+> a
+< <font color="red" size="2" style="color:blue;font-weight:bold">a</font>
+> <span style="font-size: 13px; color: blue"><strong>a</strong></span>
+
+# ── 글자 크기 단위
+< <span style="font-size:10.0pt">a</span>
+> <span style="font-size: 13px">a</span>
+< <span style="font-size:11pt">a</span>
+> <span style="font-size: 15px">a</span>
+< <p style="FONT-SIZE:12PT">a</p>
+> <p style="font-size: 16px">a</p>
+< <span style="font-size:14.5px">a</span>
+> <span style="font-size: 15px">a</span>
+< <span style="font-size:5px">a</span>
+> <span style="font-size: 8px">a</span>
+< <span style="font-size:.5pt">a</span>
+> <span style="font-size: 8px">a</span>
+< <span style="font-size:200px">a</span>
+> <span style="font-size: 96px">a</span>
+< <span style="font-size:999pt">a</span>
+> <span style="font-size: 96px">a</span>
+< <span style="font-size:1.2em">a</span><span style="font-size:120%">b</span><span style="font-size:1e9pt">c</span><span style="font-size:1234567pt">d</span><span style="font-size:-3px">e</span>
+> abcde
+
+# ── 굵기
+< <span style="font-weight:bold">a</span>
+> <strong>a</strong>
+< <span style="font-weight:BOLDER">a</span><span style="font-weight:700">b</span><span style="font-weight:800">c</span><span style="font-weight:900">d</span>
+> <strong>a</strong><strong>b</strong><strong>c</strong><strong>d</strong>
+< <span style="font-weight:normal">a</span><span style="font-weight:400">b</span><span style="font-weight:600">c</span><span style="font-weight:expression(1)">d</span>
+> abcd
+< <span style="color:red;font-weight:bold">a</span>
+> <span style="color: red"><strong>a</strong></span>
+< <span style="font-weight:bold;font-weight:normal">a</span>
+> a
+< <h1 style="font-weight:bold;text-align:center">a</h1>
+> <h1 style="text-align: center"><strong>a</strong></h1>
+< <p style="font-weight:700">a <em>b</em> c</p>
+> <p><strong>a <em>b</em> c</strong></p>
+< <span style="font-weight:bold"><span style="font-weight:700">a</span></span>
+> <strong>a</strong>
+< <p style="font-weight:bold"><strong>a</strong>b</p>
+> <p><strong>a</strong><strong>b</strong></p>
+< <strong style="font-weight:bold">a</strong>
+> <strong>a</strong>
+< <blockquote style="font-weight:bold"><p>a</p>b</blockquote>
+> <blockquote><p><strong>a</strong></p><strong>b</strong></blockquote>
+< <ul style="font-weight:bold"><li>a</li><li>b</li></ul>
+> <ul><li><strong>a</strong></li><li><strong>b</strong></li></ul>
+< <a href="/x" style="font-weight:bold">a</a>
+> <a href="/x" target="_blank" rel="noopener noreferrer"><strong>a</strong></a>
+< <p style="font-weight:bold"><br></p>
+> <p><br></p>
+< <table><tr style="font-weight:700"><th>h</th><td>a</td></tr></table>
+> <table><tbody><tr><th>h</th><td><strong>a</strong></td></tr></tbody></table>
+< <table><tr><td style="font-weight:bold">a</td><td style="font-weight:bold">&nbsp;</td><th style="font-weight:bold">h</th></tr></table>
+> <table><tbody><tr><td><strong>a</strong></td><td>&nbsp;</td><th>h</th></tr></tbody></table>
+
+# ── 표: 길이·배경·옛 속성
+< <table style="width:300pt"><colgroup><col style="width:48pt"></colgroup><tr style="height:15.0pt"><td style="width:48pt;height:7.5pt">a</td></tr></table>
+> <table style="width: 400px"><colgroup><col style="width: 64px"></colgroup><tbody><tr style="height: 20px"><td style="width: 64px; height: 10px">a</td></tr></tbody></table>
+< <table><tr><td style="width:12.5px;height:20.5px">a</td><td style="width:50%">b</td><td style="width:1e9pt;height:5em">c</td></tr></table>
+> <table><tbody><tr><td style="width: 12.5px; height: 20.5px">a</td><td style="width: 50%">b</td><td>c</td></tr></tbody></table>
+< <p style="width:48pt">a</p>
+> <p>a</p>
+< <table><tr><td style="background:#FFFF00">a</td><td style="background:url(x.png) #fff no-repeat">b</td><td style="background:no-repeat center rgb(1, 2, 3)">c</td></tr></table>
+> <table><tbody><tr><td style="background-color: #FFFF00">a</td><td style="background-color: #fff">b</td><td style="background-color: rgb(1, 2, 3)">c</td></tr></tbody></table>
+< <table><tr><td style="background:url(javascript:x)">a</td><td style="background:none">b</td><td style="background:url(x.png) center">c</td></tr></table>
+> <table><tbody><tr><td>a</td><td>b</td><td>c</td></tr></tbody></table>
+< <span style="background:#ff0">a</span>
+> <span style="background-color: #ff0">a</span>
+< <p style="background:#ff0">a</p>
+> <p>a</p>
+< <table bgcolor="#eeeeee" align="center" width="600"><tr bgcolor="red" valign="top" height="30"><td bgcolor="yellow" align="right" valign="middle" width="50%" height="20.5px">a</td></tr></table>
+> <table style="background-color: #eeeeee; margin-left: auto; margin-right: auto; width: 600px"><tbody><tr style="background-color: red; vertical-align: top; height: 30px"><td style="background-color: yellow; text-align: right; vertical-align: middle; width: 50%; height: 20.5px">a</td></tr></tbody></table>
+< <table><colgroup><col width="64"></colgroup><tr><td bgcolor="url(x)" align="javascript:x" valign="baseline" width="1e9" height="abc;color:red">a</td></tr></table>
+> <table><colgroup><col style="width: 64px"></colgroup><tbody><tr><td>a</td></tr></tbody></table>
+< <table><tr><td bgcolor="red" width="10" style="background:blue;width:20px">a</td></tr></table>
+> <table><tbody><tr><td style="background-color: blue; width: 20px">a</td></tr></tbody></table>
+
+# ── 스타일 파서
+< <span style="font-family:'맑은 고딕',serif;color:red">a</span>
+> <span style='font-family: "맑은 고딕"; color: red'>a</span>
+< <span style="font-family:'a;b:c','굴림';color:red">a</span>
+> <span style='font-family: "굴림"; color: red'>a</span>
+< <span style="mso-font-charset:129;mso-fareast-font-family:굴림;color:red;mso-bidi-font-size:10pt">a</span>
+> <span style="color: red">a</span>
+< <span style="color:url(x);color:expression(alert(1));background-color:url(javascript:x)">a</span>
+> a
+< <span style="font-family:expression(alert(1));font-family:'굴림;color:red">a</span>
+> a
+< <span style="color:red:blue">a</span>
+> a
+< <table><tr><td style="background:url(a;color:red)">a</td></tr></table>
+> <table><tbody><tr><td>a</td></tr></tbody></table>
+
+# ── 표 셀 테두리
+< <table><tr><td style="border:.5pt solid windowtext">a</td></tr></table>
+> <table><tbody><tr><td style="border: 1px solid windowtext">a</td></tr></tbody></table>
+< <table><tr><td style="border:solid windowtext 1.0pt">a</td><th style="BORDER:1.5PT Double #F00">b</th></tr></table>
+> <table><tbody><tr><td style="border: 1px solid windowtext">a</td><th style="border: 2px double #F00">b</th></tr></tbody></table>
+< <table><tr><td style="border-top:thin dashed rgb(0, 0, 0);border-right:medium dotted red;border-bottom:none;border-left:0">a</td></tr></table>
+> <table><tbody><tr><td style="border-top: thin dashed rgb(0, 0, 0); border-right: medium dotted red; border-bottom: none; border-left: 0px">a</td></tr></tbody></table>
+< <table><tr><td style="border-top-width:.5pt;border-right-style:dashed;border-bottom-color:#ccc;border-left-width:thick;border-width:20px;border-style:solid;border-color:red">a</td></tr></table>
+> <table><tbody><tr><td style="border-top-width: 1px; border-right-style: dashed; border-bottom-color: #ccc; border-left-width: thick; border-width: 20px; border-style: solid; border-color: red">a</td></tr></tbody></table>
+< <table><tr><td style="border:21px solid red;border-top:1px solid red blue;border-right:1px solid url(x);border-bottom:1px groove red;border-left:1px 2px;border-top-width:1em;border-left-style:groove;border-right-color:url(x);border-image:url(x)">a</td></tr></table>
+> <table><tbody><tr><td>a</td></tr></tbody></table>
+< <table style="border-collapse:collapse;border:1px solid red"><tr style="border:1px solid red"><td style="border-collapse:separate">a</td></tr></table>
+> <table style="border-collapse: collapse"><tbody><tr><td>a</td></tr></tbody></table>
+< <p style="border:1px solid red">a</p><span style="border-top:1px solid red">b</span>
+> <p>a</p>b
+
+# ── 글꼴
+< <span style="font-family:Arial,sans-serif">a</span>
+> <span style='font-family: "Arial"'>a</span>
+< <span style='font-family:"Times New Roman"'>a</span>
+> <span style='font-family: "Times New Roman"'>a</span>
+< <span style="font-family:'없는 글꼴',ARIAL,'맑은 고딕'">a</span>
+> <span style='font-family: "Arial"'>a</span>
+< <span style="font-family:Malgun Gothic">a</span><span style="font-family:'hcr batang'">b</span><span style="font-family:GULIM">c</span><span style="font-family:Dotum">d</span><span style="font-family:Batang">e</span>
+> <span style='font-family: "맑은 고딕"'>a</span><span style='font-family: "함초롬바탕"'>b</span><span style='font-family: "굴림"'>c</span><span style='font-family: "돋움"'>d</span><span style='font-family: "바탕"'>e</span>
+< <span style="font-family:serif">a</span><span style="font-family:sans-serif,monospace">b</span><span style="font-family:Comic Sans MS">c</span>
+> abc
+< <h2 style="font-family:궁서">a</h2>
+> <h2 style='font-family: "궁서"'>a</h2>
+
+# ── 붙여넣기 형식 샘플
+< <table class="MsoNormalTable"><tr><td style="border:.5pt solid windowtext;background:#FFFF00;width:48pt;font-size:11.0pt;font-weight:700">글</td></tr></table>
+> @CLASS <table class="MsoNormalTable"><tbody><tr><td style="border: 1px solid windowtext; background-color: #FFFF00; width: 64px; font-size: 15px"><strong>글</strong></td></tr></tbody></table>
+< <p style="margin:0cm;line-height:160%"><span style="font-family:함초롬바탕;font-size:10.0pt;mso-hansi-font-family:함초롬바탕;color:#000000;letter-spacing:0pt">한글</span></p>
+> <p><span style='font-family: "함초롬바탕"; font-size: 13px; color: #000000'>한글</span></p>
+
+# ── 블록을 감싼 font·span: 인라인 묶음만 span 으로, 블록·표 칸에 내려줌
+< <font color="red"><p>a</p><p>b</p></font>
+> <p><span style="color: red">a</span></p><p><span style="color: red">b</span></p>
+< <span style="color:red"><p>a</p></span>
+> <p><span style="color: red">a</span></p>
+< <font color="red">x<p>a</p>y</font>
+> <span style="color: red">x</span><p><span style="color: red">a</span></p><span style="color: red">y</span>
+< <font color="red"><table><tr><td>a</td><th>b</th></tr></table><p>c</p></font>
+> <table><tbody><tr><td><span style="color: red">a</span></td><th><span style="color: red">b</span></th></tr></tbody></table><p><span style="color: red">c</span></p>
+< <font color="red"><ul><li>a</li></ul></font>
+> <ul><li><span style="color: red">a</span></li></ul>
+< <font color="red"><font size="2"><p>a</p></font></font>
+> <p><span style="color: red; font-size: 13px">a</span></p>
+< <font color="red"><font color="blue"><p>a</p></font></font>
+> <p><span style="color: blue">a</span></p>
+< <font color="red"><p style="color:blue;font-size:12px">a</p><p><font color="green">b</font></p></font>
+> <p style="color: blue; font-size: 12px">a</p><p><span style="color: red"><span style="color: green">b</span></span></p>
+< <font color="red" style="font-weight:bold"><p>a</p></font>
+> <p><span style="color: red"><strong>a</strong></span></p>
+< <span style="font-weight:bold"><table><tr><td>a</td></tr></table></span>
+> <table><tbody><tr><td><strong>a</strong></td></tr></tbody></table>
+< <font color="red"><p><br></p></font>
+> <p><br></p>
+< <font color="red"> <p>a</p> </font>
+> <p><span style="color: red">a</span></p>
+< <font color="red"><em><p>a</p></em></font>
+> <em><p><span style="color: red">a</span></p></em>
+< <span style="color:red">a<em>b</em></span>
+> <span style="color: red">a<em>b</em></span>
+
+# ── 표 정렬: table 의 align 은 표 위치, 칸은 글자 정렬
+< <table align="center"><tr><td>a</td></tr></table>
+> <table style="margin-left: auto; margin-right: auto"><tbody><tr><td>a</td></tr></tbody></table>
+< <table align="left"><tr><td>a</td></tr></table><table align="right"><tr><td>b</td></tr></table>
+> <table><tbody><tr><td>a</td></tr></tbody></table><table><tbody><tr><td>b</td></tr></tbody></table>
+< <table style="margin-left:auto;margin-right:10px;margin-top:auto"><tr><td style="margin-left:auto">a</td></tr></table><p style="margin-left:auto">b</p>
+> <table style="margin-left: auto"><tbody><tr><td>a</td></tr></tbody></table><p>b</p>
+
+# ── 이관 공백
+< <table border="0"><tr><td>a</td></tr></table><table border="1"><tr><td>b</td></tr></table>
+> <table data-border="0"><tbody><tr><td>a</td></tr></tbody></table><table><tbody><tr><td>b</td></tr></tbody></table>
+< <p align="center">a</p><h2 align="RIGHT">b</h2><p align="middle">c</p><p align="left" style="text-align:right">d</p>
+> <p style="text-align: center">a</p><h2 style="text-align: right">b</h2><p>c</p><p style="text-align: right">d</p>
+< <span style="background:yellow;mso-highlight:yellow">a</span><span style="background:url(x)">b</span><font style="background:url(x) red">c</font>
+> <span style="background-color: yellow">a</span>b<span style="background-color: red">c</span>
+< <span style="font-size:5mm">a</span><span style="font-size:1cm">b</span>
+> <span style="font-size: 19px">a</span><span style="font-size: 38px">b</span>
+< <table><tr><td style="border:solid #000 0.28mm;width:10mm;height:1CM">a</td><td style="border-top:0.1cm dashed red;border-left-width:.1mm">b</td><td style="border:1cm solid red;width:1e3mm">c</td></tr></table>
+> <table><tbody><tr><td style="border: 1px solid #000; width: 38px; height: 38px">a</td><td style="border-top: 4px dashed red; border-left-width: 1px">b</td><td>c</td></tr></tbody></table>
+< <table><colgroup><col span="3" style="width:10px"><col span="1000"><col span="1001"><col span="0"><col span="a"></colgroup><tr><td>a</td></tr></table>
+> <table><colgroup><col span="3" style="width: 10px"><col span="1000"><col><col><col></colgroup><tbody><tr><td>a</td></tr></tbody></table>
+< <span style="color:rgb(0&#160;0,0)">a</span><span style="color:rgb(0&#12288;0,0)">b</span><span style="color:rgb(0 0 0)">c</span>
+> ab<span style="color: rgb(0 0 0)">c</span>
+
+# ── 굵게: 버튼·플러그인 제외, 해제한 자식은 strong 밖
+< <span style="font-weight:bold">a<a data-role="button" href="/x">b</a></span>
+> <strong>a</strong><a data-role="button" href="/x" data-style="primary" target="_blank" rel="noopener noreferrer">b</a>
+< <p style="font-weight:bold">a<span style="font-weight:normal">b</span>c</p>
+> <p><strong>a</strong>b<strong>c</strong></p>
+< <p style="font-weight:bold">a<span style="font-weight:400;color:red">b</span></p>
+> <p><strong>a</strong><span style="color: red">b</span></p>
+

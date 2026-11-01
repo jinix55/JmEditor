@@ -17,7 +17,7 @@
 ## 서버에서 꼭 처리할 것
 
 1. **저장 전 sanitize** — 등록·수정 본문은 반드시 `HtmlSanitizer.clean()` 을 거쳐 저장합니다. 클라이언트 Sanitizer 는 편의용이라 우회할 수 있습니다. 서식(`editor_format.html`)도 내려줄 때 같은 sanitize 를 거칩니다.
-2. **상대 경로 보존** — jsoup 은 `baseUri` 로 절대 주소를 만든 뒤 프로토콜을 검사합니다. `Jsoup.clean(html, "", ...)` 처럼 빈 `baseUri` 를 넘기면 `/uploads/editor/...` 같은 상대 경로 `src`/`href` 가 모두 지워져 업로드한 이미지가 사라집니다. 샘플은 검사용 가상 주소(`http://jm-editor.local/`)와 `preserveRelativeLinks(true)` 를 함께 써서, 저장값은 원래 상대 경로로 둡니다.
+2. **상대 경로 보존** — jsoup 은 `baseUri` 로 절대 주소를 만든 뒤 프로토콜을 검사합니다. `Jsoup.clean(html, "", ...)` 처럼 빈 `baseUri` 를 넘기면 `/uploads/editor/...` 같은 상대 경로 `src`/`href` 가 모두 지워져 업로드한 이미지가 사라집니다. 샘플은 검사용 가상 주소(`http://jm-editor.local/`)와 `preserveRelativeLinks(true)` 를 함께 써서, 저장값은 원래 경로로 둡니다. 그 뒤 후처리에서 `/` 로 시작하는 내부 경로만 남기고 `//…`·`/\…`·`a.png` 같은 주소는 지웁니다.
 3. **업로드 확장자는 MIME 으로 결정** — 원본 파일명의 확장자를 쓰면 `Content-Type: image/png` 로 위장한 `.html`·`.svg` 가 같은 출처에서 그대로 서빙되어 저장형 XSS 가 됩니다. 샘플은 MIME → 확장자 표로만 정하고, 그 밖의 MIME 은 거부합니다.
 
    | MIME | 저장 확장자 |
@@ -50,7 +50,7 @@
 implementation 'org.springframework.boot:spring-boot-starter-web'
 implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 implementation 'org.springframework.boot:spring-boot-starter-validation'
-implementation 'org.jsoup:jsoup:1.18.1'   // 서버 측 HTML sanitize (필수)
+implementation 'org.jsoup:jsoup:1.23.2'   // 서버 측 HTML sanitize (필수)
 ```
 
 ## application.yml
@@ -58,6 +58,8 @@ implementation 'org.jsoup:jsoup:1.18.1'   // 서버 측 HTML sanitize (필수)
 jm-editor:
   upload-dir: /var/app/uploads/editor   # 이미지 저장 경로
   upload-url-prefix: /uploads/editor    # 정적 리소스로 노출되는 URL 접두사
+  font:
+    families: [맑은 고딕, Noto Sans KR, Noto Sans, 굴림, 돋움, 바탕, 궁서, 함초롬바탕, 함초롬돋움, HY헤드라인M, Arial, Times New Roman]   # 글꼴 허용 목록 (생략하면 이 기본 목록). 클라이언트 font.families 와 같게
 spring:
   servlet:
     multipart:
@@ -139,8 +141,8 @@ jm-editor:
 
 | 대상 | 허용 |
 |---|---|
-| a[href] | http, https, mailto, 상대 경로(`/…`, `#…`) |
-| img[src] | http, https, 상대 경로, `data:image/(png·jpeg·gif·webp·svg+xml);base64,` |
+| a[href] | `http(s)://`, mailto, tel, `#…`, `/` 내부 경로 (`//…`·`/\…` 불허), 8192자까지 |
+| img[src] | `http(s)://`, `/` 내부 경로 (`//…`·`/\…` 불허), `data:image/(png·jpeg·gif·webp·svg+xml);base64,` |
 | iframe[src] | 유튜브 embed 주소만 (아래 참고) |
 
 `javascript:` 등 그 밖의 프로토콜은 속성째 제거합니다. 링크는 `#`·`tel:`·`mailto:` 이면 `target`·`rel` 없이, 그 밖에는 `target="_blank"`, `rel="noopener noreferrer"` 가 강제로 붙습니다.
@@ -156,7 +158,15 @@ jm-editor:
 | vertical-align | top, middle, bottom |
 | width | 숫자 + `px`/`%`, `auto` |
 | height | 숫자 + `px` |
-| font-size | 8~96 `px` (정수) |
+| font-size | `px`·`pt`·`mm`·`cm`(소수 허용) → 정수 `px`, 8~96 안으로 맞춤. `em`·`%` 는 지움 |
+| font-family | `FontPolicy` 허용 목록의 첫 이름만 `"이름"` 으로 (대소문자 무시, 영문 별칭 변환), 없으면 지움 |
+| width, height (table·tr·td·th·col) | `pt`·`mm`·`cm` → 정수 `px` |
+| background (table·tr·td·th·col·span) | 색만 `background-color` 로, 색이 없으면 지움 |
+| border, border-top·right·bottom·left, border-\*-width·style·color (td·th) | 폭 0~20px·pt·mm·cm·thin·medium·thick, 스타일 none·solid·dashed·dotted·double, 색. 단축값은 토큰 3개 이하로 정규화 |
+| border-collapse (table) | collapse, separate |
+| margin-left, margin-right (table) | auto 만 |
+
+허용 검사 전에 `LegacyFormat` 이 옛 형식을 바꿉니다: `font` → `span style`, 표 `bgcolor`·`align`·`valign`·`width`·`height` 속성 → `style`, `font-weight` 굵게 → 내용을 `strong` 으로, 블록을 감싼 `font`·`span` → 안쪽 글자에 내려줌, `table border=0` → `data-border`, 구조 모드를 끈 `caption` → 표 앞 `p`. 파싱 전 `object`·`applet`·`marquee` 여는 태그는 합계 2000개까지만 남깁니다. 선언 값은 256자까지이며 따옴표·괄호 안의 `;`·`:` 는 구분자로 보지 않습니다. 클라이언트 `core/legacy-format.js` 와 같은 사례 파일(`test/fixtures/legacy/cases.txt`)로 확인합니다.
 | list-style-type | disc, circle, square, decimal, decimal-leading-zero, lower-alpha, upper-alpha, lower-roman, upper-roman, hangul, hangul-consonant, none |
 
 ### 블록 (`div[data-type]`)
@@ -179,5 +189,5 @@ jm-editor:
 | 항목 | 클라이언트 (`core/Sanitizer.js`) | 서버 (`HtmlSanitizer`) |
 |---|---|---|
 | `ol[start]` | 1~4자리 숫자만 | 값 검사 없음 |
-| `a[href]` | http(s)·mailto·tel·`#`·`/` 경로만 (`//…`, `/\…` 같은 외부 주소 우회 차단). 사용자가 입력한 링크는 도메인만 쓰면 `https://` 를 붙이고 `javascript:` 등은 거부 | http·https·mailto 와 상대 경로(`//…` 포함) |
+| `a[href]` | http(s)·mailto·tel·`#`·`/` 경로만 (`//…`, `/\…` 같은 외부 주소 우회 차단). 사용자가 입력한 링크는 도메인만 쓰면 `https://` 를 붙이고 `javascript:` 등은 거부 | 클라이언트와 같음 |
 | 출력 형식 | 공백 없이 | 블록 사이에 줄바꿈·들여쓰기가 들어감 (`body().html()` pretty print) |

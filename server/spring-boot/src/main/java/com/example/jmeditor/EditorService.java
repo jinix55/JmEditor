@@ -27,7 +27,7 @@ public class EditorService {
     public EditorDto.ContentResponse create(EditorDto.SaveRequest req) {
         EditorContent e = new EditorContent();
         e.setTitle(req.title());
-        e.setContent(sanitizer.clean(req.content()));
+        e.setContent(cleanContent(req.content()));
         return EditorDto.ContentResponse.from(contentRepository.save(e));
     }
 
@@ -36,7 +36,7 @@ public class EditorService {
     public EditorDto.ContentResponse update(Long id, EditorDto.SaveRequest req) {
         EditorContent e = find(id);
         e.setTitle(req.title());
-        e.setContent(sanitizer.clean(req.content()));
+        e.setContent(cleanContent(req.content()));
         return EditorDto.ContentResponse.from(e);
     }
 
@@ -46,6 +46,18 @@ public class EditorService {
         return formatRepository.findByUseYnOrderBySortOrderAscIdAsc("Y").stream()
                 .map(f -> new EditorDto.FormatResponse(f.getId(), f.getName(), f.getCategory(), f.getDescription(), sanitizer.clean(f.getHtml())))
                 .toList();
+    }
+
+    /**
+     * 본문 정제. 정제하면서 커지는 입력(예: 짧은 a 태그의 target·rel 추가)이 있어 정제 후 길이도 상한을 검사한다.
+     * @param content 요청 본문
+     * @return 정제한 본문
+     * @throws IllegalArgumentException 정제 후 {@link EditorDto#MAX_CONTENT_LENGTH} 를 넘을 때 (컨트롤러가 400 으로 응답)
+     */
+    private String cleanContent(String content) {
+        String cleaned = sanitizer.clean(content);
+        if (cleaned.length() > EditorDto.MAX_CONTENT_LENGTH) throw new IllegalArgumentException("본문이 너무 큽니다. 이미지는 파일로 올려 주세요");
+        return cleaned;
     }
 
     private EditorContent find(Long id) {

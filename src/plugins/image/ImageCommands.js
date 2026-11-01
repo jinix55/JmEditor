@@ -139,6 +139,7 @@ export class ImageCommands {
   async replace(img, file) {
     if (!file.type.startsWith('image/')) return;
     const src = await this.#upload(file);
+    if (!src) return;
     img.removeAttribute('width');
     img.removeAttribute('height');
     img.alt = file.name;
@@ -148,14 +149,19 @@ export class ImageCommands {
   }
 
   /**
-   * 파일 → 주소: uploadImage 옵션이 있으면 업로드, 없으면 base64(data:)
+   * 파일 → 주소: uploadImage 옵션이 있으면 업로드, 없으면 base64(data:). 실패하면 알리고 null
    * @param {File} file
-   * @returns {Promise<string>}
+   * @returns {Promise<string|null>}
    */
   async #upload(file) {
-    return this.editor.options.uploadImage
-      ? this.editor.options.uploadImage(file)
-      : new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+    try {
+      return await (this.editor.options.uploadImage
+        ? this.editor.options.uploadImage(file)
+        : new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); }));
+    } catch (err) {
+      notify(this.editor.options, `이미지를 올리지 못했습니다: ${err?.message || err}`);
+      return null;
+    }
   }
 
   /**
@@ -201,7 +207,8 @@ export class ImageCommands {
    */
   async addMobile(img, file) {
     if (!file.type.startsWith('image/')) return;
-    const srcset = this.#mobileSrcset(await this.#upload(file));
+    const url = await this.#upload(file);
+    const srcset = url && this.#mobileSrcset(url);
     if (!srcset) return;
     let pic = img.parentElement;
     if (pic?.tagName !== 'PICTURE') {
@@ -224,7 +231,8 @@ export class ImageCommands {
   async replaceMobile(img, file) {
     const source = ImageCommands.mobileSource(img);
     if (!source || !file.type.startsWith('image/')) return;
-    const srcset = this.#mobileSrcset(await this.#upload(file));
+    const url = await this.#upload(file);
+    const srcset = url && this.#mobileSrcset(url);
     if (!srcset) return;
     source.setAttribute('srcset', srcset);
     if (source.getAttribute('type') !== file.type) source.removeAttribute('type');

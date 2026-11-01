@@ -53,8 +53,6 @@ public final class StructurePolicy {
     private static final Pattern CONTROL_CHARS = Pattern.compile("[\\u0000-\\u001f\\u007f]");
     /** JS trim() 이 지우는 공백 (빈 aria-label 판정용 — Java strip() 은 nbsp 를 남김) */
     private static final Pattern JS_SPACE = Pattern.compile("(?U)[\\s\\uFEFF]");
-    /** JS trim() 이 지우는 앞뒤 공백 (jsTrim 용) */
-    private static final Pattern JS_EDGE_SPACE = Pattern.compile("(?U)^[\\s\\uFEFF]+|[\\s\\uFEFF]+$");
     /** aria id 목록 구분자: HTML ASCII 공백 */
     private static final Pattern ASCII_SPACES = Pattern.compile("[ \\t\\n\\f\\r]+");
 
@@ -189,7 +187,17 @@ public final class StructurePolicy {
      * @return 앞뒤 공백을 뺀 문자열
      */
     static String jsTrim(String value) {
-        return value == null ? "" : JS_EDGE_SPACE.matcher(value).replaceAll("");
+        if (value == null) return "";
+        int from = 0, to = value.length();
+        while (from < to && isJsTrimSpace(value.charAt(from))) from++;
+        while (to > from && isJsTrimSpace(value.charAt(to - 1))) to--;
+        return value.substring(from, to);
+    }
+
+    /** JS trim() 이 지우는 문자인지 (WhiteSpace + LineTerminator). 정규식은 공백이 길면 이차 시간이라 문자 하나씩 본다 */
+    private static boolean isJsTrimSpace(char c) {
+        return (c >= '\t' && c <= '\r') || c == ' ' || c == '\u00a0' || c == '\u1680' || (c >= '\u2000' && c <= '\u200a')
+                || c == '\u2028' || c == '\u2029' || c == '\u202f' || c == '\u205f' || c == '\u3000' || c == '\ufeff';
     }
 
     /** id 값 하나가 남아도 되는지: 길이·공백·제어 문자, 형식, jm- 접두(대소문자 무시), 예약 전역(정확한 이름), idDeny */

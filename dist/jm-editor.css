@@ -68,6 +68,7 @@
 .jm-btn-dropdown svg:last-child { opacity: .6; }
 /* 값 고르기 버튼 (글자 크기·제목): 값이 바뀌어도 툴바가 흔들리지 않게 최소 폭 */
 .jm-btn-select { display: inline-flex; align-items: center; justify-content: space-between; min-width: 64px; padding-left: 8px; border-color: var(--jm-border); }
+.jm-btn[data-cmd="fontFamily"] .jm-btn-select-label { max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* 긴 글꼴 이름이 툴바를 밀지 않게 */
 
 /* 스플릿 버튼 (목록 + 유형 꺾쇠) */
 .jm-btn-split-main { border-radius: 4px 0 0 4px; border-color: var(--jm-border); }

@@ -9,6 +9,7 @@
  * 크기 단위는 MB, 길이 단위는 px.
  */
 import { STRUCTURE_DEFAULTS } from './core/structure-policy.js';
+import { FONT_DEFAULTS } from './core/font-policy.js';
 
 /** 기본 설정 */
 export const DEFAULT_CONFIG = Object.freeze({
@@ -24,11 +25,13 @@ export const DEFAULT_CONFIG = Object.freeze({
   structure: STRUCTURE_DEFAULTS,
   // 본문 이미지 — 모바일 이미지(picture > source)의 media 값
   image: Object.freeze({ mobileMedia: '(max-width: 767px)' }),
+  // 글꼴 허용 목록 — 툴바 글꼴 목록이자 정제 허용 목록. 서버 jm-editor.font.families 도 같은 값으로 (core/font-policy.js)
+  font: FONT_DEFAULTS,
 });
 
 /**
  * 설정 파일(window.JmEditorConfig)의 한 영역을 읽는다
- * @param {'gallery'|'structure'|'image'} section
+ * @param {'gallery'|'structure'|'image'|'font'} section
  * @returns {object} 없으면 빈 객체
  */
 export function fileConfig(section) {
@@ -38,7 +41,7 @@ export function fileConfig(section) {
 
 /**
  * 기본값 < 설정 파일 < 생성 옵션 순으로 합친 영역 설정
- * @param {'gallery'|'structure'|'image'} section
+ * @param {'gallery'|'structure'|'image'|'font'} section
  * @param {object} [override] 에디터 생성 옵션으로 넘긴 값
  * @returns {object}
  */

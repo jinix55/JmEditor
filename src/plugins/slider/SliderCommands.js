@@ -9,6 +9,7 @@
 import { BlockDrag } from '../../core/BlockDrag.js';
 import { initSlider, stripSliderUI, destroySliders } from './slider-runtime.js';
 import { stampSize } from '../gallery/gallery-layout.js';
+import { notify } from '../gallery/gallery-upload.js';
 
 export const SLIDER_LAYER_CLASS = 'jm-slider-layer';
 const SLIDER_SELECTED = 'is-selected';
@@ -31,8 +32,17 @@ export class SliderCommands {
     });
   }
 
+  /**
+   * 슬라이드 블록 HTML. 값은 허용 범위만 쓰고 어긋나면 기본값 (exec 입력이 속성에 그대로 들어가지 않게 — Sanitizer 와 같은 범위)
+   * @param {number} [interval] 넘김 간격(ms) 0~60000
+   * @param {string} [ratio] 16:9·4:3·1:1·21:9
+   * @returns {string}
+   */
   static template(interval = 3000, ratio = '16:9') {
-    return `<div data-type="slider" data-interval="${interval}" data-ratio="${ratio}" data-indicator="dots" data-indicator-pos="bottom-center" data-width="100" data-align="center"></div>`;
+    const iv = Number(interval);
+    const safeInterval = Number.isInteger(iv) && iv >= 0 && iv <= 60000 ? iv : 3000;
+    const safeRatio = ['16:9', '4:3', '1:1', '21:9'].includes(ratio) ? ratio : '16:9';
+    return `<div data-type="slider" data-interval="${safeInterval}" data-ratio="${safeRatio}" data-indicator="dots" data-indicator-pos="bottom-center" data-width="100" data-align="center"></div>`;
   }
 
   // ───────────── 레이어 ─────────────
@@ -205,9 +215,15 @@ export class SliderCommands {
 
   async addFiles(block, files) {
     for (const file of files) {
-      const src = this.editor.options.uploadImage
-        ? await this.editor.options.uploadImage(file)
-        : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+      let src;
+      try {
+        src = this.editor.options.uploadImage
+          ? await this.editor.options.uploadImage(file)
+          : await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+      } catch (err) {
+        notify(this.editor.options, `이미지를 올리지 못했습니다: ${err?.message || err}`);
+        break;
+      }
       const img = document.createElement('img');
       img.alt = file.name;
       await new Promise((resolve) => { img.onload = () => { stampSize(img); resolve(); }; img.onerror = resolve; img.src = src; });

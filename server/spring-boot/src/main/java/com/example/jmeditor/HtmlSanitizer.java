@@ -8,7 +8,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * 서버 측 HTML sanitize — 클라이언트(core/Sanitizer.js)와 동일 범위.
@@ -22,7 +21,7 @@ public class HtmlSanitizer {
     /** th[scope] 허용 값 (구조 모드) */
     private static final java.util.Set<String> TH_SCOPES = java.util.Set.of("row", "col", "rowgroup", "colgroup");
     /** 클라이언트와 같은 태그 별칭 (b→strong 등) — 정제 전에 바꾼다 */
-    private static final java.util.Map<String, String> TAG_ALIAS = java.util.Map.of("b", "strong", "i", "em", "strike", "s");
+    private static final java.util.Map<String, String> TAG_ALIAS = java.util.Map.of("b", "strong", "i", "em", "strike", "s", "font", "span");
 
     /** 기본 허용 태그 (구조 정책 전) — 플러그인 안에서 구조 전용 태그를 가려낼 때 */
     private static final java.util.Set<String> BASE_TAGS = java.util.Set.of("p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "ul", "ol", "li", "blockquote",
@@ -38,6 +37,8 @@ public class HtmlSanitizer {
 
     /** 퍼블 구조 정책 (꺼져 있으면 지금 규칙) */
     private final StructurePolicy policy;
+    /** 글꼴 허용 목록 */
+    private final FontPolicy fonts;
 
     /** 구조 정책 없이 (예전 규칙 — class 제거·div→p). Spring 에서는 StructureConfig 의 정책(기본 켜짐)으로 만들어진다 */
     public HtmlSanitizer() {
@@ -45,11 +46,20 @@ public class HtmlSanitizer {
     }
 
     /**
+     * @param policy 퍼블 구조 정책 (글꼴은 기본 목록)
+     */
+    public HtmlSanitizer(StructurePolicy policy) {
+        this(policy, FontPolicy.defaults());
+    }
+
+    /**
      * @param policy 퍼블 구조 정책 (StructureConfig 가 application.yml 에서 만든 빈)
+     * @param fonts 글꼴 허용 목록 (FontConfig 가 application.yml 에서 만든 빈)
      */
     @org.springframework.beans.factory.annotation.Autowired
-    public HtmlSanitizer(StructurePolicy policy) {
+    public HtmlSanitizer(StructurePolicy policy, FontPolicy fonts) {
         this.policy = policy == null ? StructurePolicy.disabled() : policy;
+        this.fonts = fonts == null ? FontPolicy.defaults() : fonts;
         this.safelist = baseSafelist();
         if (this.policy.enabled()) {
             // 구조 태그 + 모든 태그의 class(토큰 검사는 후처리) + th[scope]. 먼저 통과시켜야 후처리에서 고를 수 있다
@@ -60,17 +70,14 @@ public class HtmlSanitizer {
         }
     }
 
-    /** 색상 값 형식: #hex, rgb(a)(), 색 이름 */
-    private static final Pattern SAFE_COLOR = Pattern.compile("^(#[0-9a-fA-F]{3,8}|rgba?\\([\\d\\s.,%]+\\)|[a-zA-Z]+)$");
-    /** style 속성에서 허용하는 CSS 속성과 값 형식 (클라이언트 Sanitizer 와 동일) */
+    /** style 속성에서 허용하는 CSS 속성과 값 형식 (클라이언트 Sanitizer 와 동일). 글꼴·글자 크기·테두리·background 는 먼저 LegacyFormat 이 처리 */
     private static final java.util.Map<String, Pattern> ALLOWED_STYLE = java.util.Map.of(
-            "color", SAFE_COLOR,
-            "background-color", SAFE_COLOR,
+            "color", LegacyFormat.SAFE_COLOR,
+            "background-color", LegacyFormat.SAFE_COLOR,
             "text-align", Pattern.compile("^(left|center|right|justify)$", Pattern.CASE_INSENSITIVE),
             "vertical-align", Pattern.compile("^(top|middle|bottom)$", Pattern.CASE_INSENSITIVE),
             "width", Pattern.compile("^(\\d+(\\.\\d+)?(px|%)|auto)$", Pattern.CASE_INSENSITIVE),
             "height", Pattern.compile("^\\d+(\\.\\d+)?px$", Pattern.CASE_INSENSITIVE),
-            "font-size", Pattern.compile("^([89]|[1-8]\\d|9[0-6])px$"),
             "list-style-type", Pattern.compile("^(disc|circle|square|decimal|decimal-leading-zero|lower-alpha|upper-alpha|lower-roman|upper-roman|hangul|hangul-consonant|none)$", Pattern.CASE_INSENSITIVE));
 
     private final Safelist safelist;
@@ -91,12 +98,12 @@ public class HtmlSanitizer {
             .addAttributes("ul", "style")
             .addAttributes("ol", "style", "start")
             .addAttributes("table", "style", "data-border")
-            .addAttributes("col", "style")
+            .addAttributes("col", "style", "span")
             .addAttributes("tr", "style")
             .addAttributes("td", "style", "colspan", "rowspan")
             .addAttributes("th", "style", "colspan", "rowspan")
             .addAttributes("span", "style")
-            .addAttributes("div", "data-type", "data-cols", "data-auto", "data-layout", "data-align", "data-width", "data-interval", "data-ratio", "data-indicator", "data-indicator-pos",
+            .addAttributes("div", "style", "data-type", "data-cols", "data-auto", "data-layout", "data-align", "data-width", "data-interval", "data-ratio", "data-indicator", "data-indicator-pos",
                            "data-preset", "data-variant", "data-split", "data-cell",    // 이미지+글 배치 블록
                            "data-provider", "data-timestamp", "data-key", "data-height", "data-title") // 카카오 지도 블록
             .addAttributes("iframe", "src", "title", "allow", "allowfullscreen")
@@ -127,21 +134,30 @@ public class HtmlSanitizer {
     /** 버튼 직접 색: style 의 --jm-btn: #rgb | #rrggbb */
     private static final Pattern BUTTON_COLOR = Pattern.compile("(?:^|;)\\s*--jm-btn\\s*:\\s*(#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?)\\s*(?:;|$)");
 
-    /** img src 에 허용하는 data: 주소: 이미지 base64 만 (img 안의 svg 는 스크립트가 실행되지 않아 허용, data:text/html 등은 제거) */
-    private static final Pattern DATA_IMAGE = Pattern.compile("^data:image/(png|jpeg|jpg|gif|webp|svg\\+xml);base64,", Pattern.CASE_INSENSITIVE);
-
     /** 모바일 이미지(picture) 한도·형식 — 클라이언트 Sanitizer.js 와 같아야 한다 */
     private static final int PICTURE_SOURCE_MAX = 4, SRCSET_MAX = 4, MEDIA_MAX = 200;
     /** srcset 후보 하나: 주소(공백·쉼표 없음) + 선택 서술자(폭 640w 또는 배율 2x) */
     private static final Pattern SRCSET_CANDIDATE = Pattern.compile("^([^ ,]+)(?: (\\d+w|\\d+(?:\\.\\d+)?x))?$");
     /** data: 주소 후보(통째로 1개): 주소 + 선택 서술자 */
     private static final Pattern SRCSET_DATA_CANDIDATE = Pattern.compile("^([^ ]+)(?: (\\d+w|\\d+(?:\\.\\d+)?x))?$");
-    /** img src 와 같은 허용 주소 (http(s)·/ 경로·이미지 base64 data:) */
-    private static final Pattern SAFE_URL = Pattern.compile("^(https?:|/|data:image/(png|jpeg|jpg|gif|webp|svg\\+xml);base64,)", Pattern.CASE_INSENSITIVE);
+    /** img src·srcset 허용 주소: http(s)://, / 로 시작하는 내부 경로(// 와 /\\ 제외), 이미지 base64 data: (클라이언트 SAFE_URL 과 같음) */
+    private static final Pattern SAFE_URL = Pattern.compile("^(https?://|/(?![/\\\\])|data:image/(png|jpeg|jpg|gif|webp|svg\\+xml);base64,)", Pattern.CASE_INSENSITIVE);
+    /** href 허용 주소: http(s)://, mailto:, tel:, #, / 로 시작하는 내부 경로(// 와 /\\ 제외) (클라이언트 SAFE_HREF 와 같음) */
+    private static final Pattern SAFE_HREF = Pattern.compile("^(https?://|mailto:|tel:|#|/(?![/\\\\]))", Pattern.CASE_INSENSITIVE);
+    /** href·srcset(data: 제외) 값 길이 상한 — 넘으면 그 속성(srcset 은 그 source)을 버린다 (클라이언트 URL_MAX 와 같음) */
+    private static final int URL_MAX = 8192;
+    /** 요소 중첩 깊이 상한 — 그보다 깊은 요소는 벗기고 글만 남긴다 (클라이언트 DEPTH_MAX 와 같음) */
+    private static final int DEPTH_MAX = 256;
     private static final Pattern MEDIA_CHARS = Pattern.compile("^[a-zA-Z0-9 \\t\\n\\f\\r():,.\\-]+$");
     private static final Pattern MEDIA_URL = Pattern.compile("url\\s*\\(", Pattern.CASE_INSENSITIVE);
     private static final Pattern SOURCE_TYPE = Pattern.compile("^image/(png|jpeg|gif|webp|avif|svg\\+xml)$");
     private static final Pattern CONTROL_CHARS = Pattern.compile("[\\u0000-\\u001f\\u007f]");
+
+    /** col span 허용 값: 1~1000 */
+    private static final Pattern COL_SPAN = Pattern.compile("^([1-9]\\d{0,2}|1000)$");
+    /** 파싱 전에 남기는 object·applet·marquee 여는 태그 수 합계 */
+    private static final int BARRIER_TAGS_MAX = 2000;
+    private static final java.util.List<String> BARRIER_TAGS = java.util.List.of("object", "applet", "marquee");
 
     /** 카카오 지도 블록 값 형식 */
     private static final Pattern MAP_TIMESTAMP = Pattern.compile("^\\d{10,16}$");
@@ -172,13 +188,17 @@ public class HtmlSanitizer {
     public String clean(String html) {
         if (html == null || html.isBlank()) return "";
         // 태그 별칭: 클라이언트와 같게 b·i·strike → strong·em·s (Safelist 에 없어 글자만 남던 것을 맞춤)
-        Document pre = Jsoup.parseBodyFragment(html);
+        // jsoup 은 object·applet·marquee 가 쌓이면 이차 시간(removeFromActiveFormattingElements)이라 파싱 전에 그 수만 제한한다.
+        // 클라이언트 #limitOpenTags(순 열림 2만)와 기준이 달라 이 극단 입력에서는 결과가 다를 수 있다(허용)
+        Document pre = Jsoup.parseBodyFragment(limitBarrierTags(html));
         pre.outputSettings().prettyPrint(false); // 원문 공백 그대로
+        LegacyFormat.normalize(pre.body(), fonts, policy.tags().contains("caption")); // 옛 형식(font·표 옛 속성·font-weight) 변환 — 허용 검사 전에
         TAG_ALIAS.forEach((from, to) -> {
             for (Element el : pre.select(from)) if (!(from.equals("i") && isIcon(el))) el.tagName(to);
         });
         String cleaned = Jsoup.clean(pre.body().html(), PROTOCOL_CHECK_BASE_URI, safelist, new Document.OutputSettings().prettyPrint(false));
         Document doc = Jsoup.parseBodyFragment(cleaned);
+        flattenDeep(doc.body());
 
         // 구조 모드: class 는 허용 토큰만, th[scope] 는 허용 값만.
         // 플러그인 블록 안은 정책 없이(클라이언트와 같게): class 없음, 구조 전용 태그는 벗김 (div 는 아래 div 처리에서 p 로)
@@ -218,24 +238,17 @@ public class HtmlSanitizer {
         // style 은 허용 속성·값 형식만 남김 (버튼 링크의 직접 색 --jm-btn 은 아래 cleanButton 에서 따로 처리)
         for (Element el : doc.select("[style]")) {
             if (el.tagName().equals("a")) continue;
-            String style = Arrays.stream(el.attr("style").split(";"))
-                    .map(d -> d.split(":", 2))
-                    .filter(kv -> kv.length == 2)
-                    .map(kv -> new String[]{kv[0].trim().toLowerCase(), kv[1].trim()})
-                    .filter(kv -> ALLOWED_STYLE.containsKey(kv[0]) && ALLOWED_STYLE.get(kv[0]).matcher(kv[1]).matches())
-                    .map(kv -> kv[0] + ": " + kv[1])
-                    .collect(Collectors.joining("; "));
+            String style = cleanStyle(el.attr("style"), el.normalName());
             if (style.isEmpty()) el.removeAttr("style"); else el.attr("style", style);
         }
         // 속성이 하나도 남지 않은 span 은 의미 없으므로 언래핑
         // (구조 모드에서 class·id·aria 가 남은 span 은 둔다 — 아이콘·앵커 등)
-        for (Element span : doc.select("span")) if (span.attributes().size() == 0) span.unwrap();
+        unwrapBareSpans(doc.body());
 
         // 글 감싸기 이미지: data-float 는 left/right, style 은 width 10~100% 만
-        // data: 주소는 이미지(png·jpeg·gif·webp·svg) base64 만 — data:text/html 등 다른 형식은 src 제거
+        // src 는 isSafeUrl 통과분만 — 외부 주소 우회(//·/\\)와 data:text/html 등 다른 data: 형식은 src 제거
         for (Element img : doc.select("img")) {
-            String src = img.attr("src");
-            if (src.regionMatches(true, 0, "data:", 0, 5) && !DATA_IMAGE.matcher(src).lookingAt()) img.removeAttr("src");
+            if (img.hasAttr("src") && !isSafeUrl(img.attr("src"))) img.removeAttr("src");
             if (!img.attr("loading").equals("lazy") && !img.attr("loading").equals("eager")) img.removeAttr("loading");
             String f = img.attr("data-float");
             if (!f.equals("left") && !f.equals("right")) img.removeAttr("data-float");
@@ -251,6 +264,9 @@ public class HtmlSanitizer {
         // 번호 목록 시작 번호: 숫자 1~4자리만 (클라이언트 Sanitizer 와 같게)
         for (Element ol : doc.select("ol[start]")) if (!ol.attr("start").matches("\\d{1,4}")) ol.removeAttr("start");
 
+        // col span: 1~1000 정수만 (클라이언트와 같게)
+        for (Element col : doc.select("col[span]")) if (!COL_SPAN.matcher(col.attr("span")).matches()) col.removeAttr("span");
+
         // 인용 스타일: box(박스)·quote(따옴표)만, 세로선(line)은 기본값이라 속성 없음
         for (Element q : doc.select("blockquote[data-style]")) {
             if (!java.util.Set.of("box", "quote").contains(q.attr("data-style"))) q.removeAttr("data-style");
@@ -258,6 +274,7 @@ public class HtmlSanitizer {
 
         // 버튼 링크: data-role=button 일 때만 data-style 허용
         for (Element a : doc.select("a")) {
+            if (a.hasAttr("href") && !isSafeHref(a.attr("href"))) a.removeAttr("href");
             applyLinkTarget(a);
             if (!"button".equals(a.attr("data-role"))) BUTTON_ATTRS.forEach(a::removeAttr);
             else cleanButton(a);
@@ -277,6 +294,7 @@ public class HtmlSanitizer {
         }
         // div 는 갤러리/유튜브/버튼 블록만 허용, 그 외는 p 로 치환
         for (Element div : doc.select("div")) {
+            if (PLUGIN_TYPES.contains(div.attr("data-type"))) div.removeAttr("style"); // 플러그인 블록에는 style 을 두지 않는다 (클라이언트와 같게)
             // 배치 블록과 그 칸은 cleanLayout 에서 처리
             if ("layout".equals(div.attr("data-type"))) continue;
             if (div.hasAttr("data-cell") && div.parent() != null && "layout".equals(div.parent().attr("data-type"))) continue;
@@ -327,9 +345,11 @@ public class HtmlSanitizer {
                 continue;
             }
             if (!"gallery".equals(div.attr("data-type"))) {
-                // p 로 바꿀 때 id·aria 는 남긴다 (위에서 검사 끝, 플러그인 안이면 이미 없음 — 클라이언트 div→p 와 같게)
+                // p 로 바꿀 때 id·aria·style 은 남긴다 (위에서 검사 끝, 플러그인 안이면 이미 없음 — 클라이언트 div→p 와 같게)
                 org.jsoup.nodes.Attributes keep = idAria(div);
+                String st = div.attr("style");
                 div.tagName("p"); div.clearAttributes(); div.attributes().addAll(keep);
+                if (!st.isEmpty()) div.attr("style", st);
                 continue;
             }
             // data-cols 는 예전 cover 갤러리 호환용 — 있을 때만 1~6 으로 맞춰 남긴다
@@ -360,6 +380,138 @@ public class HtmlSanitizer {
         // 줄 맞춤(pretty print) 없이 — 켜 두면 dt·dd·div·caption 처럼 글만 있는 블록 안에 줄바꿈·들여쓰기가 들어가 글자가 바뀐다
         doc.outputSettings().prettyPrint(false);
         return doc.body().html();
+    }
+
+    /**
+     * object·applet·marquee 여는 태그를 합계 {@value #BARRIER_TAGS_MAX} 개까지만 남기고 지운다 (선형 스캔).
+     * 주석·따옴표를 해석하지 않으며, 결과는 다시 파서·정제를 거치므로 보안 경계가 아니다.
+     * @param html 입력
+     * @return 초과분을 지운 문자열 (초과가 없으면 입력 그대로)
+     */
+    static String limitBarrierTags(String html) {
+        StringBuilder out = null;
+        int count = 0, copied = 0, i = 0;
+        while ((i = html.indexOf('<', i)) >= 0) {
+            int nameEnd = barrierNameEnd(html, i + 1);
+            if (nameEnd < 0) { i++; continue; }
+            int close = html.indexOf('>', nameEnd);
+            if (close < 0) break; // 닫히지 않은 태그: 파서가 글로 다루거나 버린다
+            if (++count > BARRIER_TAGS_MAX) {
+                if (out == null) out = new StringBuilder(html.length());
+                out.append(html, copied, i);
+                copied = close + 1;
+            }
+            i = close + 1;
+        }
+        return out == null ? html : out.append(html, copied, html.length()).toString();
+    }
+
+    /** from 위치가 막는 태그 이름이면 이름 끝 위치, 아니면 -1 */
+    private static int barrierNameEnd(String html, int from) {
+        for (String name : BARRIER_TAGS) {
+            int end = from + name.length();
+            if (html.regionMatches(true, from, name, 0, name.length()) && end < html.length()) {
+                char c = html.charAt(end);
+                if (c == '>' || c == '/' || c == ' ' || c == '\t' || c == '\n' || c == '\f' || c == '\r') return end;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 속성 없는 span 을 벗긴다. 부모별로 자식을 한 번에 다시 세운다 (Element.unwrap 을 하나씩 부르면 형제 수에 이차 시간).
+     * @param root 문서 body
+     */
+    private static void unwrapBareSpans(Element root) {
+        java.util.Set<Element> parents = new java.util.LinkedHashSet<>();
+        for (Element span : root.select("span")) if (span.attributes().size() == 0 && span.parent() != null) parents.add(span.parent());
+        for (Element p : parents) {
+            java.util.List<org.jsoup.nodes.Node> out = new java.util.ArrayList<>();
+            java.util.ArrayDeque<org.jsoup.nodes.Node> st = new java.util.ArrayDeque<>();
+            java.util.List<org.jsoup.nodes.Node> kids = new java.util.ArrayList<>(p.childNodes());
+            for (int i = kids.size() - 1; i >= 0; i--) st.push(kids.get(i));
+            p.empty();
+            while (!st.isEmpty()) {
+                org.jsoup.nodes.Node n = st.pop();
+                if (n instanceof Element e && e.normalName().equals("span") && e.attributes().size() == 0) {
+                    java.util.List<org.jsoup.nodes.Node> c = new java.util.ArrayList<>(e.childNodes());
+                    e.empty();
+                    for (int i = c.size() - 1; i >= 0; i--) st.push(c.get(i));
+                } else out.add(n);
+            }
+            p.appendChildren(out);
+        }
+    }
+
+    /**
+     * style 문자열 정리 (클라이언트 Sanitizer.cleanStyle 과 같음): 옛 형식 변환 후 허용 속성·값만 남긴다
+     * @param style style 속성값
+     * @param tag 그 style 을 가진 요소의 태그
+     * @return 정리한 style (남는 것이 없으면 빈 문자열)
+     */
+    private String cleanStyle(String style, String tag) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String[] d : LegacyFormat.parseStyle(style)) {
+            String[] legacy = LegacyFormat.cleanDecl(d[0], d[1], tag, fonts);
+            if (legacy == null) continue;
+            if (legacy != LegacyFormat.NOT_LEGACY) out.add(legacy[0] + ": " + legacy[1]);
+            else if (ALLOWED_STYLE.containsKey(d[0]) && ALLOWED_STYLE.get(d[0]).matcher(d[1]).matches()) out.add(d[0] + ": " + d[1]);
+        }
+        return String.join("; ", out);
+    }
+
+    /**
+     * 링크 주소가 허용 형식인지 (클라이언트 Sanitizer.isSafeHref 와 같음): 8192자 이하, 앞뒤 공백을 자른 뒤 제어 문자가 없고 SAFE_HREF 에 맞아야 한다.
+     * @param url href 값
+     * @return 남겨도 되면 true
+     */
+    static boolean isSafeHref(String url) {
+        return url != null && url.length() <= URL_MAX && matchesSafe(url, SAFE_HREF);
+    }
+
+    /**
+     * 이미지 주소가 허용 형식인지 (클라이언트 Sanitizer.isSafeUrl 과 같음): 앞뒤 공백을 자른 뒤 제어 문자가 없고 SAFE_URL 에 맞아야 한다.
+     * @param url src 값
+     * @return 남겨도 되면 true
+     */
+    static boolean isSafeUrl(String url) {
+        return url != null && matchesSafe(url, SAFE_URL);
+    }
+
+    /** 앞뒤 공백(JS trim 기준)을 자른 값이 비어 있지 않고, 제어 문자가 없고, 주어진 형식으로 시작하는지 */
+    private static boolean matchesSafe(String url, Pattern format) {
+        String v = StructurePolicy.jsTrim(url);
+        return !v.isEmpty() && !CONTROL_CHARS.matcher(v).find() && format.matcher(v).find();
+    }
+
+    /** 앞뒤 스페이스(U+0020)만 자른다 — 정규식(^ +| +$)은 공백이 길면 이차 시간이라 인덱스로 찾는다 */
+    private static String trimSpaces(String s) {
+        int from = 0, to = s.length();
+        while (from < to && s.charAt(from) == ' ') from++;
+        while (to > from && s.charAt(to - 1) == ' ') to--;
+        return s.substring(from, to);
+    }
+
+    /**
+     * 깊이 {@value #DEPTH_MAX} 인 요소 안의 자식 요소를 모두 벗겨 글만 남긴다 (클라이언트 Sanitizer.#cleanNode 의 깊이 상한과 같은 결과).
+     * iframe 안의 글은 내용이 아니므로 버린다(클라이언트는 iframe 을 통째로 버림). 글 노드를 새로 만들어 붙여 형제 재정렬 비용이 들지 않게 한다.
+     * @param body 문서 body
+     */
+    private static void flattenDeep(Element body) {
+        java.util.List<Element> cut = new java.util.ArrayList<>();
+        org.jsoup.select.NodeTraversor.traverse((node, depth) -> {
+            if (depth == DEPTH_MAX && node instanceof Element e && e.firstElementChild() != null) cut.add(e);
+        }, body);
+        for (Element e : cut) {
+            java.util.List<org.jsoup.nodes.TextNode> texts = new java.util.ArrayList<>();
+            org.jsoup.select.NodeTraversor.traverse((node, depth) -> {
+                if (node instanceof org.jsoup.nodes.TextNode t && !"iframe".equals(t.parent() instanceof Element p ? p.tagName() : "")) {
+                    texts.add(new org.jsoup.nodes.TextNode(t.getWholeText()));
+                }
+            }, e);
+            e.empty();
+            texts.forEach(e::appendChild);
+        }
     }
 
     /**
@@ -456,8 +608,9 @@ public class HtmlSanitizer {
     static String cleanSrcset(String value) {
         String raw = value == null ? "" : value;
         if (CONTROL_CHARS.matcher(raw).find()) return null;
-        String v = raw.replaceAll("^ +| +$", "");
+        String v = trimSpaces(raw);
         if (v.isEmpty()) return null;
+        if (!v.regionMatches(true, 0, "data:", 0, 5) && raw.length() > URL_MAX) return null;
         if (v.regionMatches(true, 0, "data:", 0, 5)) {
             var m = SRCSET_DATA_CANDIDATE.matcher(v);
             if (!m.matches() || !SAFE_URL.matcher(m.group(1)).find() || m.group(1).chars().filter(ch -> ch == ',').count() != 1) return null;
@@ -467,7 +620,7 @@ public class HtmlSanitizer {
         if (cands.length > SRCSET_MAX) return null;
         java.util.List<String> out = new java.util.ArrayList<>();
         for (String c0 : cands) {
-            var m = SRCSET_CANDIDATE.matcher(c0.replaceAll("^ +| +$", ""));
+            var m = SRCSET_CANDIDATE.matcher(trimSpaces(c0));
             if (!m.matches() || !SAFE_URL.matcher(m.group(1)).find() || m.group(1).regionMatches(true, 0, "data:", 0, 5)) return null;
             out.add(m.group(2) != null ? m.group(1) + " " + m.group(2) : m.group(1));
         }

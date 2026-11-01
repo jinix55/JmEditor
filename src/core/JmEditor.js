@@ -23,7 +23,9 @@ import { History } from './History.js';
 import { BlockDrag } from './BlockDrag.js';
 import { Sanitizer, HIDDEN_ID_ATTR } from './Sanitizer.js';
 import { makeStructurePolicy, INLINE_STRUCTURE_TAGS } from './structure-policy.js';
+import { normalizeFamilies, fontFamilyName } from './font-policy.js';
 import { resolveConfig } from '../config.js';
+import { notify } from '../plugins/gallery/gallery-upload.js';
 
 const ZWSP = '​';
 
@@ -49,15 +51,18 @@ export class JmEditor {
    * @param {(message: string) => void} [options.notify] 업로드 제한 등 안내 문구 표시. 없으면 alert
    * @param {string} [options.placeholder]
    * @param {object} [options.structure] 퍼블 구조 보존 정책 (window.JmEditorConfig.structure 보다 우선, core/structure-policy.js)
+   * @param {{families?: string[]}} [options.font] 글꼴 허용 목록 (window.JmEditorConfig.font 보다 우선, core/font-policy.js)
    * @param {(x: number, y: number, cb: (color: string|null) => void) => void} [options.pickColor]
    *        색상 선택 UI 를 띄우는 콜백 (표 셀/행 배경색 메뉴에서 사용). 래퍼가 주입한다.
    */
   constructor(root, options = {}) {
     this.root = root;
-    this.options = options;
+    this.options = JmEditor.#guardOptions(options);
     this.composing = false; // 한글 IME 조합 중 여부
     /** 퍼블 구조 정책 (꺼져 있으면 null — 지금 정리 규칙). 생성 시 확정 */
     this.structure = makeStructurePolicy(resolveConfig('structure', options.structure));
+    /** 글꼴 허용 목록 (툴바 목록·정제 공통). 생성 시 확정 */
+    this.fontFamilies = normalizeFamilies(resolveConfig('font', options.font).families);
 
     this.root.contentEditable = 'true';
     this.root.classList.add('jm-editor');
@@ -93,6 +98,7 @@ export class JmEditor {
    *                      |table|tableRowBelow|tableRowAbove|tableColRight|tableColLeft|tableDeleteRow|tableDeleteCol|tableDelete
    *                      |color|bgColor (value: 색상 문자열, null 이면 해제)
    *                      |fontSize (value: '14px' 등, null 이면 해제)
+   *                      |fontFamily (value: 허용 목록의 글꼴 이름, null 이면 해제. 목록 밖이면 무시)
    *                      |alignLeft|alignCenter|alignRight (블록 가로 정렬)
    *                      |valignTop|valignMiddle|valignBottom (표 셀 세로 정렬)
    *                      |format (value: 삽입할 HTML — 서식/템플릿. 내부에서 sanitize 후 블록 단위 삽입)
@@ -126,7 +132,7 @@ export class JmEditor {
       link: () => c.setLink(value),
       unlink: () => c.setLink(null),
       image: () => c.insertImage(value?.src, value?.alt),
-      format: () => c.insertBlockHTML(Sanitizer.clean(value || '', this.structure)),
+      format: () => c.insertBlockHTML(Sanitizer.clean(value || '', this.structure, this.fontFamilies)),
       gallery: () => c.insertBlockHTML(GalleryCommands.template()),
       layout: () => c.insertBlockHTML(LayoutCommands.template(value?.preset ?? value, value?.variant)),
       youtube: () => this.embed.insertYouTube(value),
@@ -136,6 +142,10 @@ export class JmEditor {
       color: () => c.setStyle('color', value ?? null),
       bgColor: () => c.setStyle('background-color', value ?? null),
       fontSize: () => c.setStyle('font-size', value ?? null),
+      fontFamily: () => {
+        const name = value ? fontFamilyName(value, this.fontFamilies) : null;
+        if (!value || name) c.setStyle('font-family', name ? `"${name}"` : null);
+      },
       // 정렬: 표 셀 범위 선택이 있으면 선택한 셀 전체에, 아니면 커서 블록(셀 포함)에
       alignLeft: () => (this.table.selection ? this.table.setAlign('left') : c.setAlign('left')),
       alignCenter: () => (this.table.selection ? this.table.setAlign('center') : c.setAlign('center')),
@@ -178,7 +188,7 @@ export class JmEditor {
   setHTML(html) {
     this.image?.clear();
     this.slider?.stopAll(); // 이전 내용의 슬라이드 타이머 정리
-    this.root.innerHTML = Sanitizer.clean(html || '', this.structure);
+    this.root.innerHTML = Sanitizer.clean(html || '', this.structure, this.fontFamilies);
     this.table.wrapAll();
     this.gallery.wrapAll();
     this.embed.wrapAll();
@@ -193,12 +203,38 @@ export class JmEditor {
     this.#emitChange();
   }
 
-  /** 이미지 파일 삽입 (툴바 파일 선택, 드롭, 붙여넣기 공통 경로) */
+  /**
+   * 옵션 보기를 만든다: 원본 옵션을 그대로 따르되 uploadImage 만 돌려준 주소를 검사하도록 감싼다
+   * (갤러리·슬라이드·배치·이미지 교체 등 모든 업로드 경로 공통). 생성 후 원본 옵션을 바꿔도 반영되고, 업로드 함수의 this 는 원본 옵션이다.
+   * @param {object} options 원본 옵션
+   * @returns {object} 주소가 규칙에 맞지 않으면 uploadImage 가 Error 로 거부하는 옵션
+   */
+  static #guardOptions(options) {
+    const guarded = async (file) => {
+      const url = await options.uploadImage.call(options, file);
+      if (!Sanitizer.isSafeUrl(url)) throw new Error('이미지 주소를 쓸 수 없습니다');
+      return url;
+    };
+    return Object.create(options, {
+      uploadImage: {
+        get: () => (options.uploadImage ? guarded : undefined),
+        set: (fn) => { options.uploadImage = fn; },
+      },
+    });
+  }
+
+  /** 이미지 파일 삽입 (툴바 파일 선택, 드롭, 붙여넣기 공통 경로). 올리지 못하면 알리고 넣지 않는다 */
   async insertImageFile(file) {
     if (!file || !file.type.startsWith('image/')) return;
-    const src = this.options.uploadImage
-      ? await this.options.uploadImage(file)
-      : await this.#toDataURL(file);
+    let src;
+    try {
+      src = this.options.uploadImage
+        ? await this.options.uploadImage(file)
+        : await this.#toDataURL(file);
+    } catch (err) {
+      notify(this.options, `이미지를 올리지 못했습니다: ${err?.message || err}`);
+      return;
+    }
     this.exec('image', { src, alt: file.name });
   }
 
@@ -467,17 +503,20 @@ export class JmEditor {
     }
   }
 
-  /** 붙여넣기: 이미지 파일이면 업로드, HTML 이면 sanitize, 아니면 텍스트 */
+  /** 붙여넣기: HTML 이면 sanitize, 글이면 텍스트, 둘 다 없고 이미지 파일만 있으면 업로드 */
   async #handlePaste(e) {
     // 블록 헤더의 입력란(버튼 주소·지도 코드 등)에는 브라우저 기본 붙여넣기
     if (e.target.closest?.('input, textarea, select')) return;
     e.preventDefault();
     const cd = e.clipboardData;
-    const imageItem = Array.from(cd.items || []).find((i) => i.type.startsWith('image/'));
-    if (imageItem) { await this.insertImageFile(imageItem.getAsFile()); return; }
-
     const html = cd.getData('text/html');
     const text = cd.getData('text/plain');
+    // 글·HTML 이 함께 있으면 이미지는 무시 (엑셀·파워포인트는 표·글과 함께 그림 미리보기를 클립보드에 넣는다)
+    if (!html && !text) {
+      const imageItem = Array.from(cd.items || []).find((i) => i.type.startsWith('image/'));
+      if (imageItem) await this.insertImageFile(imageItem.getAsFile());
+      return;
+    }
     const escape = (s) => s.replace(/[&<>]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
     // 갤러리·슬라이드 제목, 버튼 글자처럼 한 줄짜리 편집 영역에는 서식 없이 글자만
     const start = this.sel.getRange()?.startContainer;
@@ -490,7 +529,7 @@ export class JmEditor {
     // 카카오맵 「지도 퍼가기」 코드를 본문에 붙여 넣으면 지도 블록으로
     if (isRoughmapCode(text)) { this.map.insertFromCode(text); return; }
     if (html) {
-      this.commands.insertHTML(Sanitizer.clean(html, this.structure));
+      this.commands.insertHTML(Sanitizer.clean(html, this.structure, this.fontFamilies));
     } else if (text) {
       // 한 줄이면 커서 위치에 글자로, 여러 줄이면 줄마다 단락으로 (현재 문단을 나눠 그 사이에)
       const lines = text.split(/\r?\n/);
@@ -578,7 +617,7 @@ export class JmEditor {
     block.querySelectorAll('span[style]').forEach((sp) => {
       // 속성 하나씩 검사해 허용되지 않는 것만 뺀다 (남은 style 의 표기는 브라우저 그대로)
       Array.from(sp.style).forEach((name) => {
-        if (!Sanitizer.cleanStyle(`${name}: ${sp.style.getPropertyValue(name)}`)) sp.style.removeProperty(name);
+        if (!Sanitizer.cleanStyle(`${name}: ${sp.style.getPropertyValue(name)}`, 'span', this.fontFamilies)) sp.style.removeProperty(name);
       });
       if (sp.style.length) return;
       sp.removeAttribute('style');

@@ -32,4 +32,8 @@ window.JmEditorConfig = {
     idPattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$', // id 이름 형식 (id 는 구조 모드에서만 남음)
     idDeny: [],        // 막을 id 이름·접두어(xxx-*). 사이트 스크립트 전역·레이아웃 id(header, gnb 등)를 넣을 것. jm-*·예약 전역(JmEditorConfig 등)은 항상 제거
   },
+  // 글꼴 — 툴바 글꼴 목록이자 허용 목록(밖의 글꼴은 지움). 서버 HtmlSanitizer(jm-editor.font.families)도 같은 값이어야 함. 웹폰트는 사이트에서 불러올 것
+  font: {
+    families: ['맑은 고딕', 'Noto Sans KR', 'Noto Sans', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', 'HY헤드라인M', 'Arial', 'Times New Roman'],
+  },
 };

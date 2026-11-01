@@ -55,7 +55,7 @@ test.describe('픽스처: 구조 정책으로 정제하면 expected 와 같다',
       expect(r.out).toBe(await canon(page, exp));
       expect(r.twice).toBe(true); // 두 번 정제해도 같음
       // expected 는 원본에서 링크 target·rel 강제만 다름 (구조·class 는 그대로)
-      expect(r.out.replace(/ rel="noopener noreferrer" target="_blank"/g, '')).toBe(await canon(page, src));
+      if (f !== 'legacy.html') expect(r.out.replace(/ rel="noopener noreferrer" target="_blank"/g, '')).toBe(await canon(page, src)); // legacy.html 은 옛 형식 변환이라 원본과 다름
     });
   }
 });

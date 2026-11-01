@@ -27,8 +27,14 @@ export class ButtonsCommands {
     this.root = editor.root;
   }
 
+  /**
+   * 버튼 그룹 블록 HTML. 정렬은 허용 값만 쓰고 어긋나면 가운데 (exec 입력이 속성에 그대로 들어가지 않게)
+   * @param {string} [align] left·center·right
+   * @returns {string}
+   */
   static template(align = 'center') {
-    return `<div data-type="buttons" data-align="${align}">${ButtonsCommands.buttonHTML('버튼', 'https://example.com', 'primary')}</div>`;
+    const safeAlign = ['left', 'center', 'right'].includes(align) ? align : 'center';
+    return `<div data-type="buttons" data-align="${safeAlign}">${ButtonsCommands.buttonHTML('버튼', 'https://example.com', 'primary')}</div>`;
   }
 
   static buttonHTML(text, href, style) {
