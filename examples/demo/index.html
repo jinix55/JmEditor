@@ -10909,6 +10909,14 @@ class JmEditor {
       while (a < b && blank(run[a])) run[a++].remove();
       while (b > a && blank(run[b - 1])) run[--b].remove();
       if (a === b) return;
+      // 구간 앞뒤 글의 소스 줄바꿈·들여쓰기는 내용이 아니다 (nbsp 는 보이는 공백이라 둔다)
+      if (run[a].nodeType === Node.TEXT_NODE) run[a].data = run[a].data.replace(/^[ \t\r\n]+/, '');
+      const tail = run[b - 1];
+      if (tail.nodeType === Node.TEXT_NODE) {
+        let end = tail.data.length;
+        while (end > 0 && ' \t\r\n'.includes(tail.data[end - 1])) end--;
+        tail.data = tail.data.slice(0, end);
+      }
       const p = document.createElement('p');
       r.insertBefore(p, run[a]);
       run.slice(a, b).forEach((x) => p.appendChild(x));
