@@ -30,6 +30,10 @@ import { notify } from '../plugins/gallery/gallery-upload.js';
 const ZWSP = '​';
 
 const HREF_ATTR = 'data-jm-href'; // 편집 중 링크 주소 보관 속성 (href 는 제거해 어떤 환경에서도 열리지 않게)
+/** 전체 선택 상태를 푸는 이동 키 */
+const ALL_SELECT_EXIT_KEY = /^(Arrow.*|Home|End|PageUp|PageDown|Escape|Tab)$/;
+const ALL_SELECTED_CLASS = 'jm-all-selected'; // 전체 선택 때 블록 레이어에 붙이는 표시
+const AUTO_ATTR = 'data-jm-auto'; // 표만 있는 문서에 자동으로 넣은 빈 문단 표시 (저장 때 비어 있으면 지움)
 const ID_ATTR = HIDDEN_ID_ATTR; // 편집 중 id 보관 속성 (본문 id 가 페이지의 id·window 전역과 겹쳐 페이지 스크립트를 흔들지 않게)
 
 /** id 숨김에서 건너뛸 플러그인 레이어 (헤더·핸들 등 에디터 UI 포함, 표 레이어는 본문이라 제외) */
@@ -50,6 +54,7 @@ export class JmEditor {
    * @param {object} [options.galleryLimits] 갤러리 업로드 제한 (설정 파일 jm-editor.config.js 의 gallery 와 같은 키, 이 값이 우선)
    * @param {(message: string) => void} [options.notify] 업로드 제한 등 안내 문구 표시. 없으면 alert
    * @param {string} [options.placeholder]
+   * @param {string} [options.ariaLabel] 편집 영역 aria-label (없으면 placeholder, 그것도 없으면 '본문 편집')
    * @param {object} [options.structure] 퍼블 구조 보존 정책 (window.JmEditorConfig.structure 보다 우선, core/structure-policy.js)
    * @param {{families?: string[]}} [options.font] 글꼴 허용 목록 (window.JmEditorConfig.font 보다 우선, core/font-policy.js)
    * @param {(x: number, y: number, cb: (color: string|null) => void) => void} [options.pickColor]
@@ -68,6 +73,10 @@ export class JmEditor {
     this.root.classList.add('jm-editor');
     if (this.structure) this.root.classList.add('jm-structure'); // 구조 모드 표시 (중첩 블록 손잡이 숨김 등 CSS 용)
     if (options.placeholder) this.root.dataset.placeholder = options.placeholder;
+    // 접근성: 루트 자체의 속성이라 getHTML(innerHTML)에는 섞이지 않는다
+    this.root.setAttribute('role', 'textbox');
+    this.root.setAttribute('aria-multiline', 'true');
+    if (!this.root.hasAttribute('aria-label')) { this.root.setAttribute('aria-label', options.ariaLabel || options.placeholder || '본문 편집'); this.#ownAriaLabel = true; }
 
     this.sel = new SelectionUtil(root);
     this.sel.structure = this.structure; // 블록 판정·삽입 기준이 구조를 알게
@@ -131,7 +140,7 @@ export class JmEditor {
       ol: () => c.toggleList('ol', value),
       link: () => c.setLink(value),
       unlink: () => c.setLink(null),
-      image: () => c.insertImage(value?.src, value?.alt),
+      image: () => c.insertImage(value?.src, value?.alt, value?.split),
       format: () => c.insertBlockHTML(Sanitizer.clean(value || '', this.structure, this.fontFamilies)),
       gallery: () => c.insertBlockHTML(GalleryCommands.template()),
       layout: () => c.insertBlockHTML(LayoutCommands.template(value?.preset ?? value, value?.variant)),
@@ -170,7 +179,7 @@ export class JmEditor {
 
   /** 저장용 HTML 반환 (ZWSP·표 레이어 제거, picture 안 img 뒤 글은 picture 밖으로) */
   getHTML() {
-    let html = this.root.innerHTML.replace(new RegExp(ZWSP, 'g'), '');
+    let html = JmEditor.#dropEmptyInlines(this.root.innerHTML).replace(new RegExp(ZWSP, 'g'), '');
     html = TableCommands.unwrapHTML(html);
     html = GalleryCommands.unwrapHTML(html);
     html = EmbedCommands.unwrapHTML(html);
@@ -181,11 +190,37 @@ export class JmEditor {
     html = ImageCommands.unwrapHTML(html);
     html = JmEditor.#restoreLinks(html);
     html = JmEditor.#restoreIds(html);
+    html = JmEditor.#dropAutoParagraphs(html);
     return BlockDrag.cleanHTML(html);
   }
 
   /** HTML 로드 (sanitize 후) */
   setHTML(html) {
+    this.#loadContent(html);
+    this.#ensureCaretAfterTables();
+    this.history?.cancel();
+    this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
+    this.#emitChange();
+  }
+
+  /**
+   * 내용 바꾸기 (setHTML 과 같은 정제) — 이력을 새로 시작하지 않고 한 단계로 기록한다. HTML 보기에서 돌아올 때 쓴다
+   * @param {string} html
+   */
+  replaceContent(html) {
+    this.history.push(); // 미기록 타이핑을 먼저 한 단계로
+    this.#loadContent(html);
+    this.#ensureCaretAfterTables();
+    this.history.push();
+    this.#emitChange();
+  }
+
+  /**
+   * 정제한 HTML 을 편집 DOM 으로 넣는다 (이력·알림 없음)
+   * @param {string} html
+   */
+  #loadContent(html) {
+    this.#clearAllSelected();
     this.image?.clear();
     this.slider?.stopAll(); // 이전 내용의 슬라이드 타이머 정리
     this.root.innerHTML = Sanitizer.clean(html || '', this.structure, this.fontFamilies);
@@ -199,8 +234,19 @@ export class JmEditor {
     this.#neutralizeLinks();
     this.#neutralizeIds();
     this.#ensureBlock();
-    this.history = new History(() => this.getHTML(), (h) => this.#restore(h));
-    this.#emitChange();
+  }
+
+  /**
+   * 표만 있는 문서면 뒤에 빈 문단을 둔다 (표 레이어는 편집 불가라 터치에서 커서를 둘 곳이 없음).
+   * 표시(data-jm-auto)를 달아 비어 있으면 저장에 넣지 않는다 — 불러오기만 해도 내용이 바뀌지 않게
+   */
+  #ensureCaretAfterTables() {
+    const kids = Array.from(this.root.children);
+    if (!kids.length || !kids.every((el) => el.classList.contains(TABLE_LAYER_CLASS))) return;
+    const p = document.createElement('p');
+    p.setAttribute(AUTO_ATTR, '1');
+    p.appendChild(document.createElement('br'));
+    this.root.appendChild(p);
   }
 
   /**
@@ -223,8 +269,12 @@ export class JmEditor {
     });
   }
 
-  /** 이미지 파일 삽입 (툴바 파일 선택, 드롭, 붙여넣기 공통 경로). 올리지 못하면 알리고 넣지 않는다 */
-  async insertImageFile(file) {
+  /**
+   * 이미지 파일 삽입 (툴바 파일 선택, 드롭, 붙여넣기 공통 경로). 올리지 못하면 알리고 넣지 않는다
+   * @param {File} file
+   * @param {Range|null} [at] 넣을 지점 (드롭). 업로드 중 커서를 옮겨도 이 자리에 들어가고, 문단 중간이면 문단을 나눈다
+   */
+  async insertImageFile(file, at = null) {
     if (!file || !file.type.startsWith('image/')) return;
     let src;
     try {
@@ -235,7 +285,9 @@ export class JmEditor {
       notify(this.options, `이미지를 올리지 못했습니다: ${err?.message || err}`);
       return;
     }
-    this.exec('image', { src, alt: file.name });
+    const range = at && this.root.contains(at.startContainer) ? at : null;
+    if (range) this.sel.setRange(range);
+    this.exec('image', { src, alt: file.name, split: !!range });
   }
 
   /** 현재 서식 상태 (툴바 활성화용) */
@@ -267,16 +319,25 @@ export class JmEditor {
     this.options.onSelectionChange?.();
   }
 
-  /** 이벤트 해제 */
+  /** 이벤트 해제, 편집 속성·클래스·타이머 정리 (내용은 root 에 남는다) */
   destroy() {
     this.#unbind?.();
+    this.history.cancel();
+    this.root.removeAttribute('contenteditable');
+    this.root.removeAttribute('role');
+    this.root.removeAttribute('aria-multiline');
+    if (this.#ownAriaLabel) this.root.removeAttribute('aria-label');
+    this.root.classList.remove('jm-editor', 'jm-structure', 'is-empty');
+    delete this.root.dataset.placeholder;
     this.menu.destroy();
     this.gallery.destroy();
     this.slider.destroy();
     this.layout.destroy();
     this.image.destroy();
     this.blockDrag.destroy();
+    this.#unbindGap?.();
     this.gapBar?.remove();
+    this.root.innerHTML = this.getHTML(); // 레이어·핸들·편집 표시를 걷고 저장 형태로 남긴다
   }
 
   // ───────────── 내부 ─────────────
@@ -286,6 +347,7 @@ export class JmEditor {
     const r = this.root;
     const onInput = () => {
       this.#updateEmpty(); // 조합 중 첫 글자에도 placeholder 가 바로 사라지게
+      r.querySelectorAll(`[${AUTO_ATTR}]`).forEach((p) => { if (p.textContent.trim()) p.removeAttribute(AUTO_ATTR); }); // 글을 쓰면 일반 문단 (Enter 로 표시가 복제되지 않게)
       if (this.composing) return; // IME 조합 중에는 기록하지 않음
       this.image.fixPictures(); // 크롬이 picture 안(img 뒤)에 넣은 글을 밖으로 (저장 때 사라지지 않게)
       this.#cleanStraySpans();
@@ -293,12 +355,21 @@ export class JmEditor {
       this.history.pushDebounced();
       this.#emitChange();
     };
-    const onCompStart = () => { this.composing = true; };
+    const onCompStart = () => {
+      if (this.#isAllSelected(this.sel.getRange())) this.#replaceAll(); // 전체 선택 위 한글 입력: 비운 뒤 조합
+      this.composing = true;
+    };
+    const onCopy = (e) => this.#handleCopy(e, false);
+    const onCut = (e) => this.#handleCopy(e, true);
+    const onMouseDown = () => this.#clearAllSelected();
     const onCompEnd = () => { this.composing = false; onInput(); };
     const onKeydown = (e) => this.#handleKeydown(e);
     const onBeforeInput = (e) => this.#handleBeforeInput(e);
     const onPaste = (e) => this.#handlePaste(e);
     const onDrop = (e) => this.#handleDrop(e);
+    // 에디터 안에서 시작한 끌기(글 옮기기)는 외부 드롭과 구분한다
+    const onDragStart = () => { this.#innerDrag = true; };
+    const onDragEnd = () => { this.#innerDrag = false; };
     const onDragover = (e) => e.preventDefault();
     const onContext = (e) => this.#handleContextMenu(e);
     // 편집 중에는 링크(버튼 포함)를 따라가지 않는다. 가운데 클릭(auxclick)도 차단.
@@ -318,6 +389,7 @@ export class JmEditor {
     };
     document.addEventListener('mousedown', onDocDown, true);
     const onSelChange = () => {
+      if (this.#allSelected && !this.#isAllSelected(this.sel.getRange())) this.#clearAllSelected();
       // 루트뿐 아니라 표 셀·갤러리 제목 등 루트 안쪽 편집 영역에 포커스가 있을 때도 커서를 저장
       const ae = document.activeElement;
       if (ae === r || (ae && r.contains(ae))) {
@@ -333,6 +405,11 @@ export class JmEditor {
     r.addEventListener('beforeinput', onBeforeInput);
     r.addEventListener('paste', onPaste);
     r.addEventListener('drop', onDrop);
+    r.addEventListener('copy', onCopy);
+    r.addEventListener('cut', onCut);
+    r.addEventListener('mousedown', onMouseDown);
+    r.addEventListener('dragstart', onDragStart);
+    r.addEventListener('dragend', onDragEnd);
     r.addEventListener('dragover', onDragover);
     r.addEventListener('contextmenu', onContext);
     window.addEventListener('click', onLinkClick, true);
@@ -347,6 +424,11 @@ export class JmEditor {
       r.removeEventListener('beforeinput', onBeforeInput);
       r.removeEventListener('paste', onPaste);
       r.removeEventListener('drop', onDrop);
+      r.removeEventListener('copy', onCopy);
+      r.removeEventListener('cut', onCut);
+      r.removeEventListener('mousedown', onMouseDown);
+      r.removeEventListener('dragstart', onDragStart);
+      r.removeEventListener('dragend', onDragEnd);
       r.removeEventListener('dragover', onDragover);
       r.removeEventListener('contextmenu', onContext);
       window.removeEventListener('click', onLinkClick, true);
@@ -356,6 +438,14 @@ export class JmEditor {
     };
   }
   #unbind = null;
+  /** 에디터 안에서 시작한 끌기 중인지 */
+  #innerDrag = false;
+  /** 전체 선택 때의 범위 (그대로면 삭제가 앞뒤 블록까지 지운다) */
+  #allSelected = null;
+  /** 단락 삽입기 이벤트 해제 */
+  #unbindGap = null;
+  /** aria-label 을 에디터가 넣었는지 (destroy 때 호스트가 준 값은 두려고) */
+  #ownAriaLabel = false;
 
   /** 우클릭: 표 레이어 위에서만 표 메뉴 표시, 그 외는 브라우저 기본 메뉴 */
   #handleContextMenu(e) {
@@ -412,7 +502,14 @@ export class JmEditor {
    * @param {InputEvent} e
    */
   #handleBeforeInput(e) {
-    if (!this.structure || this.composing) return;
+    if (this.composing) return;
+    // 전체 선택 위 입력(키 없이 오는 가상 키보드 등)은 구조 모드와 상관없이 Backspace 와 같게
+    if (/^(delete|insertText|insertReplacementText|insertParagraph|insertLineBreak)/.test(e.inputType) && this.#isAllSelected(this.sel.getRange())) {
+      e.preventDefault();
+      this.#replaceAll(e.inputType.startsWith('insertText') || e.inputType === 'insertReplacementText' ? e.data : null);
+      return;
+    }
+    if (!this.structure) return;
     if (!/^(delete|insertText|insertReplacementText|insertParagraph|insertLineBreak)/.test(e.inputType)) return;
     const range = this.sel.getRange();
     if (!range) return;
@@ -426,15 +523,99 @@ export class JmEditor {
     e.preventDefault();
     this.commands.deleteRange(range);
     const text = e.inputType.startsWith('insertText') || e.inputType === 'insertReplacementText' ? e.data : null;
-    if (text) {
-      const t = document.createTextNode(text);
-      const r = this.sel.getRange();
-      r.insertNode(t);
-      r.setStartAfter(t);
-      r.collapse(true);
-      this.sel.setRange(r);
-    }
+    if (text) this.#insertTextAtCaret(text);
     this.commit();
+  }
+
+  /**
+   * 커서 자리에 글자 넣기 (빈 블록의 자리표시 br 은 뺀다)
+   * @param {string} text
+   */
+  #insertTextAtCaret(text) {
+    const t = document.createTextNode(text);
+    const r = this.sel.getRange();
+    r.insertNode(t);
+    if (t.nextSibling?.nodeName === 'BR' && !t.nextSibling.nextSibling) t.nextSibling.remove();
+    r.setStartAfter(t);
+    r.collapse(true);
+    this.sel.setRange(r);
+  }
+
+  /**
+   * 전체 선택 내용을 지우고 필요하면 글자로 대체. 퍼블 구조가 없으면 빈 문서로, 있으면 구조는 남기고 글·블록만 지운다
+   * @param {string|null} [text] 대체할 글자
+   * @param {boolean} [commit=true] false 면 기록하지 않음 (붙여넣기처럼 뒤이어 기록하는 경로)
+   */
+  #replaceAll(text = null, commit = true) {
+    this.#clearAllSelected();
+    this.image.clear();
+    const plain = Array.from(this.root.children).every((el) => el.getAttribute('contenteditable') === 'false' || !this.sel.isStructureTag(el));
+    if (plain) {
+      this.root.innerHTML = '<p><br></p>';
+      this.sel.placeCursor(this.root.firstChild, false);
+    } else {
+      const all = document.createRange();
+      all.selectNodeContents(this.root);
+      this.commands.deleteRange(all);
+    }
+    if (text) this.#insertTextAtCaret(text);
+    if (commit) this.commit();
+  }
+
+  /**
+   * 복사·잘라내기: 전체 선택이면 앞뒤 블록까지 저장 HTML 전체를 클립보드로 (화면 선택은 글 범위뿐이라 브라우저 기본은 블록을 빠뜨린다)
+   * @param {ClipboardEvent} e
+   * @param {boolean} cut
+   */
+  #handleCopy(e, cut) {
+    if (!this.#isAllSelected(this.sel.getRange()) || !e.clipboardData) return;
+    e.preventDefault();
+    const html = this.getHTML();
+    e.clipboardData.setData('text/html', html);
+    e.clipboardData.setData('text/plain', new DOMParser().parseFromString(html, 'text/html').body.textContent || '');
+    if (cut) this.#replaceAll();
+  }
+
+  /** 전체 선택 표시를 풀고 잊는다 */
+  #clearAllSelected() {
+    this.#allSelected = null;
+    this.root.querySelectorAll(`.${ALL_SELECTED_CLASS}`).forEach((el) => el.classList.remove(ALL_SELECTED_CLASS));
+  }
+
+  /**
+   * 문서 전체 선택: 레이어 밖 첫 글자~마지막 글자를 고르고(레이어 경계에서 시작하면 브라우저가 선택을 그리지 않는다), 전체 선택임을 기억한다
+   */
+  #selectAll() {
+    const walker = document.createTreeWalker(this.root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
+      acceptNode: (n) => {
+        if (n.nodeType === Node.TEXT_NODE) return /[^\s\u200B]/.test(n.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+        if (n.getAttribute('contenteditable') === 'false') return NodeFilter.FILTER_REJECT;
+        return n.tagName === 'BR' || n.tagName === 'IMG' ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+      },
+    });
+    const first = walker.nextNode();
+    let last = first;
+    for (let n = first; n; n = walker.nextNode()) last = n;
+    const r = document.createRange();
+    if (!first) r.selectNodeContents(this.root);
+    else {
+      if (first.nodeType === Node.TEXT_NODE) r.setStart(first, 0); else r.setStartBefore(first);
+      if (last.nodeType === Node.TEXT_NODE) r.setEnd(last, last.length); else r.setEndAfter(last);
+    }
+    this.sel.setRange(r);
+    this.#allSelected = r.cloneRange();
+    // 블록은 브라우저 선택에 그려지지 않으므로 지워질 범위를 class 로 보여 준다 (레이어라 저장 HTML 에 남지 않음)
+    this.root.querySelectorAll(`${PLUGIN_LAYER_SELECTOR}, .${TABLE_LAYER_CLASS}`).forEach((el) => el.classList.add(ALL_SELECTED_CLASS));
+  }
+
+  /**
+   * 지금 선택이 전체 선택 그대로인지 (그 뒤 커서를 옮겼으면 아님)
+   * @param {Range} range
+   */
+  #isAllSelected(range) {
+    const a = this.#allSelected;
+    if (a?.collapsed || a?.startContainer === this.root) return document.activeElement === this.root; // 글이 없는 문서: 브라우저가 선택을 지우기도 한다
+    return !!a && !!range && a.startContainer === range.startContainer && a.startOffset === range.startOffset && a.endContainer === range.endContainer && a.endOffset === range.endOffset;
   }
 
   /** 단축키 + Enter 처리 */
@@ -454,6 +635,20 @@ export class JmEditor {
           this.sel.setRange(r);
           return;
         }
+        // 문서 전체: 맨 앞·맨 뒤가 블록 레이어면 브라우저 전체 선택이 동작하지 않으므로 직접 고른다
+        if (e.target.closest?.('input, textarea, select')) return; // 블록 헤더 입력란은 브라우저 기본
+        e.preventDefault();
+        this.#selectAll();
+        return;
+      }
+    }
+
+    if (this.#allSelected) {
+      if (ALL_SELECT_EXIT_KEY.test(e.key)) this.#clearAllSelected();
+      else if (this.#isAllSelected(this.sel.getRange()) && !this.composing) {
+        // 선택이 그려지지 않는 문서(블록만)에서는 브라우저 입력이 오지 않으므로 키에서 직접 처리한다
+        if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Enter') { e.preventDefault(); this.#replaceAll(); return; }
+        if (e.key.length === 1 && !mod) { e.preventDefault(); this.#replaceAll(e.key); return; }
       }
     }
 
@@ -509,6 +704,11 @@ export class JmEditor {
     if (e.target.closest?.('input, textarea, select')) return;
     e.preventDefault();
     const cd = e.clipboardData;
+    if (this.#isAllSelected(this.sel.getRange())) {
+      // 전체 선택 위 붙여넣기: 양끝 블록까지 비운 뒤 넣는다 (기록은 넣을 때 한 번)
+      this.#replaceAll(null, false);
+      this.sel.getBlock()?.querySelector(':scope > br:only-child')?.remove();
+    }
     const html = cd.getData('text/html');
     const text = cd.getData('text/plain');
     // 글·HTML 이 함께 있으면 이미지는 무시 (엑셀·파워포인트는 표·글과 함께 그림 미리보기를 클립보드에 넣는다)
@@ -529,7 +729,7 @@ export class JmEditor {
     // 카카오맵 「지도 퍼가기」 코드를 본문에 붙여 넣으면 지도 블록으로
     if (isRoughmapCode(text)) { this.map.insertFromCode(text); return; }
     if (html) {
-      this.commands.insertHTML(Sanitizer.clean(html, this.structure, this.fontFamilies));
+      this.commands.insertHTML(Sanitizer.stripPasteClasses(Sanitizer.clean(html, this.structure, this.fontFamilies), html));
     } else if (text) {
       // 한 줄이면 커서 위치에 글자로, 여러 줄이면 줄마다 단락으로 (현재 문단을 나눠 그 사이에)
       const lines = text.split(/\r?\n/);
@@ -538,14 +738,44 @@ export class JmEditor {
     }
   }
 
-  /** 드롭: 이미지 파일만 처리 */
+  /**
+   * 드롭: 이미지 파일은 놓은 지점에 넣고, 파일이 든 드롭은 모두 기본 동작을 막는다 (이미지 아닌 파일로 페이지가 넘어가지 않게).
+   * 외부에서 끌어온 HTML 은 정제 없이 들어가므로 막는다 (에디터 안 글 옮기기와 글자만 끌어온 것은 브라우저 기본)
+   * @param {DragEvent} e
+   */
   async #handleDrop(e) {
     if (BlockDrag.isBlockDrag(e)) return;                       // 블록 이동은 BlockDrag 가 처리
+    const files = Array.from(e.dataTransfer?.files || []);
+    const inner = this.#innerDrag;
+    this.#innerDrag = false;
+    if (!files.length) {
+      if (!inner && Array.from(e.dataTransfer?.types || []).includes('text/html')) e.preventDefault();
+      return;
+    }
     if (e.target.closest?.(`.${GALLERY_LAYER_CLASS}, .${LAYOUT_LAYER_CLASS}`)) return; // 갤러리·배치 블록 레이어가 직접 처리
-    const file = Array.from(e.dataTransfer?.files || []).find((f) => f.type.startsWith('image/'));
-    if (!file) return;
     e.preventDefault();
-    await this.insertImageFile(file);
+    const file = files.find((f) => f.type.startsWith('image/'));
+    if (!file) { notify(this.options, '이미지 파일만 넣을 수 있습니다.'); return; }
+    await this.insertImageFile(file, this.#rangeAtPoint(e.clientX, e.clientY));
+  }
+
+  /**
+   * 화면 좌표의 글 위치 (드롭 지점). Range 는 살아 있어 업로드를 기다리는 동안의 편집도 따라간다
+   * @param {number} x
+   * @param {number} y
+   * @returns {Range|null} 편집할 수 없는 곳(블록 헤더 등)이면 null
+   */
+  #rangeAtPoint(x, y) {
+    let range = null;
+    if (document.caretPositionFromPoint) {
+      const pos = document.caretPositionFromPoint(x, y);
+      if (pos) { range = document.createRange(); range.setStart(pos.offsetNode, pos.offset); range.collapse(true); }
+    } else if (document.caretRangeFromPoint) {
+      range = document.caretRangeFromPoint(x, y);
+    }
+    if (!range || !this.root.contains(range.startContainer)) return null;
+    const el = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
+    return el.isContentEditable ? range : null;
   }
 
   /**
@@ -574,7 +804,8 @@ export class JmEditor {
       this.commit();
     });
     const wrap = this.root.parentNode || document.body;
-    if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+    const setPosition = getComputedStyle(wrap).position === 'static';
+    if (setPosition) wrap.style.position = 'relative';
     wrap.appendChild(bar);
     this.gapBar = bar;
 
@@ -602,8 +833,14 @@ export class JmEditor {
       bar._before = hit.before;
       bar.hidden = false;
     };
+    const onLeave = (e) => { if (!bar.contains(e.relatedTarget)) bar.hidden = true; };
     this.root.addEventListener('mousemove', onMove);
-    this.root.addEventListener('mouseleave', (e) => { if (!bar.contains(e.relatedTarget)) bar.hidden = true; });
+    this.root.addEventListener('mouseleave', onLeave);
+    this.#unbindGap = () => {
+      this.root.removeEventListener('mousemove', onMove);
+      this.root.removeEventListener('mouseleave', onLeave);
+      if (setPosition) wrap.style.position = '';
+    };
   }
 
   /** 편집 중 링크가 열리지 않도록 href 를 보관 속성으로 옮긴다 (setHTML / commit / restore 후 호출) */
@@ -655,6 +892,36 @@ export class JmEditor {
       el.removeAttribute(ID_ATTR);
     });
     return tpl.innerHTML;
+  }
+
+  /**
+   * 저장용 HTML 에서 자동 문단 처리: 비어 있으면 지우고, 글이 있으면 표시만 뺀다
+   * @param {string} html
+   * @returns {string}
+   */
+  static #dropAutoParagraphs(html) {
+    if (!html.includes(AUTO_ATTR)) return html;
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    tpl.content.querySelectorAll(`[${AUTO_ATTR}]`).forEach((p) => {
+      if (!p.textContent.trim() && !p.querySelector('img')) p.remove();
+      else p.removeAttribute(AUTO_ATTR);
+    });
+    return tpl.innerHTML;
+  }
+
+  /**
+   * 편집 HTML 에서 커서 자리용 ZWSP 만 든 인라인 서식 태그를 지운다 (굵게 토글 후 입력 없이 이동하면 남는 태그).
+   * 일부러 비어 있는 태그(아이콘 i 가 바뀐 em 등)는 ZWSP 가 없으므로 그대로 둔다
+   * @param {string} html ZWSP 를 빼기 전 HTML
+   * @returns {string}
+   */
+  static #dropEmptyInlines(html) {
+    const empty = new RegExp(`<(strong|em|u|s)>${ZWSP}+</\\1>`, 'g');
+    let out = html;
+    let prev;
+    do { prev = out; out = out.replace(empty, ZWSP); } while (out !== prev); // 중첩은 안쪽부터: 지운 자리에 ZWSP 를 남겨 바깥도 걸리게
+    return out;
   }
 
   /** 저장용 HTML 에서 보관 속성을 href 로 되돌린다. 허용되지 않는 주소(javascript: 등)는 href 없이 둔다 */
@@ -721,6 +988,9 @@ export class JmEditor {
 
   /** 히스토리 복원 */
   #restore(html) {
+    this.#clearAllSelected();
+    const before = this.#textMap();
+    const caret = this.#caretOffset(before);
     this.image.clear();
     this.slider.stopAll();
     this.root.innerHTML = html;
@@ -734,8 +1004,87 @@ export class JmEditor {
     this.#neutralizeLinks();
     this.#neutralizeIds();
     this.#ensureBlock();
-    this.sel.placeCursor(this.root.lastChild || this.root, true);
+    this.#ensureCaretAfterTables();
+    this.#placeCaretAfterRestore(before.text, caret);
     this.#emitChange();
+  }
+
+  /**
+   * 편집 가능한 글을 한 줄 문자열로 펼친 지도 (글 블록·줄바꿈 경계는 \n, ZWSP 제외).
+   * @returns {{text: string, spots: Array<{node: Node, start: number, length: number}>}} spots: 글 노드와 글 없는 블록의 위치
+   */
+  #textMap() {
+    const spots = [];
+    const parts = [];
+    let len = 0;
+    const add = (t) => { parts.push(t); len += t.length; };
+    const walker = document.createTreeWalker(this.root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (n.nodeType === Node.TEXT_NODE) {
+        if (!n.parentElement.isContentEditable) continue;
+        const t = n.textContent.replace(/\u200B/g, '');
+        if (/^\s*$/.test(t) && this.sel.textBlockOf(n) === null) continue; // 블록 사이 공백
+        spots.push({ node: n, start: len, length: t.length });
+        add(t);
+      } else if (n.tagName === 'BR') {
+        if (n.parentElement.isContentEditable) add('\n');
+      } else if (n.isContentEditable && this.sel.isTextBlock(n)) {
+        if (len) add('\n');
+        if (!n.textContent.replace(/\u200B/g, '')) spots.push({ node: n, start: len, length: 0 });
+      }
+    }
+    return { text: parts.join(''), spots };
+  }
+
+  /**
+   * 지금 커서가 펼친 글의 몇 번째인지
+   * @param {{spots: Array<{node: Node, start: number, length: number}>}} map
+   * @returns {number|null} 커서가 없거나 편집 글 밖이면 null
+   */
+  #caretOffset(map) {
+    const range = this.sel.getRange();
+    if (!range) return null;
+    let at = null;
+    for (const s of map.spots) {
+      if (s.node.nodeType === Node.TEXT_NODE && s.node === range.startContainer) {
+        return s.start + s.node.textContent.slice(0, range.startOffset).replace(/\u200B/g, '').length;
+      }
+      if (range.comparePoint(s.node, 0) > 0) break;
+      at = s.start + s.length;
+    }
+    return at;
+  }
+
+  /**
+   * 되돌리기·다시 실행 뒤 커서: 복원 전후 글의 앞쪽 공통 부분이 끝나는 곳(변경 지점). 글이 같으면(서식 변경) 전의 글자 위치, 알 수 없으면 문서 끝
+   * @param {string} oldText 복원 전 글
+   * @param {number|null} oldCaret 복원 전 커서
+   */
+  #placeCaretAfterRestore(oldText, oldCaret) {
+    const map = this.#textMap();
+    const { text } = map;
+    let at;
+    if (oldText === text) at = oldCaret;
+    else {
+      at = 0;
+      const n = Math.min(oldText.length, text.length);
+      while (at < n && oldText[at] === text[at]) at++;
+    }
+    if (at != null) {
+      for (const s of map.spots) {
+        if (at < s.start || at > s.start + s.length) continue;
+        if (s.node.nodeType === Node.TEXT_NODE) {
+          const r = document.createRange();
+          r.setStart(s.node, at - s.start);
+          r.collapse(true);
+          this.sel.setRange(r);
+        } else {
+          this.sel.placeCursor(s.node, false);
+        }
+        return;
+      }
+    }
+    this.sel.placeCursor(this.root.lastChild || this.root, true);
   }
 
   #emitChange() {

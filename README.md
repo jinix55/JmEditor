@@ -65,6 +65,18 @@ ES Module 은 `…@v0.0.5/dist/jm-editor.esm.js` 를 import 합니다. 설정은
 </script>
 ```
 
+`JmEditorApi` 를 쓸 때의 콜백 옵션:
+
+| 옵션 | 설명 |
+|---|---|
+| `onLoaded(record)` | 조회 완료 |
+| `onSaved(record)` | 저장 완료 |
+| `onError(error)` | 조회(`contentId` 자동 조회·`load()`) 실패. 없으면 `notify` 로 안내하고, `load()` 는 `undefined` 를 돌려줍니다 |
+
+`destroy()` 는 툴바와 함께 편집 영역도 제거하므로 내용이 필요하면 먼저 `getHTML()` 로 받으세요.
+
+저장 중에 `save()` 를 다시 부르면 새 요청 없이 진행 중인 Promise 를 돌려줍니다. 저장 실패는 `save()` 의 거부로 받습니다.
+
 Thymeleaf, JSP 모두 이 형태 그대로입니다. 전체 예시는 [examples/thymeleaf/notice-form.html](examples/thymeleaf/notice-form.html)(등록·수정), [notice-view.html](examples/thymeleaf/notice-view.html)(조회).
 
 API 없이 폼으로만 보낼 거면 `api` 옵션을 빼고 submit 직전에 `editor.getHTML()` 을 hidden input 에 넣으면 됩니다.
@@ -105,7 +117,7 @@ window.JmEditorConfig = {
     mobileMedia: '(max-width: 767px)', // 이미지 도구 막대「모바일 추가」가 source 에 쓰는 media (200자 이하)
   },
   font: {
-    families: ['맑은 고딕', 'Noto Sans KR', 'Noto Sans', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', 'HY헤드라인M', 'Arial', 'Times New Roman'], // 글꼴 도구 목록이자 허용 목록
+    families: ['맑은 고딕', 'Noto Sans KR', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman'], // 글꼴 도구 목록이자 허용 목록
   },
 };
 ```
@@ -162,7 +174,7 @@ const editorRef = useRef(null);
 
 ### 소스로 쓰기 / 직접 빌드
 
-`src/` 를 그대로 서빙해 `src/ui/JmToolbarEditor.js` 를 import 해도 됩니다(15개 파일). 배포본을 다시 만들려면 `npm install && npm run build` (esbuild).
+`src/` 를 그대로 서빙해 `src/ui/JmToolbarEditor.js` 를 import 해도 됩니다(JS 34개·CSS 1개). 배포본을 다시 만들려면 `npm install && npm run build` (esbuild).
 
 ## API 규약
 
@@ -250,7 +262,10 @@ initSliders(document.querySelector('.jm-content'));
 | `p`·`div`·제목 `align` | `text-align` |
 | `col span` | 1~1000 정수만 유지 |
 | 구조 모드를 끈 `caption` | 표 앞 `p` |
-| td·th `border`, `border-top` 등, `border-*-width·style·color`, table `border-collapse` | 값 검사 후 `1px solid windowtext` 꼴로 정규화 (폭 0~20px·pt·mm·cm·thin·medium·thick, 토큰 순서 무관, 스타일 none·solid·dashed·dotted·double, 색. 0 초과 1 미만은 1px) |
+| td·th `border`, `border-top` 등, `border-*-width·style·color`, table `border-collapse` | 값 검사 후 `1px solid windowtext` 꼴로 정규화 (폭 0~20px·pt·mm·cm·thin·medium·thick, 소수 둘째 자리까지 실제 값 유지 — `0.50pt` → `0.67px`, 토큰 순서 무관, 스타일 none·solid·dashed·dotted·double, 색. 소수 둘째 자리까지 유지(0.01 미만은 0.01px)) |
+| `font-size` | px·pt·mm·cm·rem(1rem=16px) → px 반올림, 8~96px 로 맞춤. em·% 는 지움 |
+| `line-height` | 단위 없는 수 0.5~5, 50~500%, px·pt → px(8~200px). `normal` 등 그 밖은 지움 |
+| `letter-spacing` | px·pt → px(소수 둘째 자리, -10~20px), em(-1~2em). `normal`·`0` 등 그 밖은 지움 |
 | `font-family` | 허용 목록의 첫 이름만 `font-family: "맑은 고딕"` 으로. 없으면 지움 |
 | `mso-*` 등 그 밖의 속성 | 지움 |
 
@@ -263,6 +278,8 @@ initSliders(document.querySelector('.jm-content'));
 ```css
 /* 함초롬바탕 → Noto Serif KR (글꼴 파일은 사이트에 둠) */
 @font-face { font-family: "함초롬바탕"; src: local("함초롬바탕"), local("HCR Batang"), url("/fonts/NotoSerifKR-Regular.woff2") format("woff2"); }
+/* 한컴바탕 → Noto Serif KR */
+@font-face { font-family: "한컴바탕"; src: local("한컴바탕"), url("/fonts/NotoSerifKR-Regular.woff2") format("woff2"); }
 /* HY헤드라인M → Noto Sans KR 700 (보통 굵기로 등록해 제목처럼 보이게) */
 @font-face { font-family: "HY헤드라인M"; font-weight: 400; src: local("HY헤드라인M"), url("/fonts/NotoSansKR-Bold.woff2") format("woff2"); }
 ```
@@ -323,6 +340,10 @@ window.JmEditorConfig = {
 };
 // 또는 에디터별: new JmToolbarEditor(el, { structure: { classAllow: [...] } })
 ```
+
+> **운영 전 확인** — 코드 기본값은 그대로이므로 사이트에서 직접 정하세요.
+> - 사이트 CSS 가 있으면 `classAllow` 로 쓸 class 를 좁히세요. 비워 두면 형식만 맞는 class 가 모두 남아, 글에 넣은 class 가 사이트 스타일을 타고 화면을 덮을 수 있습니다.
+> - 사이트 전역·레이아웃 id(`header`·`gnb`·`site-*` 등)는 `idDeny` 에 넣으세요.
 
 - 구조 태그와 모든 허용 태그의 `class`(이름 형식·목록 검사를 통과한 것만), `th[scope]`, `caption` 이 남습니다. `on*`·임의 `data-*`·script 는 열리지 않습니다.
 - **id** (구조 모드만): 형식 `^[A-Za-z][A-Za-z0-9_-]{0,63}$` 를 지키고 `jm-` 로 시작하지 않으며 예약 전역(`JmEditorConfig`·`JmEditor`·`JmViewer`·`JM`·`kakao`·`daum`·`EyeDropper`, 설정으로 못 바꿈)과 `idDeny` 에 없는 것만 남습니다. 같은 id 가 두 번 나오면 첫 번째만 남습니다. `aria-labelledby`·`aria-describedby`(위 형식의 id 를 공백으로 구분, 최대 8개), `aria-label`(200자 이하), `aria-hidden="true"` 도 남습니다. 끄면 id·aria 는 전부 지워집니다.

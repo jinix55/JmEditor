@@ -228,7 +228,7 @@ test.describe('글꼴 도구', () => {
     await select(page, 'span', 0, 2);
     await exec(page, 'fontFamily', null);
     expect(await html(page)).toBe('<p>안녕하세요</p>');
-    await expect.poll(() => page.locator('[data-cmd="fontFamily"] .jm-btn-select-label').textContent()).toBe('기본');
+    await expect.poll(() => page.locator('[data-cmd="fontFamily"] .jm-btn-select-label').textContent()).toBe('글꼴');
   });
 
   test('영문 이름 글꼴도 상태가 맞고 왕복해도 정규화된다', async ({ page }) => {
@@ -260,7 +260,7 @@ test.describe('글꼴 도구', () => {
     await page.locator('[data-cmd="fontFamily"]').click();
     const items = page.locator('.jm-listmenu .jm-ctxmenu-item');
     await expect(items.first()).toContainText('기본');
-    await expect(items).toHaveCount(13);
+    await expect(items).toHaveCount(17);
     await page.getByRole('menuitemradio', { name: '돋움', exact: true }).click();
     expect(await html(page)).toContain('돋움');
   });
@@ -334,7 +334,7 @@ test.describe('엑셀·파워포인트·워드 붙여넣기', () => {
     const td = page.locator('.jm-editor td');
     await expect(td).toHaveCount(1);
     const attr = await td.getAttribute('style');
-    expect(attr).toContain('border: 1px solid windowtext');
+    expect(attr).toContain('border: 0.67px solid windowtext');
     expect(attr).toContain('width: 64px');
     expect(attr).toContain('font-size: 15px');
     await expect(td.locator('strong')).toHaveText('글');
@@ -362,6 +362,6 @@ test.describe('데모', () => {
   test('데모 툴바에 글꼴 도구가 있다', async ({ page }) => {
     await page.goto('/examples/demo/index.html');
     await expect(page.locator('[data-cmd="fontFamily"]')).toBeVisible();
-    await expect(page.locator('[data-cmd="fontFamily"] .jm-btn-select-label')).toHaveText('기본');
+    await expect(page.locator('[data-cmd="fontFamily"] .jm-btn-select-label')).toHaveText('글꼴');
   });
 });

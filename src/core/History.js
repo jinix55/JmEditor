@@ -38,6 +38,11 @@ export class History {
     this.last = this.getState();
   }
 
+  /** 기다리는 지연 기록 취소 (이력을 버리거나 에디터를 정리할 때) */
+  cancel() {
+    clearTimeout(this.timer);
+  }
+
   /** 타이핑용 지연 기록 (input 이벤트마다 호출) */
   pushDebounced(delay = 400) {
     clearTimeout(this.timer);

@@ -59,7 +59,7 @@ jm-editor:
   upload-dir: /var/app/uploads/editor   # 이미지 저장 경로
   upload-url-prefix: /uploads/editor    # 정적 리소스로 노출되는 URL 접두사
   font:
-    families: [맑은 고딕, Noto Sans KR, Noto Sans, 굴림, 돋움, 바탕, 궁서, 함초롬바탕, 함초롬돋움, HY헤드라인M, Arial, Times New Roman]   # 글꼴 허용 목록 (생략하면 이 기본 목록). 클라이언트 font.families 와 같게
+    families: [맑은 고딕, Noto Sans KR, Noto Sans, Roboto, 굴림, 돋움, 바탕, 궁서, 함초롬바탕, 함초롬돋움, 한컴바탕, HY헤드라인M, Apple SD Gothic Neo, Arial, Helvetica Neue, Times New Roman]   # 글꼴 허용 목록 (생략하면 이 기본 목록). 클라이언트 font.families 와 같게
 spring:
   servlet:
     multipart:
@@ -166,7 +166,7 @@ jm-editor:
 | border-collapse (table) | collapse, separate |
 | margin-left, margin-right (table) | auto 만 |
 
-허용 검사 전에 `LegacyFormat` 이 옛 형식을 바꿉니다: `font` → `span style`, 표 `bgcolor`·`align`·`valign`·`width`·`height` 속성 → `style`, `font-weight` 굵게 → 내용을 `strong` 으로, 블록을 감싼 `font`·`span` → 안쪽 글자에 내려줌, `table border=0` → `data-border`, 구조 모드를 끈 `caption` → 표 앞 `p`. 파싱 전 `object`·`applet`·`marquee` 여는 태그는 합계 2000개까지만 남깁니다. 선언 값은 256자까지이며 따옴표·괄호 안의 `;`·`:` 는 구분자로 보지 않습니다. 클라이언트 `core/legacy-format.js` 와 같은 사례 파일(`test/fixtures/legacy/cases.txt`)로 확인합니다.
+`font-size` 의 rem 은 px 로(1rem=16px), `line-height`·`letter-spacing` 은 값 검사 후 다시 조립해 남기고, 셀 테두리 폭은 소수 둘째 자리까지 실제 값을 유지합니다(`0.50pt` → `0.67px`). 허용 검사 전에 `LegacyFormat` 이 옛 형식을 바꿉니다: `font` → `span style`, 표 `bgcolor`·`align`·`valign`·`width`·`height` 속성 → `style`, `font-weight` 굵게 → 내용을 `strong` 으로, 블록을 감싼 `font`·`span` → 안쪽 글자에 내려줌, `table border=0` → `data-border`, 구조 모드를 끈 `caption` → 표 앞 `p`. 파싱 전 `object`·`applet`·`marquee` 여는 태그는 합계 2000개까지만 남깁니다. 선언 값은 256자까지이며 따옴표·괄호 안의 `;`·`:` 는 구분자로 보지 않습니다. 클라이언트 `core/legacy-format.js` 와 같은 사례 파일(`test/fixtures/legacy/cases.txt`)로 확인합니다.
 | list-style-type | disc, circle, square, decimal, decimal-leading-zero, lower-alpha, upper-alpha, lower-roman, upper-roman, hangul, hangul-consonant, none |
 
 ### 블록 (`div[data-type]`)

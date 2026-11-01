@@ -18,6 +18,12 @@ const FONT_PX_MIN = 8;
 const FONT_PX_MAX = 96;
 /** 테두리 폭 상한(px) */
 const BORDER_PX_MAX = 20;
+/** font-size rem 값 (1rem=16px) */
+const FONT_REM = /^(\d{0,6}(?:\.\d{1,6})?)rem$/i;
+/** line-height 값: 단위 없는 수·%·px·pt */
+const LINE_HEIGHT = /^(\d{0,6}(?:\.\d{1,6})?)(px|pt|%)?$/i;
+/** letter-spacing 값: px·pt·em (음수 허용) */
+const LETTER_SPACING = /^(-?)(\d{0,6}(?:\.\d{1,6})?)(px|pt|em)$/i;
 /** 길이 값: px·pt·mm·cm (소수 허용, 지수 표기 불가) */
 const PX_PT_LENGTH = /^(\d{0,6}(?:\.\d{1,6})?)(px|pt|mm|cm)$/i;
 /** width·height 속성 값: 숫자(px)·px·pt·% */
@@ -35,7 +41,7 @@ const LEGACY_TABLE_TAGS = new Set(['table', 'tr', 'td', 'th', 'col']);
 /** align 을 text-align 으로 옮기는 블록 (table 은 표 위치라 따로) */
 const ALIGN_BLOCK_TAGS = new Set(['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
 /** 블록을 감싼 font·span 이 안쪽 글자로 내려주는 속성 (배경은 단축값·낱개를 한 항목으로) */
-const PENDING_KEYS = { color: 'color', 'font-size': 'font-size', 'font-family': 'font-family', 'background-color': 'background-color', background: 'background-color' };
+const PENDING_KEYS = { color: 'color', 'font-size': 'font-size', 'font-family': 'font-family', 'background-color': 'background-color', background: 'background-color', 'line-height': 'line-height', 'letter-spacing': 'letter-spacing' };
 /** 굵게 판정 값 */
 const BOLD_VALUE = /^(bold|bolder|[7-9]00)$/i;
 /** 굵기 해제 값 */
@@ -115,13 +121,65 @@ function lengthPx(value) {
   return Number(m[1]) * PX_PER_UNIT[m[2].toLowerCase()];
 }
 
-/** 테두리 폭 정규화: 키워드, 0, px·pt·mm·cm (0~20px, 0 초과 1 미만은 1px). 어긋나면 null */
+/**
+ * 소수 둘째 자리까지 반올림한 숫자 글자 (뒤의 0 없음)
+ * @param {number} v
+ * @returns {string}
+ */
+function round2(v) {
+  return String(Math.round(v * 100) / 100);
+}
+
+/**
+ * font-size 를 px 글자로: px·pt·mm·cm·rem → 반올림, 8~96px 로 맞춤
+ * @param {string} value
+ * @returns {string|null} em·% 등 그 밖은 null
+ */
+function fontSizePx(value) {
+  const rem = value.match(FONT_REM);
+  const px = rem && rem[1] ? Number(rem[1]) * 16 : lengthPx(value);
+  return px == null ? null : `${Math.min(FONT_PX_MAX, Math.max(FONT_PX_MIN, Math.round(px)))}px`;
+}
+
+/**
+ * line-height 정규화: 단위 없는 수 0.5~5, 50~500%, px·pt → px(8~200). 다시 조립하므로 값이 style 을 벗어날 수 없다
+ * @param {string} value
+ * @returns {string|null} 그 밖은 null
+ */
+function lineHeightValue(value) {
+  const m = value.match(LINE_HEIGHT);
+  if (!m || !m[1]) return null;
+  const n = Number(m[1]);
+  const unit = (m[2] || '').toLowerCase();
+  if (!unit) return n >= 0.5 && n <= 5 ? String(n) : null;
+  if (unit === '%') return n >= 50 && n <= 500 ? `${n}%` : null;
+  const px = Math.round(n * PX_PER_UNIT[unit]);
+  return px >= 8 && px <= 200 ? `${px}px` : null;
+}
+
+/**
+ * letter-spacing 정규화: px·pt → px(소수 둘째 자리, -10~20), em(-1~2). 0 은 기본값이라 지움
+ * @param {string} value
+ * @returns {string|null} 그 밖은 null
+ */
+function letterSpacingValue(value) {
+  const m = value.match(LETTER_SPACING);
+  if (!m || !m[2]) return null;
+  const n = Number(m[2]) * (m[1] ? -1 : 1);
+  const unit = m[3].toLowerCase();
+  if (unit === 'em') return n !== 0 && n >= -1 && n <= 2 ? `${n}em` : null;
+  const px = Math.round(n * PX_PER_UNIT[unit] * 100) / 100;
+  return px !== 0 && px >= -10 && px <= 20 ? `${px}px` : null;
+}
+
+/** 테두리 폭 정규화: 키워드, 0, px·pt·mm·cm (0~20px, 소수 둘째 자리까지 실제 값, 0 초과인데 0.01 미만이면 0.01px). 어긋나면 null */
 function borderWidth(value) {
   if (BORDER_WIDTH_WORD.test(value)) return value.toLowerCase();
   if (value === '0') return '0px';
   const px = lengthPx(value);
   if (px == null || px > BORDER_PX_MAX) return null;
-  return `${px > 0 && px < 1 ? 1 : Math.round(px)}px`;
+  if (px === 0) return '0px';
+  return `${px < 0.01 ? '0.01' : round2(px)}px`;
 }
 
 /** 테두리 단축값 정규화: 토큰 3개 이하, 폭·스타일·색 각 하나까지. 어긋나면 null */
@@ -161,8 +219,16 @@ export function cleanLegacyDecl(name, value, tag, families) {
     return family ? [name, `"${family}"`] : null;
   }
   if (name === 'font-size') {
-    const px = lengthPx(value);
-    return px == null ? null : [name, `${Math.min(FONT_PX_MAX, Math.max(FONT_PX_MIN, Math.round(px)))}px`];
+    const size = fontSizePx(value);
+    return size ? [name, size] : null;
+  }
+  if (name === 'line-height') {
+    const v = lineHeightValue(value);
+    return v ? [name, v] : null;
+  }
+  if (name === 'letter-spacing') {
+    const v = letterSpacingValue(value);
+    return v ? [name, v] : null;
   }
   if ((name === 'width' || name === 'height') && LEGACY_TABLE_TAGS.has(tag) && /(pt|mm|cm)$/i.test(value)) {
     const px = lengthPx(value);

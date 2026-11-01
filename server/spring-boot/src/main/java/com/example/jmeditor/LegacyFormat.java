@@ -34,6 +34,12 @@ final class LegacyFormat {
     /** font 태그 size 1~7 의 px */
     private static final int[] FONT_TAG_SIZES = {10, 13, 16, 18, 24, 32, 48};
     private static final int FONT_PX_MIN = 8, FONT_PX_MAX = 96, BORDER_PX_MAX = 20;
+    /** font-size rem 값 (1rem=16px) */
+    private static final Pattern FONT_REM = Pattern.compile("^(\\d{0,6}(?:\\.\\d{1,6})?)rem$", Pattern.CASE_INSENSITIVE);
+    /** line-height 값: 단위 없는 수·%·px·pt */
+    private static final Pattern LINE_HEIGHT = Pattern.compile("^(\\d{0,6}(?:\\.\\d{1,6})?)(px|pt|%)?$", Pattern.CASE_INSENSITIVE);
+    /** letter-spacing 값: px·pt·em (음수 허용) */
+    private static final Pattern LETTER_SPACING = Pattern.compile("^(-?)(\\d{0,6}(?:\\.\\d{1,6})?)(px|pt|em)$", Pattern.CASE_INSENSITIVE);
     /** 길이 값: px·pt·mm·cm (소수 허용, 지수 표기 불가) */
     private static final Pattern PX_PT_LENGTH = Pattern.compile("^(\\d{0,6}(?:\\.\\d{1,6})?)(px|pt|mm|cm)$", Pattern.CASE_INSENSITIVE);
     /** width·height 속성 값: 숫자(px)·px·pt·% */
@@ -52,7 +58,7 @@ final class LegacyFormat {
     /** align 을 text-align 으로 옮기는 블록 (table 은 표 위치라 따로) */
     private static final Set<String> ALIGN_BLOCK_TAGS = Set.of("p", "div", "h1", "h2", "h3", "h4", "h5", "h6");
     /** 블록을 감싼 font·span 이 안쪽 글자로 내려주는 속성 (배경은 단축값·낱개를 한 항목으로) */
-    private static final Map<String, String> PENDING_KEYS = Map.of("color", "color", "font-size", "font-size", "font-family", "font-family", "background-color", "background-color", "background", "background-color");
+    private static final Map<String, String> PENDING_KEYS = Map.of("color", "color", "font-size", "font-size", "font-family", "font-family", "background-color", "background-color", "background", "background-color", "line-height", "line-height", "letter-spacing", "letter-spacing");
     private static final Pattern FONT_TAG_SIZE = Pattern.compile("^[1-7]$");
     /** background 단축값에서 색으로 보지 않는 낱말 (색 이름 형식에 맞아도) */
     private static final Set<String> BG_KEYWORDS = Set.of("none", "repeat", "space", "round", "scroll", "fixed", "local", "left", "right", "top", "bottom", "center", "auto", "cover", "contain", "inherit", "initial", "unset", "revert");
@@ -127,13 +133,54 @@ final class LegacyFormat {
         return Double.parseDouble(m.group(1)) * PX_PER_UNIT.get(m.group(2).toLowerCase(Locale.ROOT));
     }
 
-    /** 테두리 폭 정규화: 키워드, 0, px·pt·mm·cm (0~20px, 0 초과 1 미만은 1px). 어긋나면 null */
+    /** 숫자를 뒤의 0 없는 글자로 (클라이언트 String(number) 와 같은 모양) */
+    private static String plain(double v) {
+        return java.math.BigDecimal.valueOf(v).stripTrailingZeros().toPlainString();
+    }
+
+    /** 소수 둘째 자리까지 반올림 */
+    private static double round2(double v) {
+        return Math.round(v * 100) / 100.0;
+    }
+
+    /** font-size 를 px 글자로: px·pt·mm·cm·rem → 반올림, 8~96px 로 맞춤. em·% 등 그 밖은 null */
+    private static String fontSizePx(String value) {
+        Matcher rem = FONT_REM.matcher(value);
+        Double px = rem.matches() && !rem.group(1).isEmpty() ? Double.valueOf(Double.parseDouble(rem.group(1)) * 16) : lengthPx(value);
+        return px == null ? null : Math.min(FONT_PX_MAX, Math.max(FONT_PX_MIN, Math.round(px))) + "px";
+    }
+
+    /** line-height 정규화: 단위 없는 수 0.5~5, 50~500%, px·pt → px(8~200). 다시 조립하므로 값이 style 을 벗어날 수 없다. 그 밖은 null */
+    private static String lineHeightValue(String value) {
+        Matcher m = LINE_HEIGHT.matcher(value);
+        if (!m.matches() || m.group(1).isEmpty()) return null;
+        double n = Double.parseDouble(m.group(1));
+        String unit = m.group(2) == null ? "" : m.group(2).toLowerCase(Locale.ROOT);
+        if (unit.isEmpty()) return n >= 0.5 && n <= 5 ? plain(n) : null;
+        if (unit.equals("%")) return n >= 50 && n <= 500 ? plain(n) + "%" : null;
+        long px = Math.round(n * PX_PER_UNIT.get(unit));
+        return px >= 8 && px <= 200 ? px + "px" : null;
+    }
+
+    /** letter-spacing 정규화: px·pt → px(소수 둘째 자리, -10~20), em(-1~2). 0 은 기본값이라 지움. 그 밖은 null */
+    private static String letterSpacingValue(String value) {
+        Matcher m = LETTER_SPACING.matcher(value);
+        if (!m.matches() || m.group(2).isEmpty()) return null;
+        double n = Double.parseDouble(m.group(2)) * (m.group(1).isEmpty() ? 1 : -1);
+        String unit = m.group(3).toLowerCase(Locale.ROOT);
+        if (unit.equals("em")) return n != 0 && n >= -1 && n <= 2 ? plain(n) + "em" : null;
+        double px = round2(n * PX_PER_UNIT.get(unit));
+        return px != 0 && px >= -10 && px <= 20 ? plain(px) + "px" : null;
+    }
+
+    /** 테두리 폭 정규화: 키워드, 0, px·pt·mm·cm (0~20px, 소수 둘째 자리까지 실제 값, 0 초과인데 0.01 미만이면 0.01px). 어긋나면 null */
     private static String borderWidth(String value) {
         if (BORDER_WIDTH_WORD.matcher(value).matches()) return value.toLowerCase(Locale.ROOT);
         if (value.equals("0")) return "0px";
         Double px = lengthPx(value);
         if (px == null || px > BORDER_PX_MAX) return null;
-        return (px > 0 && px < 1 ? 1 : Math.round(px)) + "px";
+        if (px == 0) return "0px";
+        return (px < 0.01 ? "0.01" : plain(round2(px))) + "px";
     }
 
     /** 테두리 단축값 정규화: 토큰 3개 이하, 폭·스타일·색 각 하나까지. 어긋나면 null */
@@ -181,8 +228,16 @@ final class LegacyFormat {
             return family == null ? null : new String[]{name, "\"" + family + "\""};
         }
         if (name.equals("font-size")) {
-            Double px = lengthPx(value);
-            return px == null ? null : new String[]{name, Math.min(FONT_PX_MAX, Math.max(FONT_PX_MIN, Math.round(px))) + "px"};
+            String size = fontSizePx(value);
+            return size == null ? null : new String[]{name, size};
+        }
+        if (name.equals("line-height")) {
+            String v = lineHeightValue(value);
+            return v == null ? null : new String[]{name, v};
+        }
+        if (name.equals("letter-spacing")) {
+            String v = letterSpacingValue(value);
+            return v == null ? null : new String[]{name, v};
         }
         if ((name.equals("width") || name.equals("height")) && TABLE_TAGS.contains(tag) && LENGTH_NOT_PX.matcher(value).matches()) {
             Double px = lengthPx(value);

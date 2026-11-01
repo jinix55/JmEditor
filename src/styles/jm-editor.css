@@ -613,3 +613,6 @@ div[data-type="layout"] [data-cell="text"] > :last-child { margin-bottom: 0; }
 .jm-layout-split::after { content: ""; position: absolute; left: 5px; top: 0; bottom: 0; width: 2px; border-radius: 1px; background: transparent; }
 .jm-layout:hover .jm-layout-split::after, .jm-layout.is-resizing .jm-layout-split::after { background: var(--jm-accent-line); }
 @media (max-width: 640px) { .jm-layout-split { display: none; } }
+
+/* 전체 선택: 브라우저 선택에 그려지지 않는 블록 표시 */
+.jm-editor .jm-all-selected { outline: 2px solid var(--jm-accent-line); background-color: var(--jm-selected); }

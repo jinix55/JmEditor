@@ -11,7 +11,6 @@
  *     <tr style="height:40px"?><td colspan rowspan style="text-align;vertical-align;background-color">…
  */
 import { TableGrid } from './TableGrid.js';
-import { SelectionUtil } from '../../core/SelectionUtil.js';
 
 export const TABLE_LAYER_CLASS = 'jm-table-layer';
 const SEL_CLASS = 'is-cell-selected';
@@ -253,11 +252,8 @@ export class TableCommands {
       tbody.appendChild(tr);
     }
     table.appendChild(tbody);
-    const cur = this.sel.getBlock();
-    const block = this.sel.insertAnchor(cur); // 퍼블 구조 안이면 그 구조 뒤에
-    // 표 안이면 지금처럼 문서 끝에. 단 구조 안의 표라면 그 구조 바로 뒤에
-    const useAnchor = block && (!this.getTable() || block !== SelectionUtil.blockAnchor(cur));
-    if (useAnchor) block.parentNode.insertBefore(table, block.nextSibling);
+    const block = this.sel.blockInsertTarget(); // 다른 블록 삽입과 같은 기준 (목록·인용·표·퍼블 구조 안이면 그 뒤)
+    if (block) block.parentNode.insertBefore(table, block.nextSibling);
     else this.root.appendChild(table);
     const layer = this.#wrap(table);
     const after = document.createElement('p');

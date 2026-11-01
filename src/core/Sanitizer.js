@@ -43,6 +43,12 @@ const SAFE_URL = /^(https?:\/\/|\/(?![/\\])|data:image\/(png|jpeg|jpg|gif|webp|s
 const URL_CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 /** href·srcset(data: 제외) 값 길이 상한 — 넘으면 그 속성(srcset 은 그 source)을 버린다 (서버 URL_MAX 와 같음) */
 const URL_MAX = 8192;
+/** 붙여넣기에서 항상 뺄 class 토큰 (오피스·브라우저 생성 이름) */
+const PASTE_JUNK_CLASS = /^(Mso.*|Apple-.*)$/;
+/** 오피스 원본일 때만 뺄 class 토큰 (font14 같은 퍼블 이름과 겹칠 수 있음) */
+const PASTE_OFFICE_CLASS = /^(xl\d+|font\d+)$/;
+/** 붙여넣은 원본 HTML 의 오피스 흔적 */
+const OFFICE_MARK = /mso-|urn:schemas-microsoft-com|ProgId/i;
 /** 자식까지 통째로 버리는 위험 태그 */
 const DROP_TAGS = ['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link'];
 /** 요소 중첩 깊이 상한 — 그보다 깊은 요소는 벗기고 글만 남긴다 (서버 DEPTH_MAX 와 같음) */
@@ -282,6 +288,25 @@ export class Sanitizer {
     if (hidden) el.setAttribute('aria-hidden', hidden);
     Array.from(node.childNodes).forEach((c) => { const r = Sanitizer.#cleanNode(c); if (r) el.appendChild(r); });
     return el;
+  }
+
+  /**
+   * 붙여넣기 전용: 오피스·브라우저가 붙인 class 토큰을 뺀다 (정제를 마친 HTML 에 적용). Mso*·Apple-* 는 항상,
+   * xl숫자·font숫자는 원본에 오피스 흔적이 있을 때만. setHTML·HTML 보기 경로에서는 쓰지 않는다
+   * @param {string} html 정제한 HTML
+   * @param {string} [source] 붙여넣은 원본 HTML
+   * @returns {string}
+   */
+  static stripPasteClasses(html, source = '') {
+    if (!html.includes('class=')) return html;
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    const office = OFFICE_MARK.test(source);
+    tpl.content.querySelectorAll('[class]').forEach((el) => {
+      const kept = Array.from(el.classList).filter((c) => !PASTE_JUNK_CLASS.test(c) && !(office && PASTE_OFFICE_CLASS.test(c)));
+      if (kept.length) el.setAttribute('class', kept.join(' ')); else el.removeAttribute('class');
+    });
+    return tpl.innerHTML;
   }
 
   /**

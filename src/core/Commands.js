@@ -8,6 +8,9 @@ import { Sanitizer } from './Sanitizer.js';
 import { notify } from '../plugins/gallery/gallery-upload.js';
 import { fontFamilyName } from './font-policy.js';
 
+/** 플러그인 블록 레이어 (플러그인 모듈이 이 모듈을 쓰므로 이름을 직접 적는다) */
+const COVERABLE_BLOCK_SELECTOR = ['table', 'gallery', 'embed', 'buttons', 'slider', 'layout', 'map'].map((n) => `.jm-${n}-layer`).join(', ');
+
 const ZWSP = '​'; // 빈 인라인 태그에 커서를 두기 위한 zero-width space
 
 export class Commands {
@@ -551,7 +554,7 @@ export class Commands {
    * @param {string} src
    * @param {string} alt
    */
-  insertImage(src, alt = '') {
+  insertImage(src, alt = '', split = false) {
     if (!Sanitizer.isSafeUrl(src)) {
       notify(this.editor.options, '이미지 주소를 쓸 수 없습니다');
       return;
@@ -562,7 +565,9 @@ export class Commands {
     const p = document.createElement('p');
     p.appendChild(img);
 
-    let block = SelectionUtil.blockAnchor(this.sel.getBlock());
+    const tail = split ? this.#splitParagraphAtCaret() : null;
+    // 목록·인용 안이면 그 뒤에 (목록 항목 사이에 문단이 끼지 않게)
+    let block = this.sel.outerListOrQuote(SelectionUtil.blockAnchor(this.sel.getBlock()));
     // 표 캡션·그림 설명 안이면(그 안의 문단 포함) 그 표(레이어)·그림 뒤에 (캡션 형제로 들어가면 표·figure 구조가 깨짐)
     const cap = block?.closest?.('caption, figcaption');
     if (cap?.tagName === 'CAPTION') { block = cap.closest('table'); if (block.parentNode?.classList?.contains('jm-table-layer')) block = block.parentNode; }
@@ -571,12 +576,41 @@ export class Commands {
     else if (block) block.parentNode.insertBefore(p, block.nextSibling);
     else this.root.appendChild(p);
 
+    // 문단을 나눴으면 뒤쪽 문단 앞으로
+    if (tail) {
+      this.sel.placeCursor(tail, false);
+      this.editor.commit();
+      return;
+    }
     // 이미지 다음에 빈 단락을 두어 계속 입력 가능하게
     const next = document.createElement('p');
     next.appendChild(document.createElement('br'));
     p.parentNode.insertBefore(next, p.nextSibling);
     this.sel.placeCursor(next, false);
     this.editor.commit();
+  }
+
+  /**
+   * 커서가 일반 문단 글 중간이면 문단을 둘로 나눈다 (드롭한 지점에 이미지를 넣으려고)
+   * @returns {HTMLElement|null} 뒤쪽 문단. 문단이 아니거나 처음·끝이면 null
+   */
+  #splitParagraphAtCaret() {
+    const range = this.sel.getRange();
+    const block = this.sel.getBlock();
+    if (!range?.collapsed || block?.tagName !== 'P' || block.closest('td, th')) return null;
+    const head = document.createRange();
+    head.setStart(block, 0);
+    head.setEnd(range.startContainer, range.startOffset);
+    const rest = document.createRange();
+    rest.setStart(range.startContainer, range.startOffset);
+    rest.setEnd(block, block.childNodes.length);
+    const filled = (r) => { const c = r.cloneContents(); return !!c.textContent.replace(new RegExp(ZWSP, 'g'), '').trim() || !!c.querySelector('img'); };
+    if (!filled(head) || !filled(rest)) return null;
+    const after = block.cloneNode(false);
+    after.appendChild(rest.extractContents());
+    block.after(after);
+    this.sel.placeCursor(block, true);
+    return after;
   }
 
   // ───────────── 구조 모드: 줄바꿈 · 구조를 지키는 범위 삭제 ─────────────
@@ -608,6 +642,7 @@ export class Commands {
    */
   deleteRange(range) {
     if (range.collapsed) return;
+    this.#removeCoveredBlocks(range);
     const touched = new Set([this.sel.textBlockOf(range.startContainer), this.sel.textBlockOf(range.endContainer)]);
     const pieces = this.#textPieces(range, true);
     pieces.forEach((t) => { touched.add(this.sel.textBlockOf(t)); t.remove(); });
@@ -623,7 +658,43 @@ export class Commands {
       const empty = !blk.textContent.replace(new RegExp(ZWSP, 'g'), '').trim() && !blk.querySelector('img, br');
       if (empty) blk.appendChild(document.createElement('br'));
     });
-    this.sel.setRange(range);
+    // 지운 블록 자리처럼 글 블록 밖이면 첫 글 블록으로 (이어서 입력할 수 있게)
+    const first = !this.sel.textBlockOf(range.startContainer) && Array.from(this.root.querySelectorAll('*')).find((el) => el.isContentEditable && this.sel.isTextBlock(el));
+    if (first) this.sel.placeCursor(first, false);
+    else this.sel.setRange(range);
+  }
+
+  /**
+   * 범위가 통째로 덮는 플러그인 블록(표·갤러리·유튜브·슬라이드·버튼·배치·지도)을 지운다. 비게 된 구조 컨테이너에는 빈 문단을 둔다
+   * @param {Range} range
+   */
+  #removeCoveredBlocks(range) {
+    this.root.querySelectorAll(COVERABLE_BLOCK_SELECTOR).forEach((layer) => {
+      if (!layer.isConnected || !Commands.#covers(range, layer)) return;
+      const parent = layer.parentNode;
+      layer.remove();
+      if (parent !== this.root && !parent.firstElementChild && !parent.textContent.trim()) {
+        const p = document.createElement('p');
+        p.appendChild(document.createElement('br'));
+        parent.appendChild(p);
+      }
+    });
+  }
+
+  /**
+   * 범위가 블록을 통째로 덮는지. 브라우저가 전체 선택의 시작을 첫 셀 글자로 옮기기도 하므로
+   * 경계 비교 대신 블록 안의 편집 가능한 글이 모두 범위 안인지 본다. 범위가 블록 안에서만 있으면 아님
+   * @param {Range} range
+   * @param {Element} layer
+   */
+  static #covers(range, layer) {
+    if (!range.intersectsNode(layer) || layer.contains(range.commonAncestorContainer)) return false;
+    const walker = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
+    for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+      if (!t.parentElement.isContentEditable || !/[^\s\u200B]/.test(t.textContent)) continue;
+      if (range.comparePoint(t, 0) !== 0 || range.comparePoint(t, t.length) !== 0) return false;
+    }
+    return true;
   }
 
   /**
@@ -726,20 +797,7 @@ export class Commands {
     tpl.innerHTML = html;
     if (!tpl.content.childNodes.length) return;
 
-    // 표 셀 안이면 셀 밖(표 레이어 뒤)에 삽입. 배치 블록 글 칸 안이면 배치 블록 뒤에. 구조 모드에서 퍼블 구조 안이면 그 구조 뒤에
-    let block = this.sel.insertAnchor(this.sel.getBlock());
-    if (block && /^(TD|TH)$/.test(block.tagName)) {
-      block = block.closest('table');
-      if (block.parentNode?.classList?.contains('jm-table-layer')) block = block.parentNode;
-    }
-    // 목록 항목이면 목록 전체 뒤에 삽입
-    if (block && block.tagName === 'LI') block = block.parentNode;
-    // 블록이 없으면(레이어 안 등) 커서 범위의 루트 직속 조상을 기준으로
-    if (!block) {
-      let n = this.sel.getRange()?.startContainer || null;
-      while (n && n.parentNode && n.parentNode !== this.root) n = n.parentNode;
-      if (n && n.parentNode === this.root) block = n;
-    }
+    const block = this.sel.blockInsertTarget();
 
     const after = document.createElement('p');
     after.appendChild(document.createElement('br'));

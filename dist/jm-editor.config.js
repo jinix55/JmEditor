@@ -34,6 +34,6 @@ window.JmEditorConfig = {
   },
   // 글꼴 — 툴바 글꼴 목록이자 허용 목록(밖의 글꼴은 지움). 서버 HtmlSanitizer(jm-editor.font.families)도 같은 값이어야 함. 웹폰트는 사이트에서 불러올 것
   font: {
-    families: ['맑은 고딕', 'Noto Sans KR', 'Noto Sans', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', 'HY헤드라인M', 'Arial', 'Times New Roman'],
+    families: ['맑은 고딕', 'Noto Sans KR', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman'],
   },
 };

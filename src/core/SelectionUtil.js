@@ -201,6 +201,35 @@ export class SelectionUtil {
   }
 
   /**
+   * 목록·인용 안이면 가장 바깥 목록·인용 (표 셀을 넘어 올라가지 않음). 아니면 그대로
+   * @param {HTMLElement|null} el
+   * @returns {HTMLElement|null}
+   */
+  outerListOrQuote(el) {
+    let out = el;
+    for (let e = el; e && e !== this.root && !/^(TD|TH)$/.test(e.tagName); e = e.parentNode) {
+      if (/^(UL|OL|BLOCKQUOTE)$/.test(e.tagName)) out = e;
+    }
+    return out;
+  }
+
+  /**
+   * 새 블록(표·서식·플러그인)을 어느 요소 뒤에 넣을지 — 모든 블록 삽입의 공통 기준.
+   * insertAnchor 규칙에 더해 표 안이면 그 표(레이어), 목록·인용 안이면 가장 바깥 목록·인용,
+   * 글 블록이 없으면(레이어 안 등) 커서의 루트 직속 조상
+   * @returns {HTMLElement|null} 없으면 null (문서 끝에 넣는다)
+   */
+  blockInsertTarget() {
+    let a = this.insertAnchor(this.getBlock());
+    const table = a?.closest?.('td, th, caption')?.closest('table');
+    if (table) a = table.parentNode?.classList?.contains('jm-table-layer') ? table.parentNode : table;
+    if (a) return this.outerListOrQuote(a);
+    let n = this.getRange()?.startContainer || null;
+    while (n && n.parentNode && n.parentNode !== this.root) n = n.parentNode;
+    return n && n.parentNode === this.root ? n : null;
+  }
+
+  /**
    * 블록(표·이미지·서식 등) 삽입 기준 블록: 배치 블록 글 칸·갤러리/슬라이드 제목처럼 블록 안 편집 영역이면
    * 그 블록의 레이어로 바꾼다 (블록 안에 블록이 들어가 저장 시 사라지지 않게 — 레이어 뒤에 삽입)
    * @param {HTMLElement|null} block getBlock() 결과

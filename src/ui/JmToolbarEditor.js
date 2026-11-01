@@ -13,6 +13,7 @@ import { observeGalleries } from '../plugins/gallery/gallery-layout.js';
 import { initSliders } from '../plugins/slider/slider-runtime.js';
 import { initMaps } from '../plugins/map/map-runtime.js';
 import { ContextMenu } from './ContextMenu.js';
+import { notify } from '../plugins/gallery/gallery-upload.js';
 
 /** 서식 버튼 아이콘 (자체 제작 SVG) */
 const FORMAT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-6-4.5L6 21Z"/></svg>'; // 서식 — 북마크 모양
@@ -44,6 +45,9 @@ const VALIGN_ITEMS = [['top', '위', VALIGN_TOP_ICON], ['middle', '중간', VALI
 /** 목록 버튼 아이콘 (자체 제작 SVG) */
 const UL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="6" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none"/><path d="M10 6h10M10 12h10M10 18h10"/></svg>';
 const OL_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><text x="2.5" y="8" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">1</text><text x="2.5" y="14" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">2</text><text x="2.5" y="20" font-size="7" font-family="sans-serif" font-weight="700" fill="currentColor" stroke="none">3</text></svg>';
+
+/** 켜고 끄는 서식 버튼 (aria-pressed 대상, 모드 버튼은 group 으로 따로 판단) */
+const TOGGLE_CMDS = new Set(['bold', 'italic', 'underline', 'strike', 'ul', 'ol']);
 
 /** 글자 크기 선택지 (px) */
 const FONT_SIZES = [10, 11, 12, 13, 14, 15, 16, 18, 20, 24, 28, 32, 36, 48];
@@ -88,9 +92,9 @@ const BUTTONS = [
   ['strike', 'S', (s) => s.s, false, { tip: '취소선' }],
   ['color', 'A', (s) => !!s.color, false, { tip: '글자색' }],     // 버튼 하단 색 띠로 현재 색 표시
   ['bgColor', 'A', (s) => !!s.bg, false, { tip: '글자 배경색' }],
-  ['fontSize', '크기', () => false, false, { tip: '글자 크기', select: FONT_SIZES.map((n) => [`${n}px`, `${n}px`]), selectDefault: ['', '기본'] }],
+  ['fontSize', '크기', () => false, false, { tip: '글자 크기', select: FONT_SIZES.map((n) => [`${n}px`, `${n}px`]), selectDefault: ['', '기본'], emptyLabel: '크기' }],
   // 글꼴: 목록은 에디터 설정(font.families)에서
-  ['fontFamily', '글꼴', () => false, false, { tip: '글꼴', select: (editor) => editor.fontFamilies.map((n) => [n, n]), selectDefault: ['', '기본'] }],
+  ['fontFamily', '글꼴', () => false, false, { tip: '글꼴', select: (editor) => editor.fontFamilies.map((n) => [n, n]), selectDefault: ['', '기본'], emptyLabel: '글꼴' }],
   null, // 구분선
   // 제목: 셀렉트 (본문 / 제목 1~3). 값 선택 시 exec('heading', 'p'|'h1'|'h2'|'h3')
   ['heading', '제목', () => false, false, { tip: '제목 단계', select: [['h1', '제목 1'], ['h2', '제목 2'], ['h3', '제목 3']], selectDefault: ['p', '본문'] }],
@@ -123,6 +127,7 @@ export class JmToolbarEditor {
    *   api:        JmEditorApi 인스턴스 또는 그 생성 옵션 객체. 지정 시 조회/등록/수정/업로드/서식을 API 로 처리
    *   contentId:  지정 시 생성 직후 api.get(contentId) 로 내용을 불러옴 (수정 화면)
    *   onLoaded(record), onSaved(record): 조회·저장 완료 콜백
+   *   onError(error): 조회 실패 콜백 (없으면 notify 로 안내)
    */
   constructor(container, options = {}) {
     // API 레이어 (옵션으로 켬)
@@ -133,6 +138,7 @@ export class JmToolbarEditor {
     this.dirty = false;   // 조회/저장 이후 변경 여부
     this.onLoaded = options.onLoaded;
     this.onSaved = options.onSaved;
+    this.onError = options.onError;
     if (this.api) {
       options = {
         uploadImage: (file) => this.api.uploadImage(file),
@@ -146,8 +152,12 @@ export class JmToolbarEditor {
     // 상단 줄(모드 전환 + 서식) / 하단 줄(서식 메뉴)
     this.toolbarTop = document.createElement('div');
     this.toolbarTop.className = 'jm-toolbar jm-toolbar-top';
+    this.toolbarTop.setAttribute('role', 'toolbar');
+    this.toolbarTop.setAttribute('aria-label', '보기 전환');
     this.toolbar = document.createElement('div');
     this.toolbar.className = 'jm-toolbar';
+    this.toolbar.setAttribute('role', 'toolbar');
+    this.toolbar.setAttribute('aria-label', '서식');
     this.area = document.createElement('div');
     // 코드(HTML 소스) 보기용 textarea — 토글 시 편집 영역과 교체
     this.source = document.createElement('textarea');
@@ -226,11 +236,18 @@ export class JmToolbarEditor {
   /**
    * 콘텐츠 조회 후 에디터에 반영
    * @param {string|number} id
-   * @returns {Promise<object>} 레코드 { id, title, content, ... }
+   * @returns {Promise<object|undefined>} 레코드 { id, title, content, ... }. 조회에 실패하면 onError(없으면 notify)로 알리고 undefined
    */
   async load(id) {
     if (!this.api) throw new Error('api 옵션이 설정되지 않았습니다');
-    const rec = await this.api.get(id);
+    let rec;
+    try {
+      rec = await this.api.get(id);
+    } catch (err) {
+      if (this.onError) this.onError(err);
+      else notify(this.editor.options, `내용을 불러오지 못했습니다: ${err?.message || err}`);
+      return undefined;
+    }
     this.contentId = rec.id ?? id;
     this.record = rec;
     this.setHTML(rec.content || '');
@@ -240,13 +257,28 @@ export class JmToolbarEditor {
   }
 
   /**
-   * 저장: contentId 가 있으면 수정(PUT), 없으면 등록(POST) 후 contentId 보관
+   * 저장: contentId 가 있으면 수정(PUT), 없으면 등록(POST) 후 contentId 보관.
+   * 저장 중에 다시 부르면 새 요청 없이 진행 중인 Promise 를 돌려준다 (두 번 눌러 글이 두 개 생기지 않게)
    * @param {object} [extra] content 외에 함께 보낼 필드 (title 등)
    * @returns {Promise<object>} 저장된 레코드
    */
-  async save(extra = {}) {
+  save(extra = {}) {
+    if (this.#saving) return this.#saving;
+    this.#saving = this.#save(extra).finally(() => { this.#saving = null; });
+    return this.#saving;
+  }
+
+  /** 진행 중인 저장 */
+  #saving = null;
+
+  /**
+   * 저장 한 번 실행
+   * @param {object} extra
+   * @returns {Promise<object>}
+   */
+  async #save(extra) {
     if (!this.api) throw new Error('api 옵션이 설정되지 않았습니다');
-    if (this.mode === 'html') this.editor.setHTML(this.source.value); // HTML 모드 편집분 반영
+    if (this.mode === 'html') this.#applySource(); // HTML 모드 편집분 반영
     const data = { ...extra, content: this.editor.getHTML() };
     const rec = this.contentId != null
       ? await this.api.update(this.contentId, data)
@@ -286,7 +318,7 @@ export class JmToolbarEditor {
         btn.dataset.value = opts.selectDefault?.[0] ?? '';
         if (opts.tip) { btn.title = opts.tip; btn.setAttribute('aria-label', opts.tip); }
         btn.innerHTML = `<span class="jm-btn-select-label"></span>${CHEVRON_ICON}`;
-        btn.firstChild.textContent = opts.selectDefault?.[1] ?? label;
+        btn.firstChild.textContent = opts.emptyLabel ?? opts.selectDefault?.[1] ?? label;
         btn.addEventListener('mousedown', (e) => e.preventDefault()); // 선택 영역 유지
         btn.addEventListener('click', () => this.#openSelectMenu(cmd, opts));
         bar.appendChild(btn);
@@ -302,7 +334,7 @@ export class JmToolbarEditor {
       if (opts.segFirst) btn.classList.add('jm-btn-seg-first');
       if (opts.segLast) btn.classList.add('jm-btn-seg-last');
       btn.dataset.cmd = cmd;
-      if (opts.tip) btn.title = opts.tip;
+      if (TOGGLE_CMDS.has(cmd) || opts.group) btn.setAttribute('aria-pressed', String(!!def[2]({ mode: this.mode })));
       if (opts.splitMain) btn.classList.add('jm-btn-split-main');
       if (opts.splitArrow) btn.classList.add('jm-btn-split-arrow');
       if (opts.icon) {
@@ -310,11 +342,12 @@ export class JmToolbarEditor {
         btn.classList.add('jm-btn-icon');
         btn.innerHTML = opts.iconOnly ? opts.icon : `${opts.icon}<span>${label}</span>`;
         if (opts.dropdown) { btn.classList.add('jm-btn-dropdown'); btn.innerHTML += CHEVRON_ICON; }
-        btn.title = label;
         btn.setAttribute('aria-label', label);
       } else {
         btn.textContent = label;
       }
+      btn.title = opts.tip || (opts.icon ? label : '');
+      if (!btn.title) btn.removeAttribute('title');
       // mousedown 에서 포커스 이동 방지 → 선택 영역 유지
       btn.addEventListener('mousedown', (e) => e.preventDefault());
       btn.addEventListener('click', () => this.#onCommand(cmd));
@@ -365,9 +398,10 @@ export class JmToolbarEditor {
     const btn = this.buttons[cmd];
     const opts = BUTTONS.find((d) => d?.[0] === cmd)?.[4];
     if (!btn || !opts) return;
-    const [v, text] = this.#selectItems(opts).find(([x]) => x === value) || opts.selectDefault;
+    const found = this.#selectItems(opts).find(([x]) => x === value);
+    const [v, text] = found || opts.selectDefault;
     btn.dataset.value = v;
-    btn.firstChild.textContent = text;
+    btn.firstChild.textContent = found ? text : (opts.emptyLabel ?? text); // 값이 없으면 크기·글꼴은 도구 이름으로
   }
 
   /** 버튼 클릭 → 명령 실행. 링크/이미지는 입력 UI 를 거친다 */
@@ -449,6 +483,7 @@ export class JmToolbarEditor {
       if (!def) return;
       const [cmd, , isActive, tableOnly] = def;
       this.buttons[cmd].classList.toggle('is-active', !!isActive(state));
+      if (this.buttons[cmd].hasAttribute('aria-pressed')) this.buttons[cmd].setAttribute('aria-pressed', String(!!isActive(state)));
       if (tableOnly) this.buttons[cmd].hidden = !state.table;
       if (def[4]?.tableEnabled) this.buttons[cmd].disabled = !state.table;
     });
@@ -501,7 +536,7 @@ export class JmToolbarEditor {
   setMode(mode) {
     if (mode === this.mode) return;
     // 현재 모드 정리
-    if (this.mode === 'html') this.editor.setHTML(this.source.value);
+    if (this.mode === 'html') this.#applySource();
     this.mode = mode;
 
     this.area.hidden = mode !== 'editor';
@@ -510,7 +545,7 @@ export class JmToolbarEditor {
 
     // 미리보기를 떠나면 미리보기 런타임(슬라이드 타이머 등) 정리
     if (mode !== 'preview') { this.#stopPreviewLayout?.(); this.#stopPreviewLayout = null; }
-    if (mode === 'html') { this.source.value = JmToolbarEditor.prettify(this.editor.getHTML()); this.source.focus(); }
+    if (mode === 'html') { this.#fillSource(this.editor.getHTML()); this.source.focus(); }
     else if (mode === 'preview') {
       this.#renderPreview();
     }
@@ -522,12 +557,31 @@ export class JmToolbarEditor {
       if (!def) return;
       const [cmd, , , , opts = {}] = def;
       const b = this.buttons[cmd];
-      if (opts.group === 'mode') b.classList.toggle('is-active', def[2]({ mode }));
+      if (opts.group === 'mode') { b.classList.toggle('is-active', def[2]({ mode })); b.setAttribute('aria-pressed', String(def[2]({ mode }))); }
       else b.disabled = !editing && cmd !== 'format';
     });
     this.buttons.format.disabled = !editing;
     this.toolbar.hidden = !editing; // 편집 모드가 아니면 하단 서식 줄 숨김
   }
+
+  /**
+   * HTML 보기 textarea 채우기 (고쳤는지 비교할 기준도 같이 둔다)
+   * @param {string} html
+   */
+  #fillSource(html) {
+    this.source.value = JmToolbarEditor.prettify(html);
+    this.#sourceBase = this.source.value;
+  }
+
+  /** HTML 보기에서 고친 내용을 에디터에 반영: 되돌리기 한 단계로 기록. 고치지 않았으면 그대로 둔다 */
+  #applySource() {
+    if (this.source.value === this.#sourceBase) return;
+    this.editor.replaceContent(this.source.value);
+    this.#sourceBase = this.source.value;
+  }
+
+  /** HTML 보기를 채운 때의 내용 */
+  #sourceBase = '';
 
   /** 블록 태그 앞뒤에 줄바꿈을 넣어 읽기 쉽게 (내용은 변경하지 않음) */
   static prettify(html) {
@@ -542,7 +596,7 @@ export class JmToolbarEditor {
 
   /** 저장할 HTML. HTML 모드에서는 입력 중인 소스를 Sanitizer 로 거른 결과 */
   getHTML() { return this.mode === 'html' ? Sanitizer.clean(this.source.value, this.editor.structure, this.editor.fontFamilies) : this.editor.getHTML(); }
-  setHTML(html) { this.editor.setHTML(html); if (this.mode === 'html') this.source.value = JmToolbarEditor.prettify(html); if (this.mode === 'preview') this.#renderPreview(); }
+  setHTML(html) { this.editor.setHTML(html); if (this.mode === 'html') this.#fillSource(html); if (this.mode === 'preview') this.#renderPreview(); }
 
   /** 미리보기 그리기: 이전 런타임(갤러리 배치 감시·슬라이드 타이머)을 정리하고 Sanitizer 를 거친 HTML 로 다시 그림 */
   #renderPreview() {
@@ -560,5 +614,8 @@ export class JmToolbarEditor {
     this.#stopPreviewLayout?.(); // 미리보기 런타임(갤러리 감시·슬라이드 타이머) 정리
     this.#stopPreviewLayout = null;
     this.gridPicker.destroy(); this.colorPicker.destroy(); this.formatPicker.destroy(); this.listMenu.destroy(); this.editor.destroy();
+    // 래퍼가 만든 DOM 정리 (컨테이너에 다시 생성해도 툴바가 쌓이지 않게). 저장은 destroy 전에 할 것
+    [this.toolbarTop, this.toolbar, this.inputBar, this.area, this.source, this.previewPane, this.fileInput].forEach((el) => el.remove());
+    this.container.classList.remove('jm-container');
   }
 }

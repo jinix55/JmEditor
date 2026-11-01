@@ -109,13 +109,13 @@
 
 # ── 표 셀 테두리
 < <table><tr><td style="border:.5pt solid windowtext">a</td></tr></table>
-> <table><tbody><tr><td style="border: 1px solid windowtext">a</td></tr></tbody></table>
+> <table><tbody><tr><td style="border: 0.67px solid windowtext">a</td></tr></tbody></table>
 < <table><tr><td style="border:solid windowtext 1.0pt">a</td><th style="BORDER:1.5PT Double #F00">b</th></tr></table>
-> <table><tbody><tr><td style="border: 1px solid windowtext">a</td><th style="border: 2px double #F00">b</th></tr></tbody></table>
+> <table><tbody><tr><td style="border: 1.33px solid windowtext">a</td><th style="border: 2px double #F00">b</th></tr></tbody></table>
 < <table><tr><td style="border-top:thin dashed rgb(0, 0, 0);border-right:medium dotted red;border-bottom:none;border-left:0">a</td></tr></table>
 > <table><tbody><tr><td style="border-top: thin dashed rgb(0, 0, 0); border-right: medium dotted red; border-bottom: none; border-left: 0px">a</td></tr></tbody></table>
 < <table><tr><td style="border-top-width:.5pt;border-right-style:dashed;border-bottom-color:#ccc;border-left-width:thick;border-width:20px;border-style:solid;border-color:red">a</td></tr></table>
-> <table><tbody><tr><td style="border-top-width: 1px; border-right-style: dashed; border-bottom-color: #ccc; border-left-width: thick; border-width: 20px; border-style: solid; border-color: red">a</td></tr></tbody></table>
+> <table><tbody><tr><td style="border-top-width: 0.67px; border-right-style: dashed; border-bottom-color: #ccc; border-left-width: thick; border-width: 20px; border-style: solid; border-color: red">a</td></tr></tbody></table>
 < <table><tr><td style="border:21px solid red;border-top:1px solid red blue;border-right:1px solid url(x);border-bottom:1px groove red;border-left:1px 2px;border-top-width:1em;border-left-style:groove;border-right-color:url(x);border-image:url(x)">a</td></tr></table>
 > <table><tbody><tr><td>a</td></tr></tbody></table>
 < <table style="border-collapse:collapse;border:1px solid red"><tr style="border:1px solid red"><td style="border-collapse:separate">a</td></tr></table>
@@ -139,9 +139,9 @@
 
 # ── 붙여넣기 형식 샘플
 < <table class="MsoNormalTable"><tr><td style="border:.5pt solid windowtext;background:#FFFF00;width:48pt;font-size:11.0pt;font-weight:700">글</td></tr></table>
-> @CLASS <table class="MsoNormalTable"><tbody><tr><td style="border: 1px solid windowtext; background-color: #FFFF00; width: 64px; font-size: 15px"><strong>글</strong></td></tr></tbody></table>
+> @CLASS <table class="MsoNormalTable"><tbody><tr><td style="border: 0.67px solid windowtext; background-color: #FFFF00; width: 64px; font-size: 15px"><strong>글</strong></td></tr></tbody></table>
 < <p style="margin:0cm;line-height:160%"><span style="font-family:함초롬바탕;font-size:10.0pt;mso-hansi-font-family:함초롬바탕;color:#000000;letter-spacing:0pt">한글</span></p>
-> <p><span style='font-family: "함초롬바탕"; font-size: 13px; color: #000000'>한글</span></p>
+> <p style="line-height: 160%"><span style='font-family: "함초롬바탕"; font-size: 13px; color: #000000'>한글</span></p>
 
 # ── 블록을 감싼 font·span: 인라인 묶음만 span 으로, 블록·표 칸에 내려줌
 < <font color="red"><p>a</p><p>b</p></font>
@@ -191,7 +191,7 @@
 < <span style="font-size:5mm">a</span><span style="font-size:1cm">b</span>
 > <span style="font-size: 19px">a</span><span style="font-size: 38px">b</span>
 < <table><tr><td style="border:solid #000 0.28mm;width:10mm;height:1CM">a</td><td style="border-top:0.1cm dashed red;border-left-width:.1mm">b</td><td style="border:1cm solid red;width:1e3mm">c</td></tr></table>
-> <table><tbody><tr><td style="border: 1px solid #000; width: 38px; height: 38px">a</td><td style="border-top: 4px dashed red; border-left-width: 1px">b</td><td>c</td></tr></tbody></table>
+> <table><tbody><tr><td style="border: 1.06px solid #000; width: 38px; height: 38px">a</td><td style="border-top: 3.78px dashed red; border-left-width: 0.38px">b</td><td>c</td></tr></tbody></table>
 < <table><colgroup><col span="3" style="width:10px"><col span="1000"><col span="1001"><col span="0"><col span="a"></colgroup><tr><td>a</td></tr></table>
 > <table><colgroup><col span="3" style="width: 10px"><col span="1000"><col><col><col></colgroup><tbody><tr><td>a</td></tr></tbody></table>
 < <span style="color:rgb(0&#160;0,0)">a</span><span style="color:rgb(0&#12288;0,0)">b</span><span style="color:rgb(0 0 0)">c</span>
@@ -205,3 +205,108 @@
 < <p style="font-weight:bold">a<span style="font-weight:400;color:red">b</span></p>
 > <p><strong>a</strong><span style="color: red">b</span></p>
 
+# ── 글꼴 기본 목록 추가
+< <span style="font-family:Roboto">a</span>
+> <span style='font-family: "Roboto"'>a</span>
+< <span style="font-family:한컴바탕">a</span>
+> <span style='font-family: "한컴바탕"'>a</span>
+< <span style="font-family:'Apple SD Gothic Neo',sans-serif">a</span>
+> <span style='font-family: "Apple SD Gothic Neo"'>a</span>
+< <span style="font-family:HelveticaNeue">a</span>
+> <span style='font-family: "Helvetica Neue"'>a</span>
+< <span style="font-family:'Helvetica Neue'">a</span>
+> <span style='font-family: "Helvetica Neue"'>a</span>
+
+# ── font-size rem
+< <span style="font-size:1.25rem">a</span>
+> <span style="font-size: 20px">a</span>
+< <span style="font-size:.1REM">a</span>
+> <span style="font-size: 8px">a</span>
+< <span style="font-size:10rem">a</span>
+> <span style="font-size: 96px">a</span>
+< <span style="font-size:1.5em">a</span>
+> a
+< <span style="font-size:120%">a</span>
+> a
+< <span style="font-size:rem">a</span>
+> a
+
+# ── line-height
+< <p style="line-height:1.5">a</p>
+> <p style="line-height: 1.5">a</p>
+< <span style="line-height:.5">a</span>
+> <span style="line-height: 0.5">a</span>
+< <span style="line-height:1.50">a</span>
+> <span style="line-height: 1.5">a</span>
+< <span style="line-height:150%">a</span>
+> <span style="line-height: 150%">a</span>
+< <span style="line-height:24PX">a</span>
+> <span style="line-height: 24px">a</span>
+< <span style="line-height:18pt">a</span>
+> <span style="line-height: 24px">a</span>
+< <table><tbody><tr><td style="line-height:2">a</td></tr></tbody></table>
+> <table><tbody><tr><td style="line-height: 2">a</td></tr></tbody></table>
+< <span style="line-height:normal">a</span>
+> a
+< <span style="line-height:expression(1)">a</span>
+> a
+< <span style="line-height:999">a</span>
+> a
+< <span style="line-height:0.4">a</span>
+> a
+< <span style="line-height:501%">a</span>
+> a
+< <span style="line-height:7px">a</span>
+> a
+< <span style="line-height:201px">a</span>
+> a
+< <span style="line-height:1.5;color:url(x)">a</span>
+> <span style="line-height: 1.5">a</span>
+< <span style="line-height:1.5em">a</span>
+> a
+
+# ── letter-spacing
+< <span style="letter-spacing:0.5px">a</span>
+> <span style="letter-spacing: 0.5px">a</span>
+< <p style="letter-spacing:-1PT">a</p>
+> <p style="letter-spacing: -1.33px">a</p>
+< <span style="letter-spacing:1.234px">a</span>
+> <span style="letter-spacing: 1.23px">a</span>
+< <span style="letter-spacing:-.05em">a</span>
+> <span style="letter-spacing: -0.05em">a</span>
+< <table><tbody><tr><td style="letter-spacing:2em">a</td></tr></tbody></table>
+> <table><tbody><tr><td style="letter-spacing: 2em">a</td></tr></tbody></table>
+< <span style="letter-spacing:normal">a</span>
+> a
+< <span style="letter-spacing:0">a</span>
+> a
+< <span style="letter-spacing:0px">a</span>
+> a
+< <span style="letter-spacing:0em">a</span>
+> a
+< <span style="letter-spacing:url(x)">a</span>
+> a
+< <span style="letter-spacing:-11px">a</span>
+> a
+< <span style="letter-spacing:21px">a</span>
+> a
+< <span style="letter-spacing:3em">a</span>
+> a
+< <span style="letter-spacing:1px;}body{color:red">a</span>
+> <span style="letter-spacing: 1px">a</span>
+
+# ── 블록을 감싼 font·span 이 줄 높이·자간도 내려줌
+< <span style="line-height:1.5;letter-spacing:1px"><p>a</p></span>
+> <p><span style="line-height: 1.5; letter-spacing: 1px">a</span></p>
+
+# ── 셀 테두리: 얇은 폭도 실제 값 (소수 둘째 자리)
+< <table><tbody><tr><td style="border-top:solid #000000 0.50pt">a</td></tr></tbody></table>
+> <table><tbody><tr><td style="border-top: 0.67px solid #000000">a</td></tr></tbody></table>
+< <table><tbody><tr><td style="border-width:0.5px">a</td></tr></tbody></table>
+> <table><tbody><tr><td style="border-width: 0.5px">a</td></tr></tbody></table>
+< <table><tbody><tr><td style="border-width:.001px">a</td></tr></tbody></table>
+> <table><tbody><tr><td style="border-width: 0.01px">a</td></tr></tbody></table>
+< <table><tbody><tr><td style="border-width:0pt">a</td></tr></tbody></table>
+> <table><tbody><tr><td style="border-width: 0px">a</td></tr></tbody></table>
+< <table><tbody><tr><td style="border-width:20.5px">a</td></tr></tbody></table>
+> <table><tbody><tr><td>a</td></tr></tbody></table>
