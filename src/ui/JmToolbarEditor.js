@@ -98,7 +98,7 @@ const BUTTONS = [
   ['fontFamily', '글꼴', () => false, false, { tip: '글꼴', select: (editor) => editor.fontFamilies.map((n) => [n, n]), inherited: (editor, node) => inheritedFontName(node, editor.root, editor.fontFamilies), unknownLabel: '브라우저 글꼴' }],
   null, // 구분선
   // 제목: 셀렉트 (제목 1~6 / 본문). 값 선택 시 exec('heading', 'p'|'h1'~'h6')
-  ['heading', '제목', () => false, false, { tip: '제목 단계', select: [['h1', '제목 1'], ['h2', '제목 2'], ['h3', '제목 3'], ['h4', '제목 4'], ['h5', '제목 5'], ['h6', '제목 6']], selectDefault: ['p', '본문'], defaultLast: true }],
+  ['heading', '제목', () => false, false, { tip: '제목 단계', select: [['h1', '제목 1'], ['h2', '제목 2'], ['h3', '제목 3'], ['h4', '제목 4'], ['h5', '제목 5'], ['h6', '제목 6']], selectDefault: ['p', '본문'], defaultLast: true, itemClass: (v) => `jm-heading-item jm-heading-item-${v}` }],
   ['quote', '인용', (s) => s.block === 'blockquote', false, { tip: '인용 (스타일 선택)', icon: QUOTE_ICON, iconOnly: true, dropdown: true }],
   null,
   // 정렬: 드롭다운 두 개 (가로 / 세로). 버튼 아이콘은 현재 상태를 보여주고, 누르면 목록
@@ -381,7 +381,7 @@ export class JmToolbarEditor {
     const inherited = opts.inherited?.(this.editor, this.editor.sel.getRange()?.startContainer) ?? null;
     const items = opts.inherited ? this.#valueItems(opts, btn.dataset.value, inherited) : (opts.defaultLast ? [...this.#selectItems(opts), opts.selectDefault] : [opts.selectDefault, ...this.#selectItems(opts)]).filter(Boolean); // 제목은 큰 글자부터 본문까지
     this.listMenu.open(r.left, r.bottom + 4, items.map(([v, text]) => ({
-      label: text, checked: v === btn.dataset.value, action: () => this.editor.exec(cmd, (v && v !== inherited) ? v : null),
+      label: text, className: opts.itemClass?.(v), checked: v === btn.dataset.value, action: () => this.editor.exec(cmd, (v && v !== inherited) ? v : null),
     })));
   }
 

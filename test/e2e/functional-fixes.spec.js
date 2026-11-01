@@ -600,6 +600,18 @@ test.describe('11. 글자 크기·글꼴 버튼 표시', () => {
     expect(await page.locator('.jm-listmenu .jm-ctxmenu-item').allTextContents()).toEqual(['제목 1', '제목 2', '제목 3', '제목 4', '제목 5', '제목 6', '본문']);
   });
 
+  test('제목 목록 항목은 단계별 크기로 보이고, 본문은 굵지 않다', async ({ page }) => {
+    await page.locator('.jm-btn[data-cmd="heading"]').click();
+    const m = await page.locator('.jm-listmenu .jm-ctxmenu-item').evaluateAll((els) => els.map((e) => { const s = getComputedStyle(e); return [parseFloat(s.fontSize), parseInt(s.fontWeight, 10)]; }));
+    for (let i = 1; i < 6; i++) expect(m[i][0]).toBeLessThan(m[i - 1][0]);
+    expect(m[5][1]).toBeGreaterThanOrEqual(600);
+    expect(m[6][1]).toBe(400);
+    const others = page.locator('.jm-heading-item');
+    await page.keyboard.press('Escape');
+    await page.locator('.jm-btn[data-cmd="fontSize"]').click();
+    await expect(others).toHaveCount(0); // 다른 목록에는 안 묻는다
+  });
+
   for (const q of ['?structure=0', '?structure=1']) {
     test(`제목 4~6: 적용·표시·저장, 본문으로 복귀, 크기는 내림차순 ${q}`, async ({ page }) => {
       await open(page, q);
