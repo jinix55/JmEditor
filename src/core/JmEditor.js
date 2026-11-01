@@ -677,6 +677,7 @@ export class JmEditor {
   #handleKeydown(e) {
     const mod = e.ctrlKey || e.metaKey;
     if (mod) {
+      if (e.target.closest?.('input, textarea, select')) return; // 블록 헤더 입력란: 실행 취소·전체 선택 등은 브라우저 기본 (문서 명령으로 가지 않게)
       const key = e.key.toLowerCase();
       const map = { b: 'bold', i: 'italic', u: 'underline', z: e.shiftKey ? 'redo' : 'undo', y: 'redo' };
       if (map[key]) { e.preventDefault(); this.exec(map[key]); return; }
@@ -691,7 +692,6 @@ export class JmEditor {
           return;
         }
         // 문서 전체: 맨 앞·맨 뒤가 블록 레이어면 브라우저 전체 선택이 동작하지 않으므로 직접 고른다
-        if (e.target.closest?.('input, textarea, select')) return; // 블록 헤더 입력란은 브라우저 기본
         e.preventDefault();
         this.#selectAll();
         return;
@@ -733,7 +733,7 @@ export class JmEditor {
       // 빈 li 에서 Enter → 목록 탈출
       if (block?.tagName === 'LI' && block.textContent.replace(ZWSP, '') === '') {
         e.preventDefault();
-        this.commands.toggleList(block.parentNode.tagName.toLowerCase());
+        if (!this.commands.outdentEmptyItem(block)) this.commands.toggleList(block.parentNode.tagName.toLowerCase()); // 중첩 항목은 상위 목록의 새 항목으로
         return;
       }
       // 제목/인용에서 Enter → 다음 줄은 p 로 (브라우저 기본은 같은 태그를 복제함)
@@ -977,7 +977,7 @@ export class JmEditor {
    * @returns {string}
    */
   static #dropEmptyInlines(html) {
-    const empty = new RegExp(`<(strong|em|u|s)>${ZWSP}+</\\1>`, 'g');
+    const empty = new RegExp(`<(strong|em|u|s|span|a)(?:\\s[^>]*)?>${ZWSP}+</\\1>`, 'g');
     let out = html;
     let prev;
     do { prev = out; out = out.replace(empty, ZWSP); } while (out !== prev); // 중첩은 안쪽부터: 지운 자리에 ZWSP 를 남겨 바깥도 걸리게

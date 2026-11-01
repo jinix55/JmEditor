@@ -52,7 +52,7 @@ const BOLD_PASS_TAGS = new Set(['table', 'thead', 'tbody', 'tfoot', 'tr', 'colgr
 const BOLD_BLOCK_TAGS = new Set(['address', 'article', 'aside', 'blockquote', 'caption', 'center', 'dd', 'details', 'div', 'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form',
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr', 'li', 'main', 'menu', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'ul']);
 /** 내용을 통째로 버리는 태그 — 훑지 않는다 (Sanitizer 의 DROP_TAGS 와 같음) */
-const LEGACY_SKIP_TAGS = new Set(['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link']);
+const LEGACY_SKIP_TAGS = new Set(['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link', 'title', 'textarea', 'select']);
 
 /**
  * style 문자열을 선언 목록으로 나눈다. 따옴표·괄호 안의 `;`·`:` 는 구분자가 아니며, 첫 `:` 가 이름과 값을 나눈다.

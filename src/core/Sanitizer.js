@@ -49,8 +49,10 @@ const PASTE_JUNK_CLASS = /^(Mso.*|Apple-.*)$/;
 const PASTE_OFFICE_CLASS = /^(xl\d+|font\d+)$/;
 /** 붙여넣은 원본 HTML 의 오피스 흔적 */
 const OFFICE_MARK = /mso-|urn:schemas-microsoft-com|ProgId/i;
-/** 자식까지 통째로 버리는 위험 태그 */
-const DROP_TAGS = ['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link'];
+/** 자식까지 통째로 버리는 태그: 위험 태그 + 글이 본문에 새면 안 되는 문서 머리·폼 입력 (서버 HtmlSanitizer 와 같음) */
+const DROP_TAGS = ['script', 'style', 'iframe', 'object', 'embed', 'meta', 'link', 'title', 'textarea', 'select'];
+/** 닫는 태그가 없으면 뒤 글을 통째로 삼키는 태그 — 파싱 전에 그 여는 태그만 지운다 (서버와 같은 규칙) */
+const SWALLOW_TAG = /<(\/?)(textarea|title|select)(?=[ \t\n\f\r\/>])[^>]*>/gi;
 /** 요소 중첩 깊이 상한 — 그보다 깊은 요소는 벗기고 글만 남긴다 (서버 DEPTH_MAX 와 같음) */
 const DEPTH_MAX = 256;
 /** 파싱 전 입력에서 허용하는 태그 순 열림(이름별 열림 − 닫힘의 합계) — 넘은 뒤의 여는 태그는 파싱 전에 지운다 */
@@ -177,7 +179,7 @@ export class Sanitizer {
 
   static #cleanRoot(html) {
     Sanitizer.#depth = 0;
-    const doc = new DOMParser().parseFromString(`<body>${Sanitizer.#limitOpenTags(String(html))}</body>`, 'text/html');
+    const doc = new DOMParser().parseFromString(`<body>${Sanitizer.#limitOpenTags(Sanitizer.#dropUnclosedTags(String(html)))}</body>`, 'text/html');
     normalizeLegacy(doc.body, Sanitizer.#fonts, !!Sanitizer.#policy?.tags.has('caption'));
     const frag = document.createDocumentFragment();
     Array.from(doc.body.childNodes).forEach((n) => {
@@ -189,6 +191,43 @@ export class Sanitizer {
     wrap.appendChild(frag);
     Sanitizer.dedupeIds(wrap);
     return wrap.innerHTML;
+  }
+
+  /**
+   * 닫히지 않은 textarea·title·select 여는 태그만 지운다 (파서는 문서 끝까지 뒤 글을 그 안에 넣어, 버림 목록과 만나면 본문이 조용히 사라진다).
+   * - textarea·title: 같은 이름의 닫는 태그가 뒤에 없으면 지움. 있으면 거기까지는 태그가 아닌 글이라 건너뛴다
+   * - select: 닫는 태그 전에 다른 여는 태그(select·textarea·title)가 오면 지움 (파서가 여기서 select 를 끝내고 앞 글을 버린다)
+   * 태그 목록을 먼저 훑어 이름별 마지막 닫는 태그를 알아 두므로 선형 시간. 주석·따옴표는 해석하지 않고, 결과는 다시 파서·정제를 거친다. 서버 dropUnclosedTags 와 같은 규칙
+   * @param {string} html
+   * @returns {string}
+   */
+  static #dropUnclosedTags(html) {
+    const end = html.lastIndexOf('>') + 1; // 그 뒤에는 완성된 태그가 없다 — 끝까지 찾아보는 일을 막아 선형 유지
+    const body = html.slice(0, end);
+    const tokens = [];
+    const lastClose = {};
+    for (const m of body.matchAll(SWALLOW_TAG)) {
+      const name = m[2].toLowerCase();
+      tokens.push({ close: !!m[1], name, start: m.index, stop: m.index + m[0].length });
+      if (m[1]) lastClose[name] = m.index;
+    }
+    if (!tokens.length) return html;
+    const drops = [];
+    let inside = null; // 지금 열려 있는 태그
+    tokens.forEach((t) => {
+      if (inside && inside.name !== 'select') { if (t.close && t.name === inside.name) inside = null; return; }
+      if (t.close) { if (t.name === 'select') inside = null; return; }
+      if (inside) drops.push(inside); // select 안의 새 여는 태그
+      inside = null;
+      if ((lastClose[t.name] ?? -1) > t.start) inside = t; else drops.push(t);
+    });
+    if (!drops.length) return html;
+    drops.sort((a, b) => a.start - b.start);
+    const parts = [];
+    let copied = 0;
+    drops.forEach((t) => { parts.push(html.slice(copied, t.start)); copied = t.stop; });
+    parts.push(html.slice(copied));
+    return parts.join('');
   }
 
   /**
@@ -345,7 +384,7 @@ export class Sanitizer {
    */
   static inlineOfficeStyles(html) {
     if (!OFFICE_MARK.test(html) || !html.includes('<style')) return html;
-    const doc = new DOMParser().parseFromString(Sanitizer.#limitOpenTags(html), 'text/html'); // 스크립트가 실행되지 않는 문서
+    const doc = new DOMParser().parseFromString(Sanitizer.#limitOpenTags(Sanitizer.#dropUnclosedTags(html)), 'text/html'); // 스크립트가 실행되지 않는 문서
     const rules = parseClassRules(Array.from(doc.querySelectorAll('style'), (s) => s.textContent).join('\n'));
     if (!rules.size) return html;
     let budget = OFFICE_INLINE_BUDGET;

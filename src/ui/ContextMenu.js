@@ -3,7 +3,7 @@
  * - 에디터 안에서 쓰는 우클릭 메뉴. 프레임워크 독립.
  * - 항목: { label, action, divider, disabled, children: [...], className, checked }  children 이 있으면 하위 메뉴(마우스 오버로 펼침).
  *   className: 항목 모양용 추가 클래스, checked: 현재 선택된 항목 표시(is-checked·aria-checked)
- * - 바깥 클릭 / Escape / 스크롤 시 닫힌다.
+ * - 바깥 클릭 / Escape / 바깥 스크롤 시 닫힌다 (메뉴 자체 스크롤에는 닫히지 않음).
  */
 export class ContextMenu {
   /**
@@ -24,7 +24,11 @@ export class ContextMenu {
 
     this.onDocDown = (e) => { if (!this.el.contains(e.target) && !this.sub?.contains(e.target)) this.close(); };
     this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
-    this.onScroll = () => this.close();
+    this.onScroll = (e) => {
+      if (this.sub?.contains(e.target)) return;
+      if (e.target === this.el) { this.#closeSub(); return; } // 항목이 움직이면 하위 메뉴 위치가 어긋나므로 그것만 닫는다
+      this.close();
+    };
   }
 
   /**

@@ -92,6 +92,14 @@ export class ImageCommands {
     if (this.img && this.img !== img) ImageCommands.#unmark(this.img);
     this.img = img;
     img.classList.add(IMG_SELECTED_CLASS);
+    if (!this.root.contains(document.activeElement)) {
+      this.root.focus({ preventScroll: true }); // 키 처리(Delete 등)는 에디터 포커스가 있어야 온다
+      // 포커스만 주면 커서가 문서 맨 앞이라, 이미지 옆에 둔다 (그대로 입력해도 이미지 뒤에 들어가게)
+      const caret = document.createRange();
+      caret.setStartAfter(img.parentElement?.tagName === 'PICTURE' ? img.parentElement : img);
+      caret.collapse(true);
+      this.editor.sel.setRange(caret);
+    }
     this.#bindMoveHandle(img);
     this.#refreshBar();
     this.bar.hidden = false;
@@ -368,7 +376,9 @@ export class ImageCommands {
     const img = this.img;
     if (!img) return;
     e.preventDefault();
-    const box = img.parentElement;
+    // 기준 상자: img 폭(%)의 기준인 가장 가까운 블록 (picture·a 같은 인라인 부모는 폭이 0 이라 건너뜀)
+    let box = img.parentElement;
+    while (box !== this.root && /^(inline|contents)/.test(getComputedStyle(box).display)) box = box.parentElement;
     const cs = getComputedStyle(box);
     const boxW = box.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
     const startW = img.getBoundingClientRect().width;

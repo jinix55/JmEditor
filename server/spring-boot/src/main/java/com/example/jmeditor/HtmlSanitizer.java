@@ -190,7 +190,9 @@ public class HtmlSanitizer {
         // 태그 별칭: 클라이언트와 같게 b·i·strike → strong·em·s (Safelist 에 없어 글자만 남던 것을 맞춤)
         // jsoup 은 object·applet·marquee 가 쌓이면 이차 시간(removeFromActiveFormattingElements)이라 파싱 전에 그 수만 제한한다.
         // 클라이언트 #limitOpenTags(순 열림 2만)와 기준이 달라 이 극단 입력에서는 결과가 다를 수 있다(허용)
-        Document pre = Jsoup.parseBodyFragment(limitBarrierTags(html));
+        Document pre = Jsoup.parseBodyFragment(limitBarrierTags(dropUnclosedTags(html)));
+        // 글까지 통째로 버린다: 문서 머리·폼 입력 글이 본문에 새지 않게 (클라이언트 DROP_TAGS 와 같음. Safelist 는 태그만 벗기고 글을 남김)
+        pre.select("title, textarea, select").remove();
         pre.outputSettings().prettyPrint(false); // 원문 공백 그대로
         LegacyFormat.normalize(pre.body(), fonts, policy.tags().contains("caption")); // 옛 형식(font·표 옛 속성·font-weight) 변환 — 허용 검사 전에
         TAG_ALIAS.forEach((from, to) -> {
@@ -380,6 +382,54 @@ public class HtmlSanitizer {
         // 줄 맞춤(pretty print) 없이 — 켜 두면 dt·dd·div·caption 처럼 글만 있는 블록 안에 줄바꿈·들여쓰기가 들어가 글자가 바뀐다
         doc.outputSettings().prettyPrint(false);
         return doc.body().html();
+    }
+
+    /** 닫는 태그가 없으면 뒤 글을 통째로 삼키는 태그 */
+    private static final java.util.regex.Pattern SWALLOW_TAG = java.util.regex.Pattern.compile(
+            "<(/?)(textarea|title|select)(?=[ \\t\\n\\f\\r/>])[^>]*+>", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /**
+     * 닫히지 않은 textarea·title·select 여는 태그만 지운다 (파서가 문서 끝까지 뒤 글을 그 안에 넣어 본문이 조용히 사라지는 것 방지). 클라이언트 #dropUnclosedTags 와 같은 규칙:
+     * textarea·title 은 같은 이름의 닫는 태그가 뒤에 없으면 지우고, 있으면 거기까지 건너뛴다. select 는 닫는 태그 전에 다른 여는 태그가 오면 지운다.
+     * 마지막 닫는 태그를 먼저 찾아 두어 선형 시간. 결과는 다시 파서·정제를 거치므로 보안 경계가 아니다.
+     * @param html 입력
+     * @return 해당 여는 태그를 뺀 문자열
+     */
+    static String dropUnclosedTags(String html) {
+        java.util.List<int[]> tokens = new java.util.ArrayList<>(); // {닫힘 여부, 이름 번호, 시작, 끝}
+        int[] lastClose = {-1, -1, -1};
+        java.util.regex.Matcher m = SWALLOW_TAG.matcher(html).region(0, html.lastIndexOf('>') + 1);
+        while (m.find()) {
+            boolean close = !m.group(1).isEmpty();
+            int name = switch (m.group(2).toLowerCase(java.util.Locale.ROOT)) { case "textarea" -> 0; case "title" -> 1; default -> 2; };
+            tokens.add(new int[] {close ? 1 : 0, name, m.start(), m.end()});
+            if (close) lastClose[name] = m.start();
+        }
+        final int select = 2;
+        java.util.List<int[]> drops = new java.util.ArrayList<>();
+        int[] inside = null; // 지금 열려 있는 태그
+        for (int[] t : tokens) {
+            boolean close = t[0] == 1;
+            if (inside != null && inside[1] != select) {
+                if (close && t[1] == inside[1]) inside = null;
+                continue;
+            }
+            if (close) {
+                if (t[1] == select) inside = null;
+                continue;
+            }
+            if (inside != null) drops.add(inside); // select 안의 새 여는 태그
+            inside = null;
+            if (lastClose[t[1]] > t[2]) inside = t; else drops.add(t);
+        }
+        if (drops.isEmpty()) return html;
+        StringBuilder out = new StringBuilder(html.length());
+        int copied = 0;
+        for (int[] t : drops) {
+            out.append(html, copied, t[2]);
+            copied = t[3];
+        }
+        return out.append(html, copied, html.length()).toString();
     }
 
     /**

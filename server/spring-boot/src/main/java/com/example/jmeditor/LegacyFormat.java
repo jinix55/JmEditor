@@ -74,7 +74,7 @@ final class LegacyFormat {
     private static final Set<String> BOLD_BLOCK_TAGS = Set.of("address", "article", "aside", "blockquote", "caption", "center", "dd", "details", "div", "dl", "dt", "fieldset", "figcaption", "figure", "footer", "form",
             "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "li", "main", "menu", "nav", "ol", "p", "pre", "section", "table", "ul");
     /** 내용을 통째로 버리는 태그 — 훑지 않는다 (클라이언트 DROP_TAGS 와 같음) */
-    private static final Set<String> SKIP_TAGS = Set.of("script", "style", "iframe", "object", "embed", "meta", "link");
+    private static final Set<String> SKIP_TAGS = Set.of("script", "style", "iframe", "object", "embed", "meta", "link", "title", "textarea", "select");
 
     /**
      * style 문자열을 선언 목록으로 나눈다. 따옴표·괄호 안의 ; : 는 구분자가 아니며, 첫 : 가 이름과 값을 나눈다.

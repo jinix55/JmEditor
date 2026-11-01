@@ -88,9 +88,11 @@ export class TableCommands {
     return { table, r1: pos.r, c1: pos.c, r2: pos.r + pos.rs - 1, c2: pos.c + pos.cs - 1 };
   }
 
-  /** 대상 셀들 (범위 선택 or 커서 셀) */
-  #targetCells() {
-    const rect = this.#targetRect();
+  /**
+   * 대상 셀들 (범위 선택 or 커서 셀)
+   * @param {object|null} [rect] 미리 잡아 둔 대상 사각형 (없으면 지금 선택 기준)
+   */
+  #targetCells(rect = this.#targetRect()) {
     if (!rect) return [];
     return this.#grid(rect.table).cellsInRect(rect);
   }
@@ -164,17 +166,19 @@ export class TableCommands {
       if (drag) return;
       const h = hit(e);
       table._resizeHit = !!h; // 선택 핸들러가 참고
-      table.style.cursor = h ? (h.kind === 'col' ? 'col-resize' : 'row-resize') : '';
+      this.#setStyle(table, 'cursor', h ? (h.kind === 'col' ? 'col-resize' : 'row-resize') : null);
     });
     // 경계에서 바로 표 밖으로 나가도 커서 스타일이 남지 않게 (저장 HTML 에 섞이지 않도록)
-    table.addEventListener('mouseleave', () => { if (!drag) { table.style.removeProperty('cursor'); table._resizeHit = false; } });
+    table.addEventListener('mouseleave', () => { if (!drag) { this.#setStyle(table, 'cursor', null); table._resizeHit = false; } });
     table.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       const h = hit(e);
       if (!h) return;
       e.preventDefault(); e.stopPropagation();
-      this.#ensureColgroup(table);
       if (h.kind === 'col') {
+        // 움직이지 않고 놓으면 되돌리려고 원래 값을 기억한다
+        const origin = { groups: Array.from(table.querySelectorAll(':scope > colgroup')).map((g) => g.cloneNode(true)), width: table.style.width };
+        this.#ensureColgroup(table);
         // 모든 열을 현재 렌더 폭(px)으로 고정한 뒤, 당기는 열과 오른쪽 이웃 열이 폭을 주고받는다 (표 전체 폭 유지)
         const cols = Array.from(table.querySelectorAll(':scope > colgroup > col'));
         const widths = cols.map((_, i) => this.#colWidth(table, i));
@@ -185,7 +189,7 @@ export class TableCommands {
         const total = widths.reduce((a, b) => a + b, 0);
         const box = getComputedStyle(layer);
         const room = layer.clientWidth - parseFloat(box.paddingLeft) - parseFloat(box.paddingRight); // 레이어 안쪽 폭
-        drag = { ...h, start: e.clientX, cols, widths, next, total, maxTotal: Math.max(total, room) };
+        drag = { ...h, start: e.clientX, cols, widths, next, total, maxTotal: Math.max(total, room), origin };
       } else {
         const tr = table.rows[h.index];
         drag = { ...h, start: e.clientY, startSize: tr.getBoundingClientRect().height, tr };
@@ -199,6 +203,8 @@ export class TableCommands {
     const MIN = 30;
     const move = (e) => {
       if (!drag) return;
+      if ((drag.kind === 'col' ? e.clientX : e.clientY) !== drag.start) drag.moved = true;
+      if (!drag.moved) return;
       if (drag.kind === 'col') {
         let delta = e.clientX - drag.start;
         const w0 = drag.widths[drag.index];
@@ -220,13 +226,29 @@ export class TableCommands {
       document.removeEventListener('mousemove', move);
       document.removeEventListener('mouseup', up);
       if (!drag) return;
-      table.style.removeProperty('cursor'); // 표 밖에서 놓으면 mouseleave 가 지나가 저장 HTML 에 남는다
-      if (drag.kind === 'col') this.#writeColPercents(table, this.#colPercents(table)); // px → % 로 되돌려 저장
+      this.#setStyle(table, 'cursor', null); // 표 밖에서 놓으면 mouseleave 가 지나가 저장 HTML 에 남는다
+      const { kind, moved, origin } = drag;
+      if (kind === 'col') {
+        if (moved) this.#writeColPercents(table, this.#colPercents(table)); // px → % 로 되돌려 저장
+        else this.#restoreCols(table, origin);
+      }
       drag = null;
       table._resizing = false;
       layer.classList.remove('is-resizing');
-      this.editor.commit();
+      if (moved) this.editor.commit();
     };
+  }
+
+  /**
+   * 열 너비를 누르기 전 상태로 되돌린다 (경계를 눌렀다 움직이지 않고 놓은 경우)
+   * @param {HTMLTableElement} table
+   * @param {{groups: HTMLElement[], width: string}} origin
+   */
+  #restoreCols(table, origin) {
+    table.querySelectorAll(':scope > colgroup').forEach((g) => g.remove());
+    const ref = table.querySelector(':scope > thead, :scope > tbody, :scope > tfoot, :scope > tr');
+    origin.groups.forEach((g) => table.insertBefore(g, ref));
+    this.#setStyle(table, 'width', origin.width || null);
   }
 
   /**
@@ -256,14 +278,20 @@ export class TableCommands {
     Array.from(cg.children).forEach((col, i) => { if (!col.style.width) col.style.width = `${this.#colWidth(table, i)}px`; });
   }
 
-  /** 열 i 의 현재 렌더 폭 */
+  /** 열 i 의 현재 폭: 병합 안 된 칸의 렌더 폭 → 기존 col 값(%·px) → 그 열을 덮는 병합 칸 폭을 나눈 값 → 균등 */
   #colWidth(table, i) {
     const grid = this.#grid(table);
     for (let r = 0; r < grid.rowCount; r++) {
       const g = grid.grid[r][i];
       if (g && g.c0 === i && (g.cell.colSpan || 1) === 1) return g.cell.getBoundingClientRect().width;
     }
-    return table.getBoundingClientRect().width / Math.max(1, grid.colCount);
+    const tableWidth = table.getBoundingClientRect().width;
+    const w = table.querySelector(':scope > colgroup')?.children[i]?.style.width || '';
+    if (/%$/.test(w)) return (parseFloat(w) / 100) * tableWidth;
+    if (/px$/.test(w)) return parseFloat(w);
+    const spanned = grid.grid.find((row) => row[i])?.[i]?.cell;
+    if (spanned) return spanned.getBoundingClientRect().width / (spanned.colSpan || 1);
+    return tableWidth / Math.max(1, grid.colCount);
   }
 
   // ───────────── 삽입 ─────────────
@@ -350,14 +378,25 @@ export class TableCommands {
     this.#normalizeRowSpans(table);
   }
 
-  /** 행 위/아래로 이동 (가로지르는 병합 셀이 있으면 불가) */
+  /**
+   * 행을 위/아래로 옮길 수 있는지: 같은 구역(thead·tbody·tfoot) 안이고 가로지르는 병합 셀이 없어야 한다
+   * @param {TableGrid} grid
+   * @param {{r1: number, r2: number}} rect
+   * @param {number} dir -1 위, 1 아래
+   */
+  #canMoveRow(grid, rect, dir) {
+    const r = dir < 0 ? rect.r1 : rect.r2, t = r + dir;
+    return t >= 0 && t < grid.rowCount && !grid.rowHasSpanAcross(r) && !grid.rowHasSpanAcross(t) && grid.rows[r].parentNode === grid.rows[t].parentNode;
+  }
+
+  /** 행 위/아래로 이동 (같은 구역 안에서만, 가로지르는 병합 셀이 있으면 불가) */
   moveRow(dir) {
     const rect = this.#targetRect();
     if (!rect) return;
     const { table } = rect;
     const grid = this.#grid(table);
+    if (!this.#canMoveRow(grid, rect, dir)) return;
     const r = dir < 0 ? rect.r1 : rect.r2, t = r + dir;
-    if (t < 0 || t >= grid.rowCount || grid.rowHasSpanAcross(r) || grid.rowHasSpanAcross(t)) return;
     const a = grid.rows[r], b = grid.rows[t];
     if (dir < 0) a.parentNode.insertBefore(a, b); else a.parentNode.insertBefore(b, a);
     this.#afterChange(table, a.cells[0]);
@@ -504,15 +543,18 @@ export class TableCommands {
     this.editor.commit();
   }
 
-  /** 대상 셀들 배경색 (null 이면 해제) */
-  setCellBackground(color) {
-    this.#targetCells().forEach((c) => this.#setStyle(c, 'background-color', color));
+  /**
+   * 대상 셀들 배경색 (null 이면 해제)
+   * @param {string|null} color
+   * @param {object|null} [rect] 미리 잡아 둔 대상 사각형 (색 입력란으로 포커스가 옮겨 가도 대상을 잃지 않게)
+   */
+  setCellBackground(color, rect = this.#targetRect()) {
+    this.#targetCells(rect).forEach((c) => this.#setStyle(c, 'background-color', color));
     this.editor.commit();
   }
 
   /** 대상 행 전체 배경색 */
-  setRowBackground(color) {
-    const rect = this.#targetRect();
+  setRowBackground(color, rect = this.#targetRect()) {
     if (!rect) return;
     const grid = this.#grid(rect.table);
     grid.cellsInRect({ r1: rect.r1, c1: 0, r2: rect.r2, c2: grid.colCount - 1 }).forEach((c) => this.#setStyle(c, 'background-color', color));
@@ -617,15 +659,15 @@ export class TableCommands {
     const grid = table ? this.#grid(table) : null;
     const rect = this.#targetRect();
     const sel = !!this.selection;
-    const rowMovable = (d) => rect && grid && !grid.rowHasSpanAcross(rect.r1) && (d < 0 ? rect.r1 > 0 : rect.r2 < grid.rowCount - 1);
+    const rowMovable = (d) => rect && grid && this.#canMoveRow(grid, rect, d);
     const colMovable = (d) => {
       if (!rect || !grid) return false;
       const c = d < 0 ? rect.c1 : rect.c2, t = c + d;
       return t >= 0 && t < grid.colCount && !grid.colHasSpanAcross(c) && !grid.colHasSpanAcross(t);
     };
     const colorItems = pickColor ? [
-      { label: '셀 배경색…', action: () => pickColor((c) => this.setCellBackground(c)) },
-      { label: '행 배경색…', action: () => pickColor((c) => this.setRowBackground(c)) },
+      { label: '셀 배경색…', action: () => this.#pickColorFor(pickColor, (c, r) => this.setCellBackground(c, r)) },
+      { label: '행 배경색…', action: () => this.#pickColorFor(pickColor, (c, r) => this.setRowBackground(c, r)) },
     ] : [];
     return [
       { label: '행', children: [
@@ -671,6 +713,19 @@ export class TableCommands {
         { label: '표 삭제', action: () => this.deleteTable() },
       ] },
     ];
+  }
+
+  /**
+   * 색 선택기를 연 시점의 대상 사각형을 잡아 두고 색을 적용한다 (HEX 입력란에 포커스가 가면 문서 선택이 사라지므로)
+   * @param {(cb: (color: string|null) => void) => void} pickColor
+   * @param {(color: string|null, rect: object|null) => void} apply
+   */
+  #pickColorFor(pickColor, apply) {
+    const rect = this.#targetRect();
+    pickColor((c) => {
+      if (!this.sel.getRange()) this.sel.restore();
+      apply(c, rect);
+    });
   }
 
   getState() {

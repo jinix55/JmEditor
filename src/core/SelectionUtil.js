@@ -36,9 +36,13 @@ export class SelectionUtil {
     return this.structure.tags.has(tag) && !INLINE_STRUCTURE_TAGS.includes(tag);
   }
 
-  /** 블록 자식이 있는 요소인지 (구조 컨테이너 판정) */
-  static hasBlockChild(el) {
-    return Array.from(el.children).some((c) => BLOCK_TAG.test(c.tagName) || c.getAttribute('contenteditable') === 'false');
+  /**
+   * 블록 자식이 있는 요소인지 (구조 컨테이너 판정)
+   * @param {Element} el
+   * @param {RegExp} [ignore] 블록으로 치지 않을 태그 (목록 항목의 직속 문단 등)
+   */
+  static hasBlockChild(el, ignore = null) {
+    return Array.from(el.children).some((c) => !ignore?.test(c.tagName) && (BLOCK_TAG.test(c.tagName) || c.getAttribute('contenteditable') === 'false'));
   }
 
   /** 현재 Range 반환. 루트 밖이거나 없으면 null */
@@ -98,10 +102,11 @@ export class SelectionUtil {
   }
 
   /**
-   * 글 블록(커서가 속하는 블록)인지
+   * 글 블록(커서가 속하는 블록)인지. li 직속 p 는 글 블록이 아니다 — 그 li 가 블록 역할 (목록 판정·토글이 li 기준으로 되게)
    * @param {Element} el
    */
   isTextBlock(el) {
+    if (el.tagName === 'P' && el.parentElement?.tagName === 'LI') return false;
     if (CARET_BLOCK.test(el.tagName)) return true;
     if (!this.structure) return false;
     if (STRUCTURE_CARET_BLOCK.test(el.tagName)) return true;

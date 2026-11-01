@@ -314,3 +314,33 @@
 # ── 제목 h4~h6 (구조 모드 켬·끔 모두 유지)
 < <h4 style="text-align:center">a</h4><h5>b</h5><h6>c</h6>
 > <h4 style="text-align: center">a</h4><h5>b</h5><h6>c</h6>
+
+# ── 글까지 통째로 버리는 태그 (문서 머리·폼 입력)
+< <html><head><title>제목</title></head><body><p>a</p></body></html>
+> <p>a</p>
+< <p>a<textarea>b</textarea></p>
+> <p>a</p>
+< <p>a<select><option>b</option></select></p>
+> <p>a</p>
+
+# ── 닫히지 않은 폼·제목 태그: 그 태그만 지우고 뒤 글을 살린다
+< <p>a</p><textarea><p>b</p><p>c</p>
+> <p>a</p><p>b</p><p>c</p>
+< <p>a</p><select><option>1<p>b</p><p>c</p>
+> <p>a</p>1<p>b</p><p>c</p>
+< <blockquote><p>k</p><textarea>t</blockquote><p>b</p>
+> <blockquote><p>k</p>t</blockquote><p>b</p>
+< <title>t<p>b</p>
+> t<p>b</p>
+< <textarea>x</textarea><p>a</p><textarea><p>b</p>
+> <p>a</p><p>b</p>
+< <select><p>b</p><select>x</select>
+> <p>b</p>
+< <TEXTAREA><title><p>b</p>
+> <p>b</p>
+
+# ── noscript 는 태그만 벗긴다 (지연 로딩 이미지 유지)
+< <noscript><img src="https://a.com/x.png"></noscript>
+> <img src="https://a.com/x.png">
+< <noscript><p>b</p></noscript>
+> <p>b</p>

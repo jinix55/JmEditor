@@ -45,9 +45,14 @@ export class Commands {
   #toggleInlineCollapsed(tag, range) {
     const inside = this.sel.closest(tag);
     if (inside) {
-      // 태그 밖(뒤)으로 커서 이동 → 이후 입력은 서식 없음
+      // 커서 자리에서 태그를 나눠 그 자리만 태그 밖으로 → 이후 입력은 이 서식만 없음 (안쪽 다른 서식은 유지)
       const after = document.createTextNode(ZWSP);
-      inside.parentNode.insertBefore(after, inside.nextSibling);
+      range.insertNode(after);
+      const upper = tag.toUpperCase();
+      for (let anc = inside; anc; anc = this.#findAncestor(after, upper)) {
+        this.#hoistLink(after, anc);
+        this.#unwrapEl(this.#isolate(after, anc));
+      }
       const r = document.createRange();
       r.setStart(after, 1);
       r.collapse(true);
@@ -62,6 +67,20 @@ export class Commands {
       r.collapse(true);
       this.sel.setRange(r);
     }
+  }
+
+  /**
+   * node 와 서식 태그 사이에 링크가 있으면 링크를 서식 태그 밖으로 옮긴다 (서식을 나눌 때 링크까지 나뉘지 않게)
+   * @param {Node} node
+   * @param {HTMLElement} anc 서식 태그
+   */
+  #hoistLink(node, anc) {
+    const link = this.#findAncestor(node, 'A');
+    if (!link || link === anc || !anc.contains(link)) return;
+    this.#isolate(link, anc);
+    this.#unwrapEl(link);
+    anc.replaceWith(link);
+    link.appendChild(anc);
   }
 
   /**
@@ -355,33 +374,149 @@ export class Commands {
   // ───────────── 블록 정렬 ─────────────
 
   /**
-   * 커서가 있는 블록(단락/제목/인용/목록 항목/표 셀)의 가로 정렬
+   * 범위 안 글 블록 목록 (문서 순서). 접힌 커서면 커서 블록 하나.
+   * 다음 블록 맨 앞에서 끝나거나 앞 블록 맨 끝에서 시작하는 선택은 그 블록을 넣지 않는다.
+   * 플러그인 블록 안(갤러리·슬라이드 제목 등)은 넣지 않는다 — 배치 블록 글 칸은 본문처럼 넣는다
+   * @returns {HTMLElement[]}
+   */
+  #rangeBlocks() {
+    const range = this.sel.getRange();
+    const current = this.sel.getBlock();
+    const fallback = current ? [current] : [];
+    if (!range || range.collapsed) return fallback;
+    const common = range.commonAncestorContainer;
+    const host = common.nodeType === Node.ELEMENT_NODE ? common : common.parentNode;
+    const blocks = new Set();
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const isText = n.nodeType === Node.TEXT_NODE;
+      if (isText ? !/[^\s\u200B]/.test(n.textContent) : !/^(BR|IMG)$/.test(n.tagName)) continue;
+      if (!n.parentElement?.isContentEditable || !range.intersectsNode(n)) continue;
+      if (n === range.startContainer && range.startOffset >= n.length) continue;
+      if (n === range.endContainer && range.endOffset === 0) continue;
+      const block = this.sel.textBlockOf(n);
+      if (block && !Commands.#isPluginText(block)) blocks.add(block);
+    }
+    return blocks.size ? Array.from(blocks) : fallback;
+  }
+
+  /**
+   * 블록 명령 뒤 선택 되살리기: 커서였으면 마지막 블록 끝, 범위였으면 처음~마지막 블록 전체
+   * @param {HTMLElement[]} blocks
+   * @param {boolean} collapsed 명령 전 선택이 접혀 있었는지
+   */
+  #restoreBlocks(blocks, collapsed) {
+    const last = blocks[blocks.length - 1];
+    if (collapsed) { this.sel.placeCursor(last, true); return; }
+    const r = document.createRange();
+    r.setStart(blocks[0], 0);
+    r.setEnd(last, last.childNodes.length);
+    this.sel.setRange(r);
+  }
+
+  /**
+   * 플러그인 블록이 정한 자리의 글인지 (태그를 바꾸면 저장 때 사라짐): data-role 요소 또는 data-type 블록 안. 배치 블록 글 칸(data-cell="text")은 아님
+   * @param {Element} el
+   */
+  static #isPluginText(el) {
+    return !!el.closest('[data-role]') || (!!el.closest('[data-type]') && !el.closest('[data-cell="text"]'));
+  }
+
+  /** 지금 선택이 접힌 커서인지 (선택이 없어도 true) */
+  #isCollapsed() {
+    return this.sel.getRange()?.collapsed !== false;
+  }
+
+  /**
+   * 범위 안 블록(단락/제목/인용/목록 항목/표 셀)의 가로 정렬
    * @param {'left'|'center'|'right'|'justify'} value left 면 스타일 제거
    */
   setAlign(value) {
-    const block = this.sel.getBlock();
-    if (!block) return;
-    if (value === 'left') block.style.removeProperty('text-align'); else block.style.textAlign = value;
-    if (!block.getAttribute('style')?.trim()) block.removeAttribute('style');
+    const blocks = this.#rangeBlocks();
+    if (!blocks.length) return;
+    blocks.forEach((block) => {
+      if (value === 'left') block.style.removeProperty('text-align'); else block.style.textAlign = value;
+      if (!block.getAttribute('style')?.trim()) block.removeAttribute('style');
+      // li 직속 문단의 자체 정렬은 항목 정렬을 가리므로 지운다
+      if (block.tagName === 'LI') block.querySelectorAll(':scope > p').forEach((p) => { p.style.removeProperty('text-align'); if (!p.getAttribute('style')?.trim()) p.removeAttribute('style'); });
+    });
     this.editor.commit();
   }
 
   // ───────────── 블록 서식 (p / h1~h6 / blockquote) ─────────────
 
   /**
-   * 현재 블록을 다른 블록 태그로 교체. 같은 태그면 p 로 되돌림.
+   * 범위 안 블록을 다른 블록 태그로 교체. 모두 그 태그면 p 로 되돌림.
    * @param {'p'|'h1'|'h2'|'h3'|'h4'|'h5'|'h6'|'blockquote'} tag
    */
   setBlock(tag) {
-    const block = this.sel.getBlock();
-    if (!block || !TRANSFORMABLE_BLOCK.test(block.tagName)) return; // 목록 항목·표 셀·구조 블록(dt·dd 등)은 블록 교체 대상 아님
-    const target = block.tagName.toLowerCase() === tag ? 'p' : tag;
-    const el = document.createElement(target);
+    const blocks = this.#rangeBlocks().filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !Commands.#isPluginText(b)); // 목록 항목·표 셀·구조 블록(dt·dd 등)·플러그인 제목은 블록 교체 대상 아님
+    if (!blocks.length) return;
+    if (tag === 'blockquote') { this.#applyQuote(blocks, blocks.every((b) => this.#quoteOf(b)) ? null : 'line', true); return; }
+    const collapsed = this.#isCollapsed();
+    const target = blocks.every((b) => b.tagName.toLowerCase() === tag) ? 'p' : tag;
+    this.#restoreBlocks(blocks.map((b) => this.#swapTag(b, target)), collapsed);
+    this.editor.commit();
+  }
+
+  /**
+   * 블록의 태그만 바꾼다 (내용·정렬·class 유지)
+   * @param {HTMLElement} block
+   * @param {string} tag
+   * @returns {HTMLElement} 새 블록
+   */
+  #swapTag(block, tag) {
+    const el = document.createElement(tag);
     Commands.#carryAttrs(block, el); // 정렬(style)·class 는 그대로
     while (block.firstChild) el.appendChild(block.firstChild);
     block.replaceWith(el);
-    this.sel.placeCursor(el, true);
-    this.editor.commit();
+    return el;
+  }
+
+  /**
+   * 요소의 내용을 블록들로 꺼낸다: 블록 자식은 그대로, 이어진 글·인라인은 p 로 묶는다(요소의 정렬·class 를 옮김). 내용이 없으면 빈 문단
+   * @param {HTMLElement} el 목록 항목·인용
+   * @returns {DocumentFragment}
+   */
+  #extractBlocks(el) {
+    const frag = document.createDocumentFragment();
+    let p = null;
+    Array.from(el.childNodes).forEach((n) => {
+      if (n.nodeType === Node.ELEMENT_NODE && Commands.#isBlockEl(n)) {
+        p = null;
+        if (n.tagName === 'P') {
+          // 바깥 요소의 class·정렬을 물려준다 (문단에 자기 값이 있으면 그것을 유지)
+          const cls = el.getAttribute('class');
+          if (cls && !n.getAttribute('class')) n.setAttribute('class', cls);
+          if (el.style.textAlign && !n.style.textAlign) n.style.textAlign = el.style.textAlign;
+        }
+        frag.appendChild(n);
+        return;
+      }
+      if (n.nodeType === Node.TEXT_NODE && !n.textContent.trim() && !p) { n.remove(); return; }
+      if (!p) { p = document.createElement('p'); Commands.#carryAttrs(el, p); frag.appendChild(p); }
+      p.appendChild(n);
+    });
+    if (!frag.firstChild) {
+      const empty = document.createElement('p');
+      Commands.#carryAttrs(el, empty);
+      empty.appendChild(document.createElement('br'));
+      frag.appendChild(empty);
+    }
+    return frag;
+  }
+
+  /**
+   * 블록이 속한 인용 (자신 또는 조상). 표 셀·목록 항목 바깥의 인용은 보지 않는다
+   * @param {HTMLElement} block
+   * @returns {HTMLElement|null}
+   */
+  #quoteOf(block) {
+    for (let e = block; e && e !== this.root; e = e.parentElement) {
+      if (e.tagName === 'BLOCKQUOTE') return e;
+      if (/^(TD|TH|LI)$/.test(e.tagName)) return null;
+    }
+    return null;
   }
 
   /**
@@ -409,26 +544,40 @@ export class Commands {
    * @param {'line'|'box'|'quote'|null} style
    */
   setQuote(style) {
-    const block = this.sel.getBlock();
-    if (!block || !TRANSFORMABLE_BLOCK.test(block.tagName)) return; // 목록 항목·표 셀·구조 블록(dt·dd 등)은 대상 아님
-    let el = block;
-    if (block.tagName !== 'BLOCKQUOTE') {
-      if (!style) return;
-      el = document.createElement('blockquote');
-      Commands.#carryAttrs(block, el); // 정렬(style)·class 는 그대로
-      while (block.firstChild) el.appendChild(block.firstChild);
-      block.replaceWith(el);
-    } else if (!style) {
-      el = document.createElement('p');
-      Commands.#carryAttrs(block, el);
-      while (block.firstChild) el.appendChild(block.firstChild);
-      block.replaceWith(el);
+    const blocks = this.#rangeBlocks().filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !Commands.#isPluginText(b)); // 목록 항목·표 셀·구조 블록(dt·dd 등)·플러그인 제목은 대상 아님
+    if (blocks.length) this.#applyQuote(blocks, style, false);
+  }
+
+  /**
+   * 블록들에 인용 적용·해제. 인용 안의 문단이면 조상 인용을 대상으로 한다 (인용이 중첩되지 않게)
+   * @param {HTMLElement[]} blocks
+   * @param {'line'|'box'|'quote'|null} style null 이면 해제
+   * @param {boolean} onlyNew true 면 이미 인용인 블록의 스타일은 건드리지 않는다 (토글)
+   */
+  #applyQuote(blocks, style, onlyNew) {
+    const collapsed = this.#isCollapsed();
+    let done;
+    if (!style) {
+      const made = new Map();
+      new Set(blocks.map((b) => this.#quoteOf(b)).filter(Boolean)).forEach((quote) => {
+        const frag = this.#extractBlocks(quote);
+        made.set(quote, frag.firstChild);
+        quote.replaceWith(frag);
+      });
+      if (!made.size) return;
+      done = blocks.map((b) => made.get(b) || b);
+    } else {
+      done = blocks.map((b) => {
+        const quote = this.#quoteOf(b);
+        const el = quote || this.#swapTag(b, 'blockquote');
+        if (!quote || !onlyNew) {
+          if (style !== 'line' && Commands.QUOTE_STYLES.includes(style)) el.dataset.style = style;
+          else delete el.dataset.style;
+        }
+        return quote ? b : el;
+      });
     }
-    if (el.tagName === 'BLOCKQUOTE') {
-      if (style && style !== 'line' && Commands.QUOTE_STYLES.includes(style)) el.dataset.style = style;
-      else delete el.dataset.style;
-    }
-    this.sel.placeCursor(el, true);
+    this.#restoreBlocks(done, collapsed);
     this.editor.commit();
   }
 
@@ -443,51 +592,102 @@ export class Commands {
    * @param {string} [styleType] list-style-type 값 (disc, circle, square, decimal, lower-alpha, upper-roman, hangul …). 기본값이면 스타일 제거
    */
   toggleList(listTag, styleType) {
-    const block = this.sel.getBlock();
-    // 표 셀 안에서는 목록 미지원. 구조 블록(dt·dd·글만 있는 div 등)은 태그를 바꾸지 않는다
-    if (!block || (block.tagName !== 'LI' && !TRANSFORMABLE_BLOCK.test(block.tagName))) return;
-    // 구조 모드: 블록 자식(div·p 등)이 있는 li 는 목록을 풀면 블록이 p 안으로 들어가므로 바꾸지 않는다
-    if (this.sel.structure && block.tagName === 'LI' && SelectionUtil.hasBlockChild(block)) return;
+    const blocks = this.#rangeBlocks().filter((b) => (b.tagName === 'LI'
+      // 구조 모드: 직속 문단·중첩 목록 외의 블록 자식(div 등)이 있는 li 는 바꾸지 않는다 (퍼블 구조 유지)
+      ? !(this.sel.structure && SelectionUtil.hasBlockChild(b, /^(P|UL|OL)$/))
+      // 표 셀 안에서는 목록 미지원. 구조 블록(dt·dd·글만 있는 div 등)·플러그인 제목은 태그를 바꾸지 않는다
+      : TRANSFORMABLE_BLOCK.test(b.tagName) && !Commands.#isPluginText(b)));
+    if (!blocks.length) return;
+    const collapsed = this.#isCollapsed();
     const isDefault = !styleType || styleType === (listTag === 'ul' ? 'disc' : 'decimal');
     const applyType = (list) => {
       if (isDefault) list.style.removeProperty('list-style-type'); else list.style.listStyleType = styleType;
       if (!list.getAttribute('style')?.trim()) list.removeAttribute('style');
     };
 
-    if (block.tagName === 'LI') {
-      const list = block.parentNode;
-      if (list.tagName.toLowerCase() === listTag) {
-        if (styleType) applyType(list); else this.#removeFromList(block);
-      } else {
-        // 목록 종류 바꾸기 (ul↔ol): class·style 은 옮기고 목록 유형은 applyType 이 새 종류에 맞게 정함. ol 의 start 는 ol 로 갈 때만
-        const newList = document.createElement(listTag);
-        Commands.#carryAttrs(list, newList);
-        if (listTag === 'ol' && list.getAttribute('start')) newList.setAttribute('start', list.getAttribute('start'));
-        while (list.firstChild) newList.appendChild(list.firstChild);
-        list.replaceWith(newList);
-        newList.style.removeProperty('list-style-type'); // 이전 종류의 유형(square 등)은 새 종류에 맞지 않음
-        applyType(newList);
+    // 범위가 모두 이 종류의 목록이면 해제
+    if (!styleType && blocks.every((b) => b.tagName === 'LI' && b.parentNode.tagName.toLowerCase() === listTag)) {
+      const removed = blocks.map((b) => this.#removeFromList(b));
+      this.#restoreBlocks(collapsed ? [removed[0].target] : [removed[0].target, removed[removed.length - 1].last], collapsed);
+      this.editor.commit();
+      return;
+    }
+
+    let made = null; // 이번에 만든 목록 — 이어진 블록은 같은 목록의 항목으로
+    let moved = false; // 블록을 항목으로 바꿨는지 (커서를 옮겨 줘야 함)
+    const done = blocks.map((block) => {
+      if (block.tagName === 'LI') {
+        const list = block.parentNode;
+        if (list.tagName.toLowerCase() === listTag) {
+          if (styleType) applyType(list);
+        } else {
+          // 목록 종류 바꾸기 (ul↔ol): class·style 은 옮기고 목록 유형은 applyType 이 새 종류에 맞게 정함. ol 의 start 는 ol 로 갈 때만
+          const newList = document.createElement(listTag);
+          Commands.#carryAttrs(list, newList);
+          if (listTag === 'ol' && list.getAttribute('start')) newList.setAttribute('start', list.getAttribute('start'));
+          while (list.firstChild) newList.appendChild(list.firstChild);
+          list.replaceWith(newList);
+          newList.style.removeProperty('list-style-type'); // 이전 종류의 유형(square 등)은 새 종류에 맞지 않음
+          applyType(newList);
+        }
+        return block;
       }
-    } else {
       // 블록 → 목록: 블록의 class·정렬은 항목(li)으로
-      const list = document.createElement(listTag);
       const li = document.createElement('li');
       Commands.#carryAttrs(block, li);
       while (block.firstChild) li.appendChild(block.firstChild);
-      list.appendChild(li);
-      block.replaceWith(list);
-      applyType(list);
-      this.sel.placeCursor(li, true);
-    }
+      if (made && made.nextElementSibling === block) {
+        made.appendChild(li);
+        block.remove();
+      } else {
+        made = document.createElement(listTag);
+        made.appendChild(li);
+        block.replaceWith(made);
+        applyType(made);
+      }
+      moved = true;
+      return li;
+    });
+    if (!collapsed || moved) this.#restoreBlocks(done, collapsed);
     this.editor.commit();
   }
 
-  /** li 를 목록에서 빼내어 p 로 변환 (목록은 필요 시 분할 — 뒤 목록은 같은 속성·이어지는 번호) */
+  /**
+   * 빈 중첩 항목을 상위 목록의 새 항목으로 내어쓴다. 뒤따르던 항목은 새 항목의 하위 목록으로 옮긴다
+   * @param {HTMLElement} li 빈 항목
+   * @returns {boolean} 중첩 항목이 아니어서 하지 않았으면 false
+   */
+  outdentEmptyItem(li) {
+    const list = li.parentNode;
+    const parentLi = list.parentNode;
+    if (parentLi?.tagName !== 'LI') return false;
+    const rest = list.cloneNode(false);
+    rest.removeAttribute('start');
+    while (li.nextSibling) rest.appendChild(li.nextSibling);
+    if (Commands.#hasItems(rest)) li.appendChild(rest);
+    parentLi.after(li);
+    if (!Commands.#hasItems(list)) list.remove();
+    this.sel.placeCursor(li, false);
+    this.editor.commit();
+    return true;
+  }
+
+  /** 목록에 공백 말고 남은 내용이 있는지 (태그 사이 줄바꿈 글자는 내용이 아님) */
+  static #hasItems(list) {
+    return Array.from(list.childNodes).some((n) => n.nodeType === Node.ELEMENT_NODE || n.textContent.trim());
+  }
+
+  /**
+   * li 를 목록에서 빼내어 p 로 변환 (목록은 필요 시 분할 — 뒤 목록은 같은 속성·이어지는 번호). li 안의 블록은 그대로 꺼낸다
+   * @param {HTMLElement} li
+   * @returns {{target: HTMLElement, last: HTMLElement}} target: 커서를 둘 블록(커서가 있던 직속 문단 → 첫 문단 → 첫 블록), last: 꺼낸 마지막 블록
+   */
   #removeFromList(li) {
     const list = li.parentNode;
-    const p = document.createElement('p');
-    Commands.#carryAttrs(li, p); // 항목의 class·정렬은 문단으로
-    while (li.firstChild) p.appendChild(li.firstChild);
+    const caretP = this.sel.closest('p');
+    const frag = this.#extractBlocks(li); // 항목의 class·정렬은 문단으로
+    const target = (caretP?.parentNode === frag && caretP) || Array.from(frag.children).find((el) => el.tagName === 'P') || frag.firstChild;
+    const last = frag.lastChild;
 
     // li 뒤에 형제가 있으면 새 목록으로 분리: class·style(목록 유형) 은 그대로, ol 은 번호가 이어지게 start
     const after = document.createElement(list.tagName.toLowerCase());
@@ -502,10 +702,11 @@ export class Commands {
     while (li.nextSibling) after.appendChild(li.nextSibling);
 
     li.remove();
-    list.parentNode.insertBefore(p, list.nextSibling);
-    if (after.childNodes.length) p.parentNode.insertBefore(after, p.nextSibling);
-    if (list.childNodes.length === 0) list.remove();
-    this.sel.placeCursor(p, true);
+    list.parentNode.insertBefore(frag, list.nextSibling);
+    if (Commands.#hasItems(after)) last.parentNode.insertBefore(after, last.nextSibling);
+    if (!Commands.#hasItems(list)) list.remove();
+    this.sel.placeCursor(target, true);
+    return { target, last };
   }
 
   // ───────────── 링크 ─────────────
@@ -656,7 +857,7 @@ export class Commands {
     touched.forEach((blk) => {
       if (!blk?.isConnected) return;
       const empty = !blk.textContent.replace(new RegExp(ZWSP, 'g'), '').trim() && !blk.querySelector('img, br');
-      if (empty) blk.appendChild(document.createElement('br'));
+      if (empty) (blk.tagName === 'LI' && blk.querySelector(':scope > p') || blk).appendChild(document.createElement('br')); // li 직속 문단이 있으면 그 안에
     });
     // 지운 블록 자리처럼 글 블록 밖이면 첫 글 블록으로 (이어서 입력할 수 있게)
     const first = !this.sel.textBlockOf(range.startContainer) && Array.from(this.root.querySelectorAll('*')).find((el) => el.isContentEditable && this.sel.isTextBlock(el));
@@ -737,10 +938,17 @@ export class Commands {
     const hasBlock = Array.from(frag.childNodes).some((n) => n.nodeType === Node.ELEMENT_NODE && Commands.#isBlockEl(n));
     const block = this.sel.getBlock();
 
-    // 문단·제목 안에 블록(문단·표·목록 등)이 섞인 조각을 넣으면: 문단을 커서 위치에서 둘로 나누고 그 사이에 넣는다
-    // (p 안에 p 가 들어가 저장 후 다시 열 때 구조가 바뀌는 것 방지)
-    if (hasBlock && block && /^(P|H[1-6])$/.test(block.tagName)) {
+    // 글만 있는 인용에 여러 줄 글: 인용을 나누지 않고 줄바꿈으로 (인용 안에 문단이 글과 섞이지 않게)
+    const quoteLines = hasBlock && block?.tagName === 'BLOCKQUOTE'
+      && !Array.from(frag.children).some((el) => Commands.#isBlockEl(el) && el.tagName !== 'P');
+    if (quoteLines) {
+      if (block.childNodes.length === 1 && block.firstChild.nodeName === 'BR') block.firstChild.remove(); // 빈 인용의 자리표시 br 만
+      this.#linesToBreaks(frag);
+    } else if (hasBlock && block && /^(P|H[1-6]|BLOCKQUOTE|LI)$/.test(block.tagName)) {
+      // 문단·제목·인용·목록 항목 안에 블록(문단·표·목록 등)이 섞인 조각을 넣으면: 블록을 커서 위치에서 둘로 나누고 그 사이에 넣는다
+      // (p 안에 p 가 들어가 저장 후 다시 열 때 구조가 바뀌는 것 방지). 목록 항목이면 넣는 조각도 항목으로
       this.#wrapLooseInline(frag);
+      if (block.tagName === 'LI') this.#blocksToItems(frag);
       const tail = document.createRange();
       tail.setStart(range.startContainer, range.startOffset);
       tail.setEnd(block, block.childNodes.length);
@@ -767,6 +975,36 @@ export class Commands {
       this.sel.setRange(r);
     }
     this.editor.commit();
+  }
+
+  /**
+   * 조각의 문단들을 앞뒤 글과 줄바꿈으로 잇는다 (글·인라인만 남김)
+   * @param {DocumentFragment} frag 최상위 블록이 p 뿐인 조각
+   */
+  #linesToBreaks(frag) {
+    Array.from(frag.childNodes).forEach((n) => { if (n.nodeType === Node.TEXT_NODE && !n.textContent.trim()) n.remove(); }); // 블록 사이 공백
+    Array.from(frag.children).filter((el) => el.tagName === 'P').forEach((p) => {
+      if (p.previousSibling && p.previousSibling.nodeName !== 'BR') p.before(document.createElement('br'));
+      if (p.nextSibling) p.after(document.createElement('br'));
+      if (p.childNodes.length === 1 && p.firstChild.nodeName === 'BR') p.firstChild.remove(); // 빈 줄의 자리표시 br
+      this.#unwrapEl(p);
+    });
+  }
+
+  /**
+   * 조각의 최상위 블록을 목록 항목으로 바꾼다: 문단은 항목으로(정렬·class 유지), 목록은 그 항목들을 꺼내고, 그 밖의 블록은 항목으로 감싼다
+   * @param {DocumentFragment} frag
+   */
+  #blocksToItems(frag) {
+    Array.from(frag.childNodes).forEach((n) => {
+      if (/^(UL|OL)$/.test(n.nodeName)) { n.replaceWith(...n.children); return; }
+      const li = document.createElement('li');
+      n.replaceWith(li);
+      if (n.nodeName === 'P') {
+        Commands.#carryAttrs(n, li);
+        while (n.firstChild) li.appendChild(n.firstChild);
+      } else li.appendChild(n);
+    });
   }
 
   /** 블록 요소(문단·제목·목록·인용·표·블록 레이어)인지 */
@@ -816,6 +1054,7 @@ export class Commands {
   /** 현재 커서 위치의 서식 상태(툴바 활성화 표시용) */
   getState() {
     const block = this.sel.getBlock();
+    const quote = block && TRANSFORMABLE_BLOCK.test(block.tagName) ? this.#quoteOf(block) : null;
     return {
       strong: this.sel.isInside('strong'),
       em: this.sel.isInside('em'),
@@ -824,8 +1063,8 @@ export class Commands {
       a: this.sel.isInside('a'),
       ...this.getStyleState(),
       block: block ? block.tagName.toLowerCase() : null,
-      quote: block?.tagName === 'BLOCKQUOTE' ? (block.dataset.style || 'line') : null, // 인용 스타일
-      align: block ? (block.style.textAlign || 'left') : 'left',
+      quote: quote ? (quote.dataset.style || 'line') : null, // 인용 스타일
+      align: block ? (block.style.textAlign || (block.tagName === 'LI' && this.sel.closest('p')?.style.textAlign) || 'left') : 'left', // li 직속 문단의 자체 정렬도 읽는다
       list: block && block.tagName === 'LI' ? block.parentNode.tagName.toLowerCase() : null,
       listType: block && block.tagName === 'LI' ? (block.parentNode.style.listStyleType || null) : null,
     };
