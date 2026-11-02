@@ -208,6 +208,8 @@ export class JmToolbarEditor {
     this.newWinLabel = this.inputBar.querySelector('.jm-inputbar-newwin');
     this.newWinBox = this.newWinLabel.querySelector('input');
     this.linkWindowChoice = null;
+    this.linkTarget = null; // 링크 입력줄이 지금 가리키는 기존 링크
+    this.linkDraft = null;  // 기존 링크로 옮기기 전에 쓰던 주소·새 창 값
     this.newWinLabel.addEventListener('mousedown', (e) => e.preventDefault());
     this.newWinBox.addEventListener('change', () => { this.linkWindowChoice = this.newWinBox.checked; });
     this.inputField.addEventListener('input', () => { if (!this.newWinLabel.hidden) this.#syncLinkWindow(); });
@@ -268,7 +270,7 @@ export class JmToolbarEditor {
       ...options,
       onChange: (html) => { this.dirty = true; if (this.charCountEl && this.mode === 'editor') this.#renderCount(JmEditor.countText(html)); options.onChange?.(html); },
       onFindShortcut: (replace) => { if (this.mode === 'editor') this.openFind(replace); },
-      onSelectionChange: () => this.#refreshState(),
+      onSelectionChange: () => { this.#refreshState(); this.#syncInputTarget(); },
       pickColor: (x, y, cb) => this.colorPicker.open(x, y, cb, { sampleMode: 'background' }),
     });
     if (!this.editor.fontFamilies.length) this.buttons.fontFamily.hidden = true; // 글꼴 목록을 비우면 도구도 숨김
@@ -526,11 +528,14 @@ export class JmToolbarEditor {
       const a = this.editor.sel.closest('a');
       // 허용되지 않는 주소(javascript: 등)면 입력줄을 닫지 않고 안내
       const apply = (v) => {
-        if (v && this.editor.exec('link', v, { newWindow: this.newWinBox.checked }) === false) { this.inputField.setCustomValidity('http(s)·mailto·tel 주소나 / 로 시작하는 경로만 쓸 수 있습니다'); this.inputField.reportValidity(); return false; }
+        if (!v) { if (this.editor.sel.closest('a')) this.editor.exec('unlink'); return true; }
+        if (this.editor.exec('link', v, { newWindow: this.newWinBox.checked }) === false) { this.inputField.setCustomValidity('http(s)·mailto·tel 주소나 / 로 시작하는 경로만 쓸 수 있습니다'); this.inputField.reportValidity(); return false; }
         return true;
       };
-      if (a) this.#openInput('링크 URL (비우면 해제)', JmEditor.getHref(a), (v) => (v ? apply(v) : (this.editor.exec('unlink'), true)), a.getAttribute('target') === '_self' ? false : null);
-      else this.#openInput('링크 URL', 'https://', apply, null);
+      const fields = this.#linkFields(a);
+      this.linkTarget = a;
+      this.linkDraft = null;
+      this.#openInput(fields.label, fields.url, apply, fields.linkWindow);
       return;
     }
     if (cmd === 'youtube') {
@@ -637,11 +642,49 @@ export class JmToolbarEditor {
     this.inputHandler = handler;
     this.inputBar.hidden = false;
     if (!this.newWinLabel.hidden) this.#syncLinkWindow();
-    const range = this.editor.sel.getRange();
-    const a = linkWindow !== undefined && range?.collapsed ? this.editor.sel.closest('a') : null; // 링크 안 커서면 그 링크 글자가 대상
-    if (a) { const whole = document.createRange(); whole.selectNodeContents(a); this.editor.sel.showTarget(whole); } else this.editor.sel.showTarget(range);
+    this.#showInputTarget();
     this.inputField.focus();
     this.inputField.select();
+  }
+
+  /** 입력 대상을 표시한다: 링크 입력에서 링크 안 커서면 그 링크 글자 전체, 그 밖은 지금 선택 */
+  #showInputTarget() {
+    const range = this.editor.sel.getRange();
+    const a = !this.newWinLabel.hidden && range?.collapsed ? this.editor.sel.closest('a') : null;
+    if (a) { const whole = document.createRange(); whole.selectNodeContents(a); this.editor.sel.showTarget(whole); } else this.editor.sel.showTarget(range);
+  }
+
+  /**
+   * 링크 입력줄에 넣을 값
+   * @param {HTMLAnchorElement|null} a 지금 커서가 든 링크
+   * @returns {{label: string, url: string, linkWindow: boolean|null}}
+   */
+  #linkFields(a) {
+    if (!a) return { label: '링크 URL', url: 'https://', linkWindow: null };
+    return { label: '링크 URL (비우면 해제)', url: JmEditor.getHref(a), linkWindow: a.getAttribute('target') === '_self' ? false : null };
+  }
+
+  /**
+   * 입력줄이 열린 채 본문 선택이 바뀌면 대상을 따라간다 (적용은 저장된 지금 선택에 되므로 표시도 맞춘다).
+   * 기존 링크로 옮기면 그 링크 값을 보이고, 벗어나면 쓰던 주소로 돌아온다.
+   */
+  #syncInputTarget() {
+    if (this.inputBar.hidden || !this.editor.root.contains(document.activeElement)) return;
+    if (!this.newWinLabel.hidden) {
+      const a = this.editor.sel.closest('a');
+      if (a !== this.linkTarget) {
+        if (!this.linkTarget) this.linkDraft = { url: this.inputField.value, linkWindow: this.linkWindowChoice };
+        const fields = this.#linkFields(a);
+        const draft = a ? null : this.linkDraft;
+        this.inputLabel.textContent = fields.label;
+        this.inputField.value = draft ? draft.url : fields.url;
+        this.linkWindowChoice = draft ? draft.linkWindow : fields.linkWindow;
+        this.inputField.setCustomValidity('');
+        this.#syncLinkWindow();
+        this.linkTarget = a;
+      }
+    }
+    this.#showInputTarget();
   }
 
   /** 새 창 체크박스를 지금 주소에 맞춘다: #·tel:·mailto: 는 꺼진 채 잠그고, 그 밖은 고른 값(없으면 켬) */

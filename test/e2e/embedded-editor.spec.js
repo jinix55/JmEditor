@@ -130,6 +130,80 @@ test.describe('링크 입력 중 대상 표시', () => {
     await page.keyboard.press('Escape');
   });
 
+  /** 글자 구간을 실제 마우스로 끈다 */
+  async function drag(page, selector, start, end) {
+    const [a, b] = await page.evaluate(([sel, s, e]) => {
+      const text = document.querySelector(`.jm-editor ${sel}`).firstChild;
+      const at = (i) => { const r = document.createRange(); r.setStart(text, i); r.setEnd(text, i + 1); const c = r.getBoundingClientRect(); return [c.left, c.right, (c.top + c.bottom) / 2]; };
+      const first = at(s); const last = at(e - 1);
+      return [[first[0] + 1, first[2]], [last[1] - 1, last[2]]];
+    }, [selector, start, end]);
+    await page.mouse.move(...a);
+    await page.mouse.down();
+    await page.mouse.move(...b, { steps: 4 });
+    await page.mouse.up();
+    await page.waitForTimeout(30);
+  }
+
+  test('입력 중 다시 드래그하면 표시가 따라오고 주소는 유지되며 새 글자에 링크가 걸린다', async ({ page }) => {
+    await open(page);
+    await setHTML(page, '<p>가나다라마바사아</p>');
+    await select(page, 'p', 0, 2);
+    await page.locator('.jm-btn[data-cmd="link"]').click();
+    await page.locator('.jm-inputbar-input').fill('https://a.b/c');
+    await drag(page, 'p', 5, 7);
+    expect(await highlight(page)).toEqual(['바사']);
+    await expect(page.locator('.jm-inputbar-input')).toHaveValue('https://a.b/c');
+    await page.locator('.jm-inputbar-input').click();
+    expect(await highlight(page)).toEqual(['바사']);
+    await page.keyboard.press('Enter');
+    expect(await html(page)).toMatch(/<p>가나다라마<a [^>]*>바사<\/a>아<\/p>/);
+  });
+
+  test('입력 중 빈 곳을 누르면 표시만 사라지고 주소는 유지', async ({ page }) => {
+    await open(page);
+    await setHTML(page, '<p>가나다라마</p>');
+    await select(page, 'p', 0, 2);
+    await page.locator('.jm-btn[data-cmd="link"]').click();
+    await page.locator('.jm-inputbar-input').fill('https://a.b/c');
+    await page.locator('.jm-editor p').click();
+    await page.waitForTimeout(30);
+    expect(await highlight(page)).toEqual([]);
+    await expect(page.locator('.jm-inputbar-input')).toHaveValue('https://a.b/c');
+  });
+
+  test('입력 중 기존 링크를 누르면 그 링크 값으로 바뀌고, 벗어나면 쓰던 주소로 돌아온다', async ({ page }) => {
+    await open(page);
+    await setHTML(page, '<p>가나다라마<a href="/x" target="_self">링크글</a></p><p>뒤의문단입니다</p>');
+    await select(page, 'p', 0, 2);
+    await page.locator('.jm-btn[data-cmd="link"]').click();
+    const input = page.locator('.jm-inputbar-input');
+    await input.fill('https://a.b/c');
+    await page.locator('.jm-editor a').click({ modifiers: [] });
+    await page.waitForTimeout(30);
+    expect(await highlight(page)).toEqual(['링크글']);
+    await expect(input).toHaveValue('/x');
+    await expect(page.locator('.jm-inputbar-label')).toContainText('비우면 해제');
+    await expect(page.locator('.jm-inputbar-newwin input')).not.toBeChecked();
+    await drag(page, 'p:nth-of-type(2)', 0, 2);
+    expect(await highlight(page)).toEqual(['뒤의']);
+    await expect(input).toHaveValue('https://a.b/c');
+    await expect(page.locator('.jm-inputbar-label')).not.toContainText('비우면 해제');
+    await expect(page.locator('.jm-inputbar-newwin input')).toBeChecked();
+  });
+
+  test('입력 중 옮겨 간 기존 링크는 주소를 비우면 해제', async ({ page }) => {
+    await open(page);
+    await setHTML(page, '<p>가나다라마<a href="/x">링크글</a></p>');
+    await select(page, 'p', 0, 2);
+    await page.locator('.jm-btn[data-cmd="link"]').click();
+    await page.locator('.jm-editor a').click();
+    await page.waitForTimeout(30);
+    await page.locator('.jm-inputbar-input').fill('');
+    await page.keyboard.press('Enter');
+    expect(await html(page)).toBe('<p>가나다라마링크글</p>');
+  });
+
   test('선택 없는 유튜브 입력은 표시 없음', async ({ page }) => {
     await open(page);
     await setHTML(page, '<p>가나</p>');
@@ -153,5 +227,27 @@ test.describe('링크 입력 중 대상 표시', () => {
     await page.waitForTimeout(50);
     await page.locator('.jm-btn[data-cmd="link"]').click();
     expect((await highlight(page)).join('').length).toBeGreaterThan(0);
+  });
+
+  test('데모 입력줄도 다시 드래그를 따라간다', async ({ page }) => {
+    await page.route(/fonts\.googleapis\.com\/css2/, (route) => route.abort());
+    await page.route(/youtube(-nocookie)?\.com\/embed\//, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '' }));
+    await page.goto('/examples/demo/index.html', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => {
+      const root = document.querySelector('.jm-editor');
+      root.innerHTML = '<p>가나다라마바사아</p>';
+      root.focus();
+      const r = document.createRange();
+      r.setStart(root.querySelector('p').firstChild, 0);
+      r.setEnd(root.querySelector('p').firstChild, 2);
+      getSelection().removeAllRanges();
+      getSelection().addRange(r);
+    });
+    await page.waitForTimeout(50);
+    await page.locator('.jm-btn[data-cmd="link"]').click();
+    await page.locator('#linkUrl').fill('https://a.b/c');
+    await drag(page, 'p', 5, 7);
+    expect(await highlight(page)).toEqual(['바사']);
+    await expect(page.locator('#linkUrl')).toHaveValue('https://a.b/c');
   });
 });
