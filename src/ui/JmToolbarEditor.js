@@ -637,6 +637,9 @@ export class JmToolbarEditor {
     this.inputHandler = handler;
     this.inputBar.hidden = false;
     if (!this.newWinLabel.hidden) this.#syncLinkWindow();
+    const range = this.editor.sel.getRange();
+    const a = linkWindow !== undefined && range?.collapsed ? this.editor.sel.closest('a') : null; // 링크 안 커서면 그 링크 글자가 대상
+    if (a) { const whole = document.createRange(); whole.selectNodeContents(a); this.editor.sel.showTarget(whole); } else this.editor.sel.showTarget(range);
     this.inputField.focus();
     this.inputField.select();
   }
@@ -659,12 +662,14 @@ export class JmToolbarEditor {
 
   /** 입력줄만 닫는다 (커서는 그대로) */
   #closeInputBar() {
+    this.editor?.sel.clearTarget();
     this.inputBar.hidden = true;
     this.newWinLabel.hidden = true;
     this.inputHandler = null;
   }
 
   #closeInput() {
+    this.editor.sel.clearTarget();
     this.inputBar.hidden = true;
     this.newWinLabel.hidden = true;
     this.inputHandler = null;
@@ -760,6 +765,7 @@ export class JmToolbarEditor {
   /** 서식 관리에서 변경 후 호출하면 다음 열 때 다시 불러옴 */
   refreshFormats() { this.formatPicker.refresh(); }
   destroy() {
+    this.editor?.sel.clearTarget();
     document.fonts?.removeEventListener('loadingdone', this.onFontsLoaded);
     clearTimeout(this.charTimer);
     this.source.removeEventListener('input', this.onSourceInput);

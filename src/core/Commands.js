@@ -182,7 +182,7 @@ export class Commands {
       if (t.nodeType === Node.ELEMENT_NODE) return true; // 이미지 (편집 가능한 본문 안)
       if (!t.textContent.replace(new RegExp(ZWSP, 'g'), '')) return false;
       // 블록 사이 줄바꿈 공백(표 tbody 안 등)은 제외 — 글이 들어갈 수 있는 블록 안의 텍스트만
-      if (parent.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, [data-cell="text"], [data-role="title"], a[data-role="button"]')) return true;
+      if (this.sel.closestIn(parent, 'p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, [data-cell="text"], [data-role="title"], a[data-role="button"]')) return true;
       // 구조 모드: dt·dd·글만 있는 div 등 구조 글 블록 안의 텍스트도 (블록 사이 공백만 있는 텍스트는 제외)
       if (!this.sel.structure) return false;
       for (let e = parent; e && e !== this.root; e = e.parentElement) {
@@ -514,7 +514,7 @@ export class Commands {
     if (!blocks.length) return;
     const range = this.sel.getRange();
     const points = range && Commands.#rangePoints(range);
-    blocks.filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !Commands.#isPluginText(b)).forEach((b) => Commands.#stepMargin(b, delta));
+    blocks.filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !this.#isPluginText(b)).forEach((b) => Commands.#stepMargin(b, delta));
     // 항목은 가장 바깥 것만 옮긴다 (선택된 하위 항목은 함께 따라감)
     const items = blocks.filter((b) => b.tagName === 'LI');
     const tops = items.filter((li) => !items.some((o) => o !== li && o.contains(li)));
@@ -581,7 +581,7 @@ export class Commands {
       const inner = Array.from(c.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, li'));
       return inner.length && !SelectionUtil.hasDirectText(c) ? inner : [c, ...inner];
     };
-    const blocks = (cells.length ? cells.flatMap(cellBlocks) : this.#rangeBlocks()).filter((b) => !Commands.#isPluginText(b));
+    const blocks = (cells.length ? cells.flatMap(cellBlocks) : this.#rangeBlocks()).filter((b) => !this.#isPluginText(b));
     if (!blocks.length) return undefined;
     /** 줄 간격 지우기 (style 이 비면 속성도) */
     const drop = (el) => { el.style.removeProperty('line-height'); if (!el.getAttribute('style')?.trim()) el.removeAttribute('style'); };
@@ -622,7 +622,7 @@ export class Commands {
       if (n === range.startContainer && range.startOffset >= n.length) continue;
       if (n === range.endContainer && range.endOffset === 0) continue;
       const block = this.sel.textBlockOf(n);
-      if (block && !Commands.#isPluginText(block)) blocks.add(block);
+      if (block && !this.#isPluginText(block)) blocks.add(block);
     }
     return blocks.size ? Array.from(blocks) : fallback;
   }
@@ -645,8 +645,9 @@ export class Commands {
    * 플러그인 블록이 정한 자리의 글인지 (태그를 바꾸면 저장 때 사라짐): data-role 요소 또는 data-type 블록 안. 배치 블록 글 칸(data-cell="text")은 아님
    * @param {Element} el
    */
-  static #isPluginText(el) {
-    return !!el.closest('[data-role]') || (!!el.closest('[data-type]') && !el.closest('[data-cell="text"]'));
+  #isPluginText(el) {
+    const inside = (selector) => !!this.sel.closestIn(el, selector);
+    return inside('[data-role]') || (inside('[data-type]') && !inside('[data-cell="text"]'));
   }
 
   /** 지금 선택이 접힌 커서인지 (선택이 없어도 true) */
@@ -677,7 +678,7 @@ export class Commands {
    * @param {'p'|'h1'|'h2'|'h3'|'h4'|'h5'|'h6'|'blockquote'} tag
    */
   setBlock(tag) {
-    const blocks = this.#rangeBlocks().filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !Commands.#isPluginText(b)); // 목록 항목·표 셀·구조 블록(dt·dd 등)·플러그인 제목은 블록 교체 대상 아님
+    const blocks = this.#rangeBlocks().filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !this.#isPluginText(b)); // 목록 항목·표 셀·구조 블록(dt·dd 등)·플러그인 제목은 블록 교체 대상 아님
     if (!blocks.length) return;
     if (tag === 'blockquote') { this.#applyQuote(blocks, blocks.every((b) => this.#quoteOf(b)) ? null : 'line', true); return; }
     const collapsed = this.#isCollapsed();
@@ -771,7 +772,7 @@ export class Commands {
    * @param {'line'|'box'|'quote'|null} style
    */
   setQuote(style) {
-    const blocks = this.#rangeBlocks().filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !Commands.#isPluginText(b)); // 목록 항목·표 셀·구조 블록(dt·dd 등)·플러그인 제목은 대상 아님
+    const blocks = this.#rangeBlocks().filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !this.#isPluginText(b)); // 목록 항목·표 셀·구조 블록(dt·dd 등)·플러그인 제목은 대상 아님
     if (blocks.length) this.#applyQuote(blocks, style, false);
   }
 
@@ -823,7 +824,7 @@ export class Commands {
       // 구조 모드: 직속 문단·중첩 목록 외의 블록 자식(div 등)이 있는 li 는 바꾸지 않는다 (퍼블 구조 유지)
       ? !(this.sel.structure && SelectionUtil.hasBlockChild(b, /^(P|UL|OL)$/))
       // 표 셀 안에서는 목록 미지원. 구조 블록(dt·dd·글만 있는 div 등)·플러그인 제목은 태그를 바꾸지 않는다
-      : TRANSFORMABLE_BLOCK.test(b.tagName) && !Commands.#isPluginText(b)));
+      : TRANSFORMABLE_BLOCK.test(b.tagName) && !this.#isPluginText(b)));
     if (!blocks.length) return;
     const collapsed = this.#isCollapsed();
     const range = this.sel.getRange();
@@ -1085,7 +1086,7 @@ export class Commands {
     // 목록·인용 안이면 그 뒤에 (목록 항목 사이에 문단이 끼지 않게)
     let block = this.sel.outerListOrQuote(SelectionUtil.blockAnchor(this.sel.getBlock()));
     // 표 캡션·그림 설명 안이면(그 안의 문단 포함) 그 표(레이어)·그림 뒤에 (캡션 형제로 들어가면 표·figure 구조가 깨짐)
-    const cap = block?.closest?.('caption, figcaption');
+    const cap = this.sel.closestIn(block, 'caption, figcaption');
     if (cap?.tagName === 'CAPTION') { block = cap.closest('table'); if (block.parentNode?.classList?.contains('jm-table-layer')) block = block.parentNode; }
     else if (cap) block = cap.closest('figure') || cap;
     if (block && /^(TD|TH)$/.test(block.tagName)) block.appendChild(p); // 셀 안이면 셀 내부에
@@ -1113,7 +1114,7 @@ export class Commands {
   #splitParagraphAtCaret() {
     const range = this.sel.getRange();
     const block = this.sel.getBlock();
-    if (!range?.collapsed || block?.tagName !== 'P' || block.closest('td, th')) return null;
+    if (!range?.collapsed || block?.tagName !== 'P' || this.sel.closestIn(block, 'td, th')) return null;
     const head = document.createRange();
     head.setStart(block, 0);
     head.setEnd(range.startContainer, range.startOffset);

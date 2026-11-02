@@ -343,6 +343,7 @@ div[data-type="gallery"] p[data-role="title"] { flex: 0 0 100%; margin: 0 0 2px;
 .jm-findbar[hidden] { display: none; }
 .jm-find-input { flex: 1 1 120px; min-width: 0; padding: 5px 8px; border: 1px solid var(--jm-border); border-radius: 4px; font: 13px ui-monospace, Menlo, monospace; }
 .jm-find-count { min-width: 32px; font-size: 12px; color: var(--jm-text-soft); text-align: center; white-space: nowrap; }
+::highlight(jm-input-target) { background-color: rgba(59, 130, 246, .35); } /* 링크 입력 중 대상 글자 (밝은·어두운 테마 공통) */
 ::highlight(jm-find) { background-color: #fde68a; color: #1f2421; }
 ::highlight(jm-find-current) { background-color: #fb923c; color: #1f2421; }
 /* 글자 수 (편집 영역 아래) */

@@ -634,8 +634,8 @@ export class JmEditor {
     const hr = this.#adjacentHr(forward);
     if (hr) { hr.remove(); this.commit(); return true; }
     const block = this.#blockAtEdge(forward);
-    if (block?.closest('[data-role="title"]')) return true; // 갤러리·슬라이드 제목은 한 줄 칸: 앞뒤 블록과 합치지 않는다 (WebKit 은 뒤 문단을 제목으로 끌어온다)
-    if (!block || block.closest('[contenteditable="false"]')) return false; // 표 칸·배치 글 칸 안은 그 영역의 동작대로
+    if (this.sel.closestIn(block, '[data-role="title"]')) return true; // 갤러리·슬라이드 제목은 한 줄 칸: 앞뒤 블록과 합치지 않는다 (WebKit 은 뒤 문단을 제목으로 끌어온다)
+    if (!block || this.sel.closestIn(block, '[contenteditable="false"]')) return false; // 표 칸·배치 글 칸 안은 그 영역의 동작대로
     if (!this.sel.adjacentLayer(block, forward)) return false;
     const isEmpty = (el) => !el.textContent.replace(new RegExp(ZWSP, 'g'), '').trim() && !el.querySelector('img');
     // 글과 레이어 사이의 빈 문단은 브라우저처럼 지운다 (글 끝 Delete·글 앞 Backspace)

@@ -6,6 +6,8 @@
 import { INLINE_STRUCTURE_TAGS } from './structure-policy.js';
 
 /** 기본 글 블록 (커서가 속하는 블록) */
+/** 입력 중 대상 글자 표시 이름 (::highlight) */
+const TARGET_HIGHLIGHT = 'jm-input-target';
 const CARET_BLOCK = /^(P|H[1-6]|LI|BLOCKQUOTE|TD|TH)$/;
 /** 구조 모드에서 더하는 글 블록: 정의 목록·캡션 (자식에 블록이 있어도 직접 글이 있으면 블록 역할) */
 const STRUCTURE_CARET_BLOCK = /^(DT|DD|FIGCAPTION|CAPTION)$/;
@@ -281,7 +283,7 @@ export class SelectionUtil {
    */
   blockInsertTarget() {
     let a = this.insertAnchor(this.getBlock());
-    const table = a?.closest?.('td, th, caption')?.closest('table');
+    const table = this.closestIn(a, 'td, th, caption')?.closest('table');
     if (table) a = table.parentNode?.classList?.contains('jm-table-layer') ? table.parentNode : table;
     if (a) return this.outerListOrQuote(a);
     let n = this.getRange()?.startContainer || null;
@@ -302,6 +304,33 @@ export class SelectionUtil {
   /** 커서가 특정 태그(strong/em 등) 안에 있는지 */
   isInside(tagName) {
     return !!this.closest(tagName);
+  }
+
+  /**
+   * el.closest 와 같되 편집 영역 안에서만 찾는다 (에디터가 페이지의 표·다른 블록 안에 있어도 바깥 요소로 새지 않게)
+   * @param {Element|null|undefined} el
+   * @param {string} selector
+   * @returns {Element|null}
+   */
+  closestIn(el, selector) {
+    const found = el?.closest?.(selector);
+    return found && found !== this.root && this.root.contains(found) ? found : null;
+  }
+
+  /**
+   * 대상 글자를 입력 중에도 보이게 표시한다. 입력란으로 포커스가 가면 브라우저 선택이 사라지기 때문 (DOM 을 바꾸지 않아 저장에 흔적이 없음).
+   * CSS Custom Highlight API 미지원 브라우저에서는 표시 없이 지나간다
+   * @param {Range|null} range 접힌 범위면 표시하지 않는다
+   */
+  showTarget(range) {
+    this.clearTarget();
+    if (!range || range.collapsed || typeof Highlight === 'undefined' || !window.CSS?.highlights) return;
+    CSS.highlights.set(TARGET_HIGHLIGHT, new Highlight(range.cloneRange()));
+  }
+
+  /** showTarget 표시 지우기 */
+  clearTarget() {
+    if (window.CSS?.highlights) CSS.highlights.delete(TARGET_HIGHLIGHT);
   }
 
   /** 커서 위치에서 상위로 올라가며 tagName 요소 찾기 (루트 전까지) */

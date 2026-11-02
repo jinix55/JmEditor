@@ -352,6 +352,7 @@ div[data-type="gallery"] p[data-role="title"] { flex: 0 0 100%; margin: 0 0 2px;
 .jm-findbar[hidden] { display: none; }
 .jm-find-input { flex: 1 1 120px; min-width: 0; padding: 5px 8px; border: 1px solid var(--jm-border); border-radius: 4px; font: 13px ui-monospace, Menlo, monospace; }
 .jm-find-count { min-width: 32px; font-size: 12px; color: var(--jm-text-soft); text-align: center; white-space: nowrap; }
+::highlight(jm-input-target) { background-color: rgba(59, 130, 246, .35); } /* 링크 입력 중 대상 글자 (밝은·어두운 테마 공통) */
 ::highlight(jm-find) { background-color: #fde68a; color: #1f2421; }
 ::highlight(jm-find-current) { background-color: #fb923c; color: #1f2421; }
 /* 글자 수 (편집 영역 아래) */
@@ -2752,6 +2753,8 @@ class Sanitizer {
  * - 에디터 루트 밖 선택은 무시하고, 선택 영역 저장/복원(툴바 클릭으로 포커스가 빠질 때)을 제공한다.
  */
 /** 기본 글 블록 (커서가 속하는 블록) */
+/** 입력 중 대상 글자 표시 이름 (::highlight) */
+const TARGET_HIGHLIGHT = 'jm-input-target';
 const CARET_BLOCK = /^(P|H[1-6]|LI|BLOCKQUOTE|TD|TH)$/;
 /** 구조 모드에서 더하는 글 블록: 정의 목록·캡션 (자식에 블록이 있어도 직접 글이 있으면 블록 역할) */
 const STRUCTURE_CARET_BLOCK = /^(DT|DD|FIGCAPTION|CAPTION)$/;
@@ -3027,7 +3030,7 @@ class SelectionUtil {
    */
   blockInsertTarget() {
     let a = this.insertAnchor(this.getBlock());
-    const table = a?.closest?.('td, th, caption')?.closest('table');
+    const table = this.closestIn(a, 'td, th, caption')?.closest('table');
     if (table) a = table.parentNode?.classList?.contains('jm-table-layer') ? table.parentNode : table;
     if (a) return this.outerListOrQuote(a);
     let n = this.getRange()?.startContainer || null;
@@ -3048,6 +3051,33 @@ class SelectionUtil {
   /** 커서가 특정 태그(strong/em 등) 안에 있는지 */
   isInside(tagName) {
     return !!this.closest(tagName);
+  }
+
+  /**
+   * el.closest 와 같되 편집 영역 안에서만 찾는다 (에디터가 페이지의 표·다른 블록 안에 있어도 바깥 요소로 새지 않게)
+   * @param {Element|null|undefined} el
+   * @param {string} selector
+   * @returns {Element|null}
+   */
+  closestIn(el, selector) {
+    const found = el?.closest?.(selector);
+    return found && found !== this.root && this.root.contains(found) ? found : null;
+  }
+
+  /**
+   * 대상 글자를 입력 중에도 보이게 표시한다. 입력란으로 포커스가 가면 브라우저 선택이 사라지기 때문 (DOM 을 바꾸지 않아 저장에 흔적이 없음).
+   * CSS Custom Highlight API 미지원 브라우저에서는 표시 없이 지나간다
+   * @param {Range|null} range 접힌 범위면 표시하지 않는다
+   */
+  showTarget(range) {
+    this.clearTarget();
+    if (!range || range.collapsed || typeof Highlight === 'undefined' || !window.CSS?.highlights) return;
+    CSS.highlights.set(TARGET_HIGHLIGHT, new Highlight(range.cloneRange()));
+  }
+
+  /** showTarget 표시 지우기 */
+  clearTarget() {
+    if (window.CSS?.highlights) CSS.highlights.delete(TARGET_HIGHLIGHT);
   }
 
   /** 커서 위치에서 상위로 올라가며 tagName 요소 찾기 (루트 전까지) */
@@ -3434,7 +3464,7 @@ class Commands {
       if (t.nodeType === Node.ELEMENT_NODE) return true; // 이미지 (편집 가능한 본문 안)
       if (!t.textContent.replace(new RegExp(ZWSP, 'g'), '')) return false;
       // 블록 사이 줄바꿈 공백(표 tbody 안 등)은 제외 — 글이 들어갈 수 있는 블록 안의 텍스트만
-      if (parent.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, [data-cell="text"], [data-role="title"], a[data-role="button"]')) return true;
+      if (this.sel.closestIn(parent, 'p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, [data-cell="text"], [data-role="title"], a[data-role="button"]')) return true;
       // 구조 모드: dt·dd·글만 있는 div 등 구조 글 블록 안의 텍스트도 (블록 사이 공백만 있는 텍스트는 제외)
       if (!this.sel.structure) return false;
       for (let e = parent; e && e !== this.root; e = e.parentElement) {
@@ -3766,7 +3796,7 @@ class Commands {
     if (!blocks.length) return;
     const range = this.sel.getRange();
     const points = range && Commands.#rangePoints(range);
-    blocks.filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !Commands.#isPluginText(b)).forEach((b) => Commands.#stepMargin(b, delta));
+    blocks.filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !this.#isPluginText(b)).forEach((b) => Commands.#stepMargin(b, delta));
     // 항목은 가장 바깥 것만 옮긴다 (선택된 하위 항목은 함께 따라감)
     const items = blocks.filter((b) => b.tagName === 'LI');
     const tops = items.filter((li) => !items.some((o) => o !== li && o.contains(li)));
@@ -3833,7 +3863,7 @@ class Commands {
       const inner = Array.from(c.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, li'));
       return inner.length && !SelectionUtil.hasDirectText(c) ? inner : [c, ...inner];
     };
-    const blocks = (cells.length ? cells.flatMap(cellBlocks) : this.#rangeBlocks()).filter((b) => !Commands.#isPluginText(b));
+    const blocks = (cells.length ? cells.flatMap(cellBlocks) : this.#rangeBlocks()).filter((b) => !this.#isPluginText(b));
     if (!blocks.length) return undefined;
     /** 줄 간격 지우기 (style 이 비면 속성도) */
     const drop = (el) => { el.style.removeProperty('line-height'); if (!el.getAttribute('style')?.trim()) el.removeAttribute('style'); };
@@ -3874,7 +3904,7 @@ class Commands {
       if (n === range.startContainer && range.startOffset >= n.length) continue;
       if (n === range.endContainer && range.endOffset === 0) continue;
       const block = this.sel.textBlockOf(n);
-      if (block && !Commands.#isPluginText(block)) blocks.add(block);
+      if (block && !this.#isPluginText(block)) blocks.add(block);
     }
     return blocks.size ? Array.from(blocks) : fallback;
   }
@@ -3897,8 +3927,9 @@ class Commands {
    * 플러그인 블록이 정한 자리의 글인지 (태그를 바꾸면 저장 때 사라짐): data-role 요소 또는 data-type 블록 안. 배치 블록 글 칸(data-cell="text")은 아님
    * @param {Element} el
    */
-  static #isPluginText(el) {
-    return !!el.closest('[data-role]') || (!!el.closest('[data-type]') && !el.closest('[data-cell="text"]'));
+  #isPluginText(el) {
+    const inside = (selector) => !!this.sel.closestIn(el, selector);
+    return inside('[data-role]') || (inside('[data-type]') && !inside('[data-cell="text"]'));
   }
 
   /** 지금 선택이 접힌 커서인지 (선택이 없어도 true) */
@@ -3929,7 +3960,7 @@ class Commands {
    * @param {'p'|'h1'|'h2'|'h3'|'h4'|'h5'|'h6'|'blockquote'} tag
    */
   setBlock(tag) {
-    const blocks = this.#rangeBlocks().filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !Commands.#isPluginText(b)); // 목록 항목·표 셀·구조 블록(dt·dd 등)·플러그인 제목은 블록 교체 대상 아님
+    const blocks = this.#rangeBlocks().filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !this.#isPluginText(b)); // 목록 항목·표 셀·구조 블록(dt·dd 등)·플러그인 제목은 블록 교체 대상 아님
     if (!blocks.length) return;
     if (tag === 'blockquote') { this.#applyQuote(blocks, blocks.every((b) => this.#quoteOf(b)) ? null : 'line', true); return; }
     const collapsed = this.#isCollapsed();
@@ -4023,7 +4054,7 @@ class Commands {
    * @param {'line'|'box'|'quote'|null} style
    */
   setQuote(style) {
-    const blocks = this.#rangeBlocks().filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !Commands.#isPluginText(b)); // 목록 항목·표 셀·구조 블록(dt·dd 등)·플러그인 제목은 대상 아님
+    const blocks = this.#rangeBlocks().filter((b) => TRANSFORMABLE_BLOCK.test(b.tagName) && !this.#isPluginText(b)); // 목록 항목·표 셀·구조 블록(dt·dd 등)·플러그인 제목은 대상 아님
     if (blocks.length) this.#applyQuote(blocks, style, false);
   }
 
@@ -4075,7 +4106,7 @@ class Commands {
       // 구조 모드: 직속 문단·중첩 목록 외의 블록 자식(div 등)이 있는 li 는 바꾸지 않는다 (퍼블 구조 유지)
       ? !(this.sel.structure && SelectionUtil.hasBlockChild(b, /^(P|UL|OL)$/))
       // 표 셀 안에서는 목록 미지원. 구조 블록(dt·dd·글만 있는 div 등)·플러그인 제목은 태그를 바꾸지 않는다
-      : TRANSFORMABLE_BLOCK.test(b.tagName) && !Commands.#isPluginText(b)));
+      : TRANSFORMABLE_BLOCK.test(b.tagName) && !this.#isPluginText(b)));
     if (!blocks.length) return;
     const collapsed = this.#isCollapsed();
     const range = this.sel.getRange();
@@ -4337,7 +4368,7 @@ class Commands {
     // 목록·인용 안이면 그 뒤에 (목록 항목 사이에 문단이 끼지 않게)
     let block = this.sel.outerListOrQuote(SelectionUtil.blockAnchor(this.sel.getBlock()));
     // 표 캡션·그림 설명 안이면(그 안의 문단 포함) 그 표(레이어)·그림 뒤에 (캡션 형제로 들어가면 표·figure 구조가 깨짐)
-    const cap = block?.closest?.('caption, figcaption');
+    const cap = this.sel.closestIn(block, 'caption, figcaption');
     if (cap?.tagName === 'CAPTION') { block = cap.closest('table'); if (block.parentNode?.classList?.contains('jm-table-layer')) block = block.parentNode; }
     else if (cap) block = cap.closest('figure') || cap;
     if (block && /^(TD|TH)$/.test(block.tagName)) block.appendChild(p); // 셀 안이면 셀 내부에
@@ -4365,7 +4396,7 @@ class Commands {
   #splitParagraphAtCaret() {
     const range = this.sel.getRange();
     const block = this.sel.getBlock();
-    if (!range?.collapsed || block?.tagName !== 'P' || block.closest('td, th')) return null;
+    if (!range?.collapsed || block?.tagName !== 'P' || this.sel.closestIn(block, 'td, th')) return null;
     const head = document.createRange();
     head.setStart(block, 0);
     head.setEnd(range.startContainer, range.startOffset);
@@ -10238,8 +10269,8 @@ class JmEditor {
     const hr = this.#adjacentHr(forward);
     if (hr) { hr.remove(); this.commit(); return true; }
     const block = this.#blockAtEdge(forward);
-    if (block?.closest('[data-role="title"]')) return true; // 갤러리·슬라이드 제목은 한 줄 칸: 앞뒤 블록과 합치지 않는다 (WebKit 은 뒤 문단을 제목으로 끌어온다)
-    if (!block || block.closest('[contenteditable="false"]')) return false; // 표 칸·배치 글 칸 안은 그 영역의 동작대로
+    if (this.sel.closestIn(block, '[data-role="title"]')) return true; // 갤러리·슬라이드 제목은 한 줄 칸: 앞뒤 블록과 합치지 않는다 (WebKit 은 뒤 문단을 제목으로 끌어온다)
+    if (!block || this.sel.closestIn(block, '[contenteditable="false"]')) return false; // 표 칸·배치 글 칸 안은 그 영역의 동작대로
     if (!this.sel.adjacentLayer(block, forward)) return false;
     const isEmpty = (el) => !el.textContent.replace(new RegExp(ZWSP, 'g'), '').trim() && !el.querySelector('img');
     // 글과 레이어 사이의 빈 문단은 브라우저처럼 지운다 (글 끝 Delete·글 앞 Backspace)
@@ -11858,7 +11889,7 @@ const editor=new JmEditor(document.getElementById('editor'),{
 /* 찾기·바꾸기 입력줄 */
 const findBar=new FindBar(editor);
 linkbar.after(findBar.el);
-function openFind(replace){if(mode!=='editor')return;linkbar.classList.remove('open');findBar.open(replace);}
+function openFind(replace){if(mode!=='editor')return;editor.sel.clearTarget();linkbar.classList.remove('open');findBar.open(replace);}
 /* ── 색 테마 패널: 라이브러리 테마 변수(--jm-*)를 :root 에 써서 바로 적용 (README 「색 테마」) ── */
 const THEME_PRESETS={
   '데모 초록':{'--bg':'#f6f7f4','--jm-bg':'#ffffff','--jm-text':'#1f2421','--jm-muted':'#6b716c','--jm-subtle':'#9aa19b','--jm-strong':'#2e3531','--jm-text-soft':'#47504a',
@@ -11973,8 +12004,8 @@ function syncLinkWindow(){const inPage=Sanitizer.isInPageHref(linkUrl.value);lin
 linkNewWinLabel.addEventListener('mousedown',e=>e.preventDefault());
 linkNewWinBox.addEventListener('change',()=>{linkWindowChoice=linkNewWinBox.checked;});
 linkUrl.addEventListener('input',()=>{if(!linkNewWinLabel.hidden)syncLinkWindow();});
-function openInput(label,initial,handler,linkWindow){findBar.close(false);editor.sel.save();linkNewWinLabel.hidden=linkWindow===undefined;linkWindowChoice=linkWindow??null;document.getElementById('linkLabel').textContent=label;linkUrl.value=initial;linkUrl.setCustomValidity('');inputHandler=handler;linkbar.classList.add('open');if(!linkNewWinLabel.hidden)syncLinkWindow();linkUrl.focus();linkUrl.select();}
-function closeInput(){linkbar.classList.remove('open');linkNewWinLabel.hidden=true;inputHandler=null;editor.root.focus();editor.sel.restore();}
+function openInput(label,initial,handler,linkWindow){findBar.close(false);editor.sel.save();linkNewWinLabel.hidden=linkWindow===undefined;linkWindowChoice=linkWindow??null;document.getElementById('linkLabel').textContent=label;linkUrl.value=initial;linkUrl.setCustomValidity('');inputHandler=handler;linkbar.classList.add('open');if(!linkNewWinLabel.hidden)syncLinkWindow();const rng=editor.sel.getRange();const lnk=linkWindow!==undefined&&rng?.collapsed?editor.sel.closest('a'):null;if(lnk){const whole=document.createRange();whole.selectNodeContents(lnk);editor.sel.showTarget(whole);}else editor.sel.showTarget(rng);linkUrl.focus();linkUrl.select();}
+function closeInput(){editor.sel.clearTarget();linkbar.classList.remove('open');linkNewWinLabel.hidden=true;inputHandler=null;editor.root.focus();editor.sel.restore();}
 document.getElementById('linkOk').addEventListener('mousedown',e=>e.preventDefault());
 document.getElementById('linkOk').addEventListener('click',()=>{linkUrl.setCustomValidity('');const v=linkUrl.value.trim();editor.root.focus();editor.sel.restore();if(inputHandler?.(v)!==false)closeInput();else linkUrl.focus();});
 document.getElementById('linkCancel').addEventListener('mousedown',e=>e.preventDefault());
@@ -11994,7 +12025,7 @@ function setMode(m){
   if(m===mode)return;
   if(mode==='html'&&sourceEl.value!==sourceBase)editor.replaceContent(sourceEl.value); // 고쳤을 때만, 되돌리기 한 단계로
   findBar.close(false); // 찾기는 편집 모드에서만
-  linkbar.classList.remove('open');linkNewWinLabel.hidden=true;inputHandler=null; // 입력줄은 편집 모드의 커서에 쓰는 것
+  editor.sel.clearTarget();linkbar.classList.remove('open');linkNewWinLabel.hidden=true;inputHandler=null; // 입력줄은 편집 모드의 커서에 쓰는 것
   mode=m;
   const area=document.getElementById('editor');
   area.hidden=m!=='editor';sourceEl.hidden=m!=='html';previewEl.hidden=m!=='preview';
