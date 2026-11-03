@@ -6,7 +6,7 @@ contenteditable 위에 직접 올린 WYSIWYG 웹에디터입니다. 외부 라�
 
 ## 기능
 
-- 굵게 / 기울임 / 밑줄 / 취소선, 글자 크기(10~48px), 글꼴(설정 목록), 글자색 / 배경색 (견본 + HSV 팔레트 + HEX 입력 + 스포이드)
+- 굵게 / 기울임 / 밑줄 / 취소선, 글자 크기(10~48px), 글꼴(웹폰트 목록), 글자색 / 배경색 (견본 + HSV 팔레트 + HEX 입력 + 스포이드)
 - 제목(본문·제목 1~6 목록), 인용(세로선·박스·따옴표 — 인용 버튼 목록에서 선택·해제), 가로 정렬(왼쪽/가운데/오른쪽)·세로 정렬(표 셀) 드롭다운, 순서 / 비순서 목록(● ○ ■, 1. 01. a. A. i. I. 가.), 링크(입력줄의 「새 창」 체크 — 기본은 외부 주소·/ 경로 켬, #·tel:·mailto: 는 새 창 없음), 버튼 그룹 블록(서식 — 이름·주소 입력으로 추가, 모양(채움·외곽선·연한색)·색(테마 7색 또는 직접 선택 — 고른 색 하나로 테두리·오버·연한 배경·글자색 자동)·크기·아이콘 16종(글자 앞/뒤), 그립 드래그로 순서, 정렬)
 - 가로줄(`<hr>`) — 툴바 버튼으로 커서 블록 뒤에 넣고 다음 문단으로 커서 이동. Backspace·Delete 는 선만 지웁니다
 - 위·아래 첨자 — 툴바 버튼(서로 배타), 커서면 이후 입력에 적용
@@ -153,7 +153,9 @@ window.JmEditorConfig = {
     mobileMedia: '(max-width: 767px)', // 이미지 도구 막대「모바일 추가」가 source 에 쓰는 media (200자 이하)
   },
   font: {
-    families: ['맑은 고딕', 'Noto Sans KR', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman'], // 글꼴 도구 목록이자 허용 목록
+    families: ['Noto Sans KR', 'Noto Serif KR'], // 글꼴 도구 목록 (웹폰트)
+    legacy: ['맑은 고딕', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman'], // 도구에는 없고 지우지만 않는 글꼴
+    css: ['https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@400;700&display=swap'], // 에디터·뷰어가 불러올 글꼴 CSS
   },
   structure: {
     enabled: true,
@@ -171,7 +173,7 @@ window.JmEditorConfig = {
 |---|---|---|
 | `gallery` | `galleryLimits` | `types`, `maxFileSizeMB`, `maxFilesPerAdd`, `maxImagesPerPost`, `maxTotalSizeMB`, `maxDimension` |
 | `image` | `image` | `mobileMedia` |
-| `font` | `font` | `families` |
+| `font` | `font` | `families`, `legacy`, `css` |
 | `structure` | `structure` | `enabled`, `tags`, `classPattern`(class 이름 형식), `classAllow`(`null` 이면 형식만, `tit-*` 접두어 가능), `classDeny`, `idPattern`, `idDeny` |
 
 우선순위는 생성 옵션 > `window.JmEditorConfig` > 기본값입니다. 제한에 걸리면 `notify` 옵션으로 넘긴 함수에 안내 문구를 주고, 없으면 `alert` 로 띄웁니다. 글당 용량은 이번 편집에서 올린 사진만 셉니다(불러온 기존 사진은 크기를 알 수 없음). 클라이언트 제한은 우회할 수 있으므로 서버에서도 같은 값으로 검사하세요 ([서버 연동 가이드](server/spring-boot/README.md)).
@@ -350,11 +352,23 @@ initSliders(document.querySelector('.jm-content'));
 
 엑셀·파워포인트는 표·글과 함께 그림 미리보기도 클립보드에 넣으므로, `text/html`·`text/plain` 이 있으면 그림은 무시하고 파일만 있을 때 이미지로 넣습니다. 오피스 문서를 붙여 넣으면 문서 머리 `<style>` 의 class 규칙(`.xl65{…}`)을 표 칸·`font` 의 `style` 로 옮겨 테두리·배경·정렬을 살립니다 (붙여넣기 전용, 칸에 직접 쓴 값 우선, 값 검사는 정제가 그대로 함). `td{…}` 같은 태그 규칙과 표 밖 문단 규칙은 옮기지 않습니다.
 
-**글꼴** — 허용 목록은 `font.families` 입니다 (생성 옵션 `font` > `window.JmEditorConfig.font` > 기본값). 툴바 글꼴 목록과 정제가 같이 씁니다. 서버는 `jm-editor.font.families` 로 같은 값을 주세요. 대소문자는 무시하고 `Malgun Gothic`·`HCR Batang`·`Gulim`·`Dotum`·`Batang` 은 한글 이름으로 바꿉니다.
+**글꼴** — 쓴 사람이 고른 글꼴이 보는 사람에게도 같게 보이도록, 툴바에는 웹폰트로 불러오는 글꼴만 둡니다. 설정 우선순위는 생성 옵션 `font` > `window.JmEditorConfig.font` > 기본값입니다.
 
-툴바의 크기·글꼴 도구에는 "기본" 항목이 없고 지금 실제로 적용되는 값(예: `16px`, `맑은 고딕`)이 선택되어 보입니다. 편집 영역은 페이지의 값을 물려받으므로 사이트 CSS 에 따라 달라지고, 이 컴퓨터에 없는 글꼴은 건너뜁니다(알 수 없으면 `브라우저 글꼴`). **지정 안 했을 때의 값을 고르면 지정을 해제**하므로 기본값은 저장 내용에 들어가지 않습니다.
+| 항목 | 내용 | 기본값 |
+|---|---|---|
+| `families` | 툴바 글꼴 목록. 비우면 글꼴 도구를 숨깁니다 | `Noto Sans KR`, `Noto Serif KR` (무료 공개 글꼴, SIL OFL) |
+| `legacy` | 툴바에는 없고 지우지만 않는 글꼴. 옛 글·붙여넣은 글의 글꼴이 다시 저장해도 남습니다. 비우면 `families` 밖의 글꼴은 지웁니다 | 맑은 고딕·굴림·바탕 등 이전 버전의 목록 |
+| `css` | 에디터와 뷰어(`initViewer`)가 페이지에 불러올 글꼴 CSS 주소. `https://` 또는 `/` 로 시작하는 주소만 쓰고, 같은 주소는 한 번만 붙입니다. 사이트가 직접 불러오거나 글꼴 파일을 자체 서버에 두면 `[]` 또는 그 주소로 바꾸세요 | Google Fonts 의 Noto Sans KR·Noto Serif KR (400·700) |
 
-웹폰트는 번들에 넣지 않습니다. 없는 글꼴은 사이트 CSS 에서 대체할 수 있습니다. 라이선스는 사이트에서 확인하세요.
+`families` 와 `legacy` 를 합친 것이 허용 목록이며, 서버는 `jm-editor.font.families`·`jm-editor.font.legacy` 로 같은 값을 주세요. 대소문자는 무시하고 `Malgun Gothic`·`HCR Batang`·`Gulim`·`Dotum`·`Batang` 은 한글 이름으로 바꿉니다. 저장 값에는 대체 글꼴을 붙입니다 (`"Noto Serif KR", serif` — 이름에 명조·바탕·궁서·Serif·Times 가 있으면 `serif`, 그 밖은 `sans-serif`).
+
+**이전 버전에서 올릴 때** — `families` 만 지정해 둔 사이트도 `legacy`·`css` 는 기본값을 받습니다. 그래서 옛 글꼴이 다시 허용되고(예전처럼 좁히려면 `legacy: []`), 에디터·뷰어가 Google Fonts 를 불러옵니다(개인정보·CSP 정책상 안 되면 `css: []` 로 두고 글꼴을 직접 불러오세요).
+
+조회 화면에서 `jm-viewer` 를 쓰지 않으면 같은 글꼴 CSS 를 조회 페이지에도 직접 불러오세요. 불러오지 않으면 보는 사람 컴퓨터의 대체 글꼴로 보입니다.
+
+툴바의 크기·글꼴 도구에는 "기본" 항목이 없고 지금 실제로 적용되는 값(예: `16px`, `Noto Sans KR`)이 선택되어 보입니다. 편집 영역은 페이지의 값을 물려받으므로 사이트 CSS 에 따라 달라지고, 이 컴퓨터에 없는 글꼴은 건너뜁니다(알 수 없으면 `브라우저 글꼴`). **지정 안 했을 때의 값을 고르면 지정을 해제**하므로 기본값은 저장 내용에 들어가지 않습니다.
+
+`legacy` 의 글꼴은 보는 사람 컴퓨터에 따라 다르게 보일 수 있습니다. 비슷한 웹폰트로 보이게 하려면 사이트 CSS 에서 대체하세요. 글꼴 파일의 라이선스는 사이트에서 확인하세요.
 
 ```css
 /* 함초롬바탕 → Noto Serif KR (글꼴 파일은 사이트에 둠) */

@@ -111,8 +111,8 @@ const BUTTONS = [
   ['color', 'A', (s) => !!s.color, false, { tip: '글자색' }],     // 버튼 하단 색 띠로 현재 색 표시
   ['bgColor', 'A', (s) => !!s.bg, false, { tip: '글자 배경색' }],
   ['fontSize', '크기', () => false, false, { tip: '글자 크기', select: FONT_SIZES.map((n) => [`${n}px`, `${n}px`]), inherited: (editor, node) => inheritedFontSize(node, editor.root), sorted: true }],
-  // 글꼴: 목록은 에디터 설정(font.families)에서
-  ['fontFamily', '글꼴', () => false, false, { tip: '글꼴', select: (editor) => editor.fontFamilies.map((n) => [n, n]), inherited: (editor, node) => inheritedFontName(node, editor.root, editor.fontFamilies), unknownLabel: '브라우저 글꼴' }],
+  // 글꼴: 목록은 에디터 설정(font.families)에서 — 옛 글꼴(font.legacy)은 허용만 하고 목록에 없음
+  ['fontFamily', '글꼴', () => false, false, { tip: '글꼴', select: (editor) => editor.fontMenu.map((n) => [n, n]), inherited: (editor, node) => inheritedFontName(node, editor.root, editor.fontFamilies), unknownLabel: '브라우저 글꼴' }],
   ['clearFormat', '서식 지우기', () => false, false, { tip: '서식 지우기', icon: CLEAR_FORMAT_ICON, iconOnly: true }],
   null, // 구분선
   // 제목: 셀렉트 (제목 1~6 / 본문). 값 선택 시 exec('heading', 'p'|'h1'~'h6')
@@ -273,7 +273,7 @@ export class JmToolbarEditor {
       onSelectionChange: () => { this.#refreshState(); this.#syncInputTarget(); },
       pickColor: (x, y, cb) => this.colorPicker.open(x, y, cb, { sampleMode: 'background' }),
     });
-    if (!this.editor.fontFamilies.length) this.buttons.fontFamily.hidden = true; // 글꼴 목록을 비우면 도구도 숨김
+    if (!this.editor.fontMenu.length) this.buttons.fontFamily.hidden = true; // 글꼴 목록을 비우면 도구도 숨김
     this.findBar = new FindBar(this.editor);
     this.inputBar.after(this.findBar.el);
     if (options.initialHTML) this.editor.setHTML(options.initialHTML);

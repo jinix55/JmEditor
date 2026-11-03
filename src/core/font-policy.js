@@ -1,14 +1,20 @@
 /**
  * font-policy — 글꼴 허용 목록 (style font-family 값 정규화)
  * - 쉼표 목록에서 허용 목록에 있는 첫 이름만 남긴다. 없으면 지운다 (serif 같은 일반 패밀리만 있어도 지워짐).
- * - 서버 FontPolicy.java 와 같은 규칙이어야 한다 (application.yml jm-editor.font.families).
+ * - 저장 값은 `"이름", serif|sans-serif` — 글꼴을 못 받았을 때도 명조·고딕은 맞게 보이도록 대체 글꼴을 붙인다.
+ * - 서버 FontPolicy.java 와 같은 규칙이어야 한다 (application.yml jm-editor.font.families·legacy).
  *
- * 설정 (생성 옵션 font > window.JmEditorConfig.font > 기본값): { families: ['맑은 고딕', 'Arial'] }
+ * 설정 (생성 옵션 font > window.JmEditorConfig.font > 기본값):
+ *   families 툴바 글꼴 목록 (웹폰트로 불러와 쓴 사람·보는 사람에게 같게 보이는 글꼴)
+ *   legacy   툴바에는 없지만 지우지 않는 글꼴 (옛 글·붙여넣기). families 와 합친 것이 허용 목록
+ *   css      에디터·뷰어가 불러올 글꼴 CSS 주소 (https:// 또는 / 로 시작). 사이트가 직접 불러오면 []
  */
 
-/** 기본 글꼴 목록 */
+/** 기본 글꼴 설정 — 툴바는 무료 공개(OFL) 웹폰트만 */
 export const FONT_DEFAULTS = Object.freeze({
-  families: Object.freeze(['맑은 고딕', 'Noto Sans KR', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman']),
+  families: Object.freeze(['Noto Sans KR', 'Noto Serif KR']),
+  legacy: Object.freeze(['맑은 고딕', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman']),
+  css: Object.freeze(['https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@400;700&display=swap']),
 });
 
 /** 영문 별칭 → 목록 이름 (소문자로 비교) */
@@ -16,14 +22,56 @@ const FONT_ALIASES = Object.freeze({ 'malgun gothic': '맑은 고딕', 'hcr bata
 /** 설정 목록에 쓸 수 있는 이름 형식 (따옴표·세미콜론 등이 style 로 나가지 않게) */
 const FONT_NAME_OK = /^[\p{L}\p{N} _-]{1,64}$/u;
 
+/** 명조 계열 이름 (대체 글꼴 serif). 그 밖은 sans-serif */
+const SERIF_FONT = /serif|myeongjo|명조|바탕|batang|궁서|gungsuh|times/i;
+/** 불러올 수 있는 글꼴 CSS 주소: https:// 또는 같은 사이트 경로 (// 와 /\ 는 다른 사이트라 제외) */
+const FONT_CSS_OK = /^(?:https:\/\/[^\s"'<>\\]+|\/(?![/\\])[^\s"'<>\\]*)$/;
+
 /**
  * 설정 목록 정리: 배열이 아니면 기본 목록, 형식에 어긋난 이름은 버린다
  * @param {unknown} list
+ * @param {readonly string[]} [fallback] 배열이 아닐 때 쓸 목록
  * @returns {string[]}
  */
-export function normalizeFamilies(list) {
-  if (!Array.isArray(list)) return [...FONT_DEFAULTS.families];
+export function normalizeFamilies(list, fallback = FONT_DEFAULTS.families) {
+  if (!Array.isArray(list)) return [...fallback];
   return [...new Set(list.map((n) => String(n).trim()).filter((n) => FONT_NAME_OK.test(n)))];
+}
+
+/**
+ * 허용 목록: 툴바 목록(families) 다음에 옛 글꼴(legacy)
+ * @param {{families?: unknown, legacy?: unknown}} font 글꼴 설정
+ * @returns {string[]}
+ */
+export function fontAllowList(font) {
+  return [...new Set([...normalizeFamilies(font?.families), ...normalizeFamilies(font?.legacy, FONT_DEFAULTS.legacy)])];
+}
+
+/**
+ * 저장할 font-family 값: 이름과 대체 글꼴
+ * @param {string} name 허용 목록의 이름
+ * @returns {string} 예: '"Noto Serif KR", serif'
+ */
+export function fontFamilyValue(name) {
+  return `"${name}", ${SERIF_FONT.test(name) && !/sans/i.test(name) ? 'serif' : 'sans-serif'}`;
+}
+
+/**
+ * 글꼴 CSS 를 페이지 head 에 붙인다 (같은 주소는 한 번만, 허용되지 않는 주소는 버림)
+ * @param {unknown} urls 설정 font.css
+ */
+export function loadFontCss(urls) {
+  if (typeof document === 'undefined' || !Array.isArray(urls)) return;
+  for (const url of urls) {
+    if (typeof url !== 'string' || !FONT_CSS_OK.test(url)) continue;
+    let href;
+    try { href = new URL(url, document.baseURI).href; } catch { continue; } // 형식은 맞지만 주소로 못 읽는 값(https://[ 등)은 버림 — 에디터·뷰어 초기화를 막지 않게
+    if (Array.from(document.querySelectorAll('link[rel="stylesheet"]')).some((l) => l.href === href)) continue;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    document.head.appendChild(link);
+  }
 }
 
 /**

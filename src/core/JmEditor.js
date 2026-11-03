@@ -24,7 +24,7 @@ import { FindReplace } from './FindReplace.js';
 import { BlockDrag } from './BlockDrag.js';
 import { Sanitizer, HIDDEN_ID_ATTR } from './Sanitizer.js';
 import { makeStructurePolicy, INLINE_STRUCTURE_TAGS } from './structure-policy.js';
-import { normalizeFamilies, fontFamilyName } from './font-policy.js';
+import { normalizeFamilies, fontAllowList, fontFamilyName, fontFamilyValue, loadFontCss } from './font-policy.js';
 import { resolveConfig } from '../config.js';
 import { notify } from '../plugins/gallery/gallery-upload.js';
 
@@ -57,7 +57,7 @@ export class JmEditor {
    * @param {string} [options.placeholder]
    * @param {string} [options.ariaLabel] 편집 영역 aria-label (없으면 placeholder, 그것도 없으면 '본문 편집')
    * @param {object} [options.structure] 퍼블 구조 보존 정책 (window.JmEditorConfig.structure 보다 우선, core/structure-policy.js)
-   * @param {{families?: string[]}} [options.font] 글꼴 허용 목록 (window.JmEditorConfig.font 보다 우선, core/font-policy.js)
+   * @param {{families?: string[], legacy?: string[], css?: string[]}} [options.font] 글꼴 설정 — 툴바 목록·옛 글꼴·글꼴 CSS (window.JmEditorConfig.font 보다 우선, core/font-policy.js)
    * @param {(replace: boolean) => void} [options.onFindShortcut] 편집 영역의 Ctrl/Cmd+F(false)·H(true) 처리. 없으면 브라우저 기본
    * @param {(x: number, y: number, cb: (color: string|null) => void) => void} [options.pickColor]
    *        색상 선택 UI 를 띄우는 콜백 (표 셀/행 배경색 메뉴에서 사용). 래퍼가 주입한다.
@@ -68,8 +68,12 @@ export class JmEditor {
     this.composing = false; // 한글 IME 조합 중 여부
     /** 퍼블 구조 정책 (꺼져 있으면 null — 지금 정리 규칙). 생성 시 확정 */
     this.structure = makeStructurePolicy(resolveConfig('structure', options.structure));
-    /** 글꼴 허용 목록 (툴바 목록·정제 공통). 생성 시 확정 */
-    this.fontFamilies = normalizeFamilies(resolveConfig('font', options.font).families);
+    const font = resolveConfig('font', options.font);
+    /** 글꼴 허용 목록 (툴바 목록 + 옛 글꼴, 정제가 씀). 생성 시 확정 */
+    this.fontFamilies = fontAllowList(font);
+    /** 툴바 글꼴 목록 */
+    this.fontMenu = normalizeFamilies(font.families);
+    loadFontCss(font.css); // 쓴 사람·보는 사람이 같은 글꼴로 보도록 (뷰어도 같은 설정으로 불러옴)
 
     this.root.contentEditable = 'true';
     this.root.classList.add('jm-editor');
@@ -165,7 +169,7 @@ export class JmEditor {
       fontSize: () => c.setStyle('font-size', value ?? null),
       fontFamily: () => {
         const name = value ? fontFamilyName(value, this.fontFamilies) : null;
-        if (!value || name) c.setStyle('font-family', name ? `"${name}"` : null);
+        if (!value || name) c.setStyle('font-family', name ? fontFamilyValue(name) : null);
       },
       // 정렬: 표 셀 범위 선택이 있으면 선택한 셀 전체에, 아니면 커서 블록(셀 포함)에
       alignLeft: () => (this.table.selection ? this.table.setAlign('left') : c.setAlign('left')),

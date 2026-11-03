@@ -107,9 +107,9 @@ test.describe('옛 형식 변환 (공통 사례)', () => {
       delete window.JmEditorConfig;
       return { own, none, cfg };
     });
-    expect(r.own).toBe('<span style="font-family: &quot;맑은 고딕&quot;">a</span>');
+    expect(r.own).toBe('<span style="font-family: &quot;맑은 고딕&quot;, sans-serif">a</span>');
     expect(r.none).toBe('a');
-    expect(r.cfg).toEqual(['<span style="font-family: &quot;Malgun Gothic&quot;">a</span>', 'a']);
+    expect(r.cfg).toEqual(['<span style="font-family: &quot;Malgun Gothic&quot;, sans-serif">a</span>', 'a']);
   });
 });
 
@@ -238,7 +238,7 @@ test.describe('글꼴 도구', () => {
     await caret(page, 'span', 1);
     await expect.poll(() => page.locator('[data-cmd="fontFamily"] .jm-btn-select-label').textContent()).toBe('Arial');
     const clean = await page.evaluate(() => window.JM.Sanitizer.clean(window.ed.getHTML()));
-    expect(clean).toBe('<p><span style="font-family: &quot;Arial&quot;">word</span></p>');
+    expect(clean).toBe('<p><span style="font-family: &quot;Arial&quot;, sans-serif">word</span></p>');
   });
 
   test('허용 목록 밖 값은 적용되지 않는다', async ({ page }) => {
@@ -260,25 +260,26 @@ test.describe('글꼴 도구', () => {
     await page.locator('[data-cmd="fontFamily"]').click();
     const items = page.locator('.jm-listmenu .jm-ctxmenu-item');
     await expect(items.filter({ hasText: '기본' })).toHaveCount(0);
-    await expect(page.getByRole('menuitemradio', { name: '돋움', exact: true })).toHaveCount(1);
-    await page.getByRole('menuitemradio', { name: '돋움', exact: true }).click();
-    expect(await html(page)).toContain('돋움');
+    await expect(page.getByRole('menuitemradio', { name: 'Noto Serif KR', exact: true })).toHaveCount(1);
+    await page.getByRole('menuitemradio', { name: 'Noto Serif KR', exact: true }).click();
+    expect(await html(page)).toContain('Noto Serif KR');
   });
 
-  test('생성 옵션 font.families 로 목록을 바꾼다, 빈 목록이면 도구를 숨긴다', async ({ page }) => {
+  test('생성 옵션 font.families·legacy 로 목록을 바꾼다, 빈 목록이면 도구를 숨긴다', async ({ page }) => {
     const r = await page.evaluate(() => {
       const mk = (font) => {
         const box = document.createElement('div');
         document.body.appendChild(box);
         return new window.JM.JmToolbarEditor(box, { font });
       };
-      const a = mk({ families: ['Arial'] });
+      const a = mk({ families: ['Arial'], legacy: [] });
       a.editor.setHTML('<p><span style="font-family:Arial">x</span><span style="font-family:굴림">y</span></p>');
       const b = mk({ families: [] });
-      return { html: a.editor.getHTML(), list: a.editor.fontFamilies, hidden: b.buttons.fontFamily.hidden };
+      return { html: a.editor.getHTML(), list: a.editor.fontFamilies, menu: a.editor.fontMenu, hidden: b.buttons.fontFamily.hidden };
     });
-    expect(r.html).toBe('<p><span style="font-family: &quot;Arial&quot;">x</span>y</p>');
+    expect(r.html).toBe('<p><span style="font-family: &quot;Arial&quot;, sans-serif">x</span>y</p>');
     expect(r.list).toEqual(['Arial']);
+    expect(r.menu).toEqual(['Arial']);
     expect(r.hidden).toBe(true);
   });
 
