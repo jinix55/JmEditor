@@ -32,10 +32,8 @@ window.JmEditorConfig = {
     idPattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$', // id 이름 형식 (id 는 구조 모드에서만 남음)
     idDeny: [],        // 막을 id 이름·접두어(xxx-*). 사이트 스크립트 전역·레이아웃 id(header, gnb 등)를 넣을 것. jm-*·예약 전역(JmEditorConfig 등)은 항상 제거
   },
-  // 글꼴 — 서버 HtmlSanitizer(jm-editor.font.families·legacy)도 같은 값이어야 함. 두 목록 밖의 글꼴은 지움
+  // 글꼴 — 툴바 글꼴 목록이자 허용 목록(밖의 글꼴은 지움). 서버 HtmlSanitizer(jm-editor.font.families)도 같은 값이어야 함. 웹폰트는 사이트에서 불러올 것
   font: {
-    families: ['Noto Sans KR', 'Noto Serif KR'], // 툴바 글꼴 목록: 웹폰트로 불러와 쓴 사람·보는 사람에게 같게 보이는 글꼴만
-    legacy: ['맑은 고딕', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman'], // 툴바에는 없고 지우지만 않는 글꼴 (옛 글·붙여넣기)
-    css: ['https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@400;700&display=swap'], // 에디터·뷰어가 불러올 글꼴 CSS (https:// 또는 /). 사이트가 직접 불러오면 []
+    families: ['맑은 고딕', 'Noto Sans KR', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman'],
   },
 };

@@ -25,7 +25,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   structure: STRUCTURE_DEFAULTS,
   // 본문 이미지 — 모바일 이미지(picture > source)의 media 값
   image: Object.freeze({ mobileMedia: '(max-width: 767px)' }),
-  // 글꼴 — families(툴바)·legacy(허용만)·css(에디터·뷰어가 불러올 글꼴 CSS). 서버 jm-editor.font.families·legacy 도 같은 값으로 (core/font-policy.js)
+  // 글꼴 허용 목록 — 툴바 글꼴 목록이자 정제 허용 목록. 서버 jm-editor.font.families 도 같은 값으로 (core/font-policy.js)
   font: FONT_DEFAULTS,
 });
 

@@ -7,7 +7,7 @@ import { normalizeLayout, normalizeSplit, cellsOf, isImageRole } from '../plugin
 import { SHAPE_VALUES, COLOR_VALUES, ICON_VALUES, normalizeHex, toneOf } from '../plugins/buttons/button-theme.js';
 import { ARIA_ATTRS } from './structure-policy.js';
 import { SAFE_COLOR, parseStyle, cleanLegacyDecl, normalizeLegacy } from './legacy-format.js';
-import { normalizeFamilies, fontAllowList } from './font-policy.js';
+import { normalizeFamilies } from './font-policy.js';
 import { resolveConfig } from '../config.js';
 
 /** 허용 태그와 각 태그에서 허용하는 속성 */
@@ -212,7 +212,7 @@ export class Sanitizer {
 
   /** 글꼴 허용 목록 정리 (인자 > 설정) */
   static #families(families) {
-    return families ? normalizeFamilies(families) : fontAllowList(resolveConfig('font'));
+    return normalizeFamilies(families ?? resolveConfig('font').families);
   }
 
   /** 정책을 잠시 바꿔 실행 (중첩 호출에도 원래대로 복구) */

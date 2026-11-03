@@ -911,20 +911,14 @@ function toneOf(hex) {
 /**
  * font-policy — 글꼴 허용 목록 (style font-family 값 정규화)
  * - 쉼표 목록에서 허용 목록에 있는 첫 이름만 남긴다. 없으면 지운다 (serif 같은 일반 패밀리만 있어도 지워짐).
- * - 저장 값은 `"이름", serif|sans-serif` — 글꼴을 못 받았을 때도 명조·고딕은 맞게 보이도록 대체 글꼴을 붙인다.
- * - 서버 FontPolicy.java 와 같은 규칙이어야 한다 (application.yml jm-editor.font.families·legacy).
+ * - 서버 FontPolicy.java 와 같은 규칙이어야 한다 (application.yml jm-editor.font.families).
  *
- * 설정 (생성 옵션 font > window.JmEditorConfig.font > 기본값):
- *   families 툴바 글꼴 목록 (웹폰트로 불러와 쓴 사람·보는 사람에게 같게 보이는 글꼴)
- *   legacy   툴바에는 없지만 지우지 않는 글꼴 (옛 글·붙여넣기). families 와 합친 것이 허용 목록
- *   css      에디터·뷰어가 불러올 글꼴 CSS 주소 (https:// 또는 / 로 시작). 사이트가 직접 불러오면 []
+ * 설정 (생성 옵션 font > window.JmEditorConfig.font > 기본값): { families: ['맑은 고딕', 'Arial'] }
  */
 
-/** 기본 글꼴 설정 — 툴바는 무료 공개(OFL) 웹폰트만 */
+/** 기본 글꼴 목록 */
 const FONT_DEFAULTS = Object.freeze({
-  families: Object.freeze(['Noto Sans KR', 'Noto Serif KR']),
-  legacy: Object.freeze(['맑은 고딕', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman']),
-  css: Object.freeze(['https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@400;700&display=swap']),
+  families: Object.freeze(['맑은 고딕', 'Noto Sans KR', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman']),
 });
 
 /** 영문 별칭 → 목록 이름 (소문자로 비교) */
@@ -932,56 +926,14 @@ const FONT_ALIASES = Object.freeze({ 'malgun gothic': '맑은 고딕', 'hcr bata
 /** 설정 목록에 쓸 수 있는 이름 형식 (따옴표·세미콜론 등이 style 로 나가지 않게) */
 const FONT_NAME_OK = /^[\p{L}\p{N} _-]{1,64}$/u;
 
-/** 명조 계열 이름 (대체 글꼴 serif). 그 밖은 sans-serif */
-const SERIF_FONT = /serif|myeongjo|명조|바탕|batang|궁서|gungsuh|times/i;
-/** 불러올 수 있는 글꼴 CSS 주소: https:// 또는 같은 사이트 경로 (// 와 /\ 는 다른 사이트라 제외) */
-const FONT_CSS_OK = /^(?:https:\/\/[^\s"'<>\\]+|\/(?![/\\])[^\s"'<>\\]*)$/;
-
 /**
  * 설정 목록 정리: 배열이 아니면 기본 목록, 형식에 어긋난 이름은 버린다
  * @param {unknown} list
- * @param {readonly string[]} [fallback] 배열이 아닐 때 쓸 목록
  * @returns {string[]}
  */
-function normalizeFamilies(list, fallback = FONT_DEFAULTS.families) {
-  if (!Array.isArray(list)) return [...fallback];
+function normalizeFamilies(list) {
+  if (!Array.isArray(list)) return [...FONT_DEFAULTS.families];
   return [...new Set(list.map((n) => String(n).trim()).filter((n) => FONT_NAME_OK.test(n)))];
-}
-
-/**
- * 허용 목록: 툴바 목록(families) 다음에 옛 글꼴(legacy)
- * @param {{families?: unknown, legacy?: unknown}} font 글꼴 설정
- * @returns {string[]}
- */
-function fontAllowList(font) {
-  return [...new Set([...normalizeFamilies(font?.families), ...normalizeFamilies(font?.legacy, FONT_DEFAULTS.legacy)])];
-}
-
-/**
- * 저장할 font-family 값: 이름과 대체 글꼴
- * @param {string} name 허용 목록의 이름
- * @returns {string} 예: '"Noto Serif KR", serif'
- */
-function fontFamilyValue(name) {
-  return `"${name}", ${SERIF_FONT.test(name) && !/sans/i.test(name) ? 'serif' : 'sans-serif'}`;
-}
-
-/**
- * 글꼴 CSS 를 페이지 head 에 붙인다 (같은 주소는 한 번만, 허용되지 않는 주소는 버림)
- * @param {unknown} urls 설정 font.css
- */
-function loadFontCss(urls) {
-  if (typeof document === 'undefined' || !Array.isArray(urls)) return;
-  for (const url of urls) {
-    if (typeof url !== 'string' || !FONT_CSS_OK.test(url)) continue;
-    let href;
-    try { href = new URL(url, document.baseURI).href; } catch { continue; } // 형식은 맞지만 주소로 못 읽는 값(https://[ 등)은 버림 — 에디터·뷰어 초기화를 막지 않게
-    if (Array.from(document.querySelectorAll('link[rel="stylesheet"]')).some((l) => l.href === href)) continue;
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = href;
-    document.head.appendChild(link);
-  }
 }
 
 /**
@@ -1348,7 +1300,7 @@ function cleanLegacyDecl(name, value, tag, families) {
   const cell = tag === 'td' || tag === 'th';
   if (name === 'font-family') {
     const family = fontFamilyName(value, families);
-    return family ? [name, fontFamilyValue(family)] : null;
+    return family ? [name, `"${family}"`] : null;
   }
   if (name === 'font-size') {
     const size = fontSizePx(value);
@@ -1408,7 +1360,7 @@ function moveLegacyAttrs(el, tag, families) {
     if (SAFE_COLOR.test(attr('color'))) pairs.push(['color', attr('color')]);
     if (/^[1-7]$/.test(attr('size'))) pairs.push(['font-size', `${FONT_TAG_SIZES[+attr('size') - 1]}px`]);
     const family = fontFamilyName(attr('face'), families);
-    if (family) pairs.push(['font-family', fontFamilyValue(family)]);
+    if (family) pairs.push(['font-family', `"${family}"`]);
   } else if (LEGACY_TABLE_TAGS.has(tag)) {
     if (SAFE_COLOR.test(attr('bgcolor'))) pairs.push(['background-color', attr('bgcolor')]);
     if (tag === 'table') {
@@ -1848,7 +1800,7 @@ class Sanitizer {
 
   /** 글꼴 허용 목록 정리 (인자 > 설정) */
   static #families(families) {
-    return families ? normalizeFamilies(families) : fontAllowList(resolveConfig('font'));
+    return normalizeFamilies(families ?? resolveConfig('font').families);
   }
 
   /** 정책을 잠시 바꿔 실행 (중첩 호출에도 원래대로 복구) */
@@ -6122,7 +6074,7 @@ const DEFAULT_CONFIG = Object.freeze({
   structure: STRUCTURE_DEFAULTS,
   // 본문 이미지 — 모바일 이미지(picture > source)의 media 값
   image: Object.freeze({ mobileMedia: '(max-width: 767px)' }),
-  // 글꼴 — families(툴바)·legacy(허용만)·css(에디터·뷰어가 불러올 글꼴 CSS). 서버 jm-editor.font.families·legacy 도 같은 값으로 (core/font-policy.js)
+  // 글꼴 허용 목록 — 툴바 글꼴 목록이자 정제 허용 목록. 서버 jm-editor.font.families 도 같은 값으로 (core/font-policy.js)
   font: FONT_DEFAULTS,
 });
 
@@ -9752,12 +9704,8 @@ class JmEditor {
     this.composing = false; // 한글 IME 조합 중 여부
     /** 퍼블 구조 정책 (꺼져 있으면 null — 지금 정리 규칙). 생성 시 확정 */
     this.structure = makeStructurePolicy(resolveConfig('structure', options.structure));
-    const font = resolveConfig('font', options.font);
-    /** 글꼴 허용 목록 (툴바 목록 + 옛 글꼴, 정제가 씀). 생성 시 확정 */
-    this.fontFamilies = fontAllowList(font);
-    /** 툴바 글꼴 목록 */
-    this.fontMenu = normalizeFamilies(font.families);
-    loadFontCss(font.css); // 쓴 사람·보는 사람이 같은 글꼴로 보도록 (뷰어도 같은 설정으로 불러옴)
+    /** 글꼴 허용 목록 (툴바 목록·정제 공통). 생성 시 확정 */
+    this.fontFamilies = normalizeFamilies(resolveConfig('font', options.font).families);
 
     this.root.contentEditable = 'true';
     this.root.classList.add('jm-editor');
@@ -9852,7 +9800,7 @@ class JmEditor {
       fontSize: () => c.setStyle('font-size', value ?? null),
       fontFamily: () => {
         const name = value ? fontFamilyName(value, this.fontFamilies) : null;
-        if (!value || name) c.setStyle('font-family', name ? fontFamilyValue(name) : null);
+        if (!value || name) c.setStyle('font-family', name ? `"${name}"` : null);
       },
       // 정렬: 표 셀 범위 선택이 있으면 선택한 셀 전체에, 아니면 커서 블록(셀 포함)에
       alignLeft: () => (this.table.selection ? this.table.setAlign('left') : c.setAlign('left')),
@@ -11901,7 +11849,7 @@ const BUTTONS = [
   ['modeHtml','HTML',s=>mode==='html',false,{icon:CODE_ICON,group:'mode',row:'top'}],
   ['modePreview','미리보기',s=>mode==='preview',false,{icon:PREVIEW_ICON,group:'mode',segLast:true,row:'top'}],
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
-  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['sub','아래 첨자',s=>s.sub,false,{tip:'아래 첨자',icon:SUB_ICON,iconOnly:true}],['sup','위 첨자',s=>s.sup,false,{tip:'위 첨자',icon:SUP_ICON,iconOnly:true}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),inherited:n=>inheritedFontSize(n,editor.root),sorted:true}],['fontFamily','글꼴',()=>false,false,{tip:'글꼴',select:()=>editor.fontMenu.map(n=>[n,n]),inherited:n=>inheritedFontName(n,editor.root,editor.fontFamilies),unknownLabel:'브라우저 글꼴'}],['clearFormat','서식 지우기',()=>false,false,{tip:'서식 지우기',icon:CLEAR_FORMAT_ICON,iconOnly:true}],null,
+  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['sub','아래 첨자',s=>s.sub,false,{tip:'아래 첨자',icon:SUB_ICON,iconOnly:true}],['sup','위 첨자',s=>s.sup,false,{tip:'위 첨자',icon:SUP_ICON,iconOnly:true}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),inherited:n=>inheritedFontSize(n,editor.root),sorted:true}],['fontFamily','글꼴',()=>false,false,{tip:'글꼴',select:()=>editor.fontFamilies.map(n=>[n,n]),inherited:n=>inheritedFontName(n,editor.root,editor.fontFamilies),unknownLabel:'브라우저 글꼴'}],['clearFormat','서식 지우기',()=>false,false,{tip:'서식 지우기',icon:CLEAR_FORMAT_ICON,iconOnly:true}],null,
   ['heading','제목',()=>false,false,{tip:'제목 단계',select:[['h1','제목 1'],['h2','제목 2'],['h3','제목 3'],['h4','제목 4'],['h5','제목 5'],['h6','제목 6']],selectDefault:['p','본문'],defaultLast:true,itemClass:v=>'jm-heading-item jm-heading-item-'+v}],['quote','인용',s=>s.block==='blockquote',false,{tip:'인용 (스타일 선택)',icon:QUOTE_ICON,iconOnly:true,dropdown:true}],null,
   ['alignMenu','가로 정렬',()=>false,false,{tip:'가로 정렬',icon:ALIGN_LEFT_ICON,iconOnly:true,dropdown:true}],['valignMenu','세로 정렬',()=>false,false,{tip:'세로 정렬 (표 셀)',icon:VALIGN_TOP_ICON,iconOnly:true,dropdown:true,tableEnabled:true}],['lineHeight','줄 간격',()=>false,false,{tip:'줄 간격',select:['1','1.2','1.5','1.8','2'].map(v=>[v,v]),inherited:node=>inheritedLineHeight(node,editor.root),sorted:true}],['outdent','내어쓰기',()=>false,false,{tip:'내어쓰기 (목록은 Shift+Tab)',icon:OUTDENT_ICON,iconOnly:true,noCell:true}],['indent','들여쓰기',()=>false,false,{tip:'들여쓰기 (목록은 Tab)',icon:INDENT_ICON,iconOnly:true,noCell:true}],null,
   ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true,splitMain:true}],['ulType','비순서 목록 유형',()=>false,false,{tip:'비순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true,splitMain:true}],['olType','순서 목록 유형',()=>false,false,{tip:'순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],null,
