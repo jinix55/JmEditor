@@ -24,7 +24,7 @@ import { FindReplace } from './FindReplace.js';
 import { BlockDrag } from './BlockDrag.js';
 import { Sanitizer, HIDDEN_ID_ATTR } from './Sanitizer.js';
 import { makeStructurePolicy, INLINE_STRUCTURE_TAGS } from './structure-policy.js';
-import { normalizeFamilies, fontFamilyName } from './font-policy.js';
+import { normalizeFamilies, fontFamilyName, fontFamilyValue } from './font-policy.js';
 import { resolveConfig } from '../config.js';
 import { notify } from '../plugins/gallery/gallery-upload.js';
 
@@ -165,7 +165,7 @@ export class JmEditor {
       fontSize: () => c.setStyle('font-size', value ?? null),
       fontFamily: () => {
         const name = value ? fontFamilyName(value, this.fontFamilies) : null;
-        if (!value || name) c.setStyle('font-family', name ? `"${name}"` : null);
+        if (!value || name) c.setStyle('font-family', name ? fontFamilyValue(name) : null);
       },
       // 정렬: 표 셀 범위 선택이 있으면 선택한 셀 전체에, 아니면 커서 블록(셀 포함)에
       alignLeft: () => (this.table.selection ? this.table.setAlign('left') : c.setAlign('left')),
@@ -1169,7 +1169,10 @@ export class JmEditor {
     block.querySelectorAll('span[style]').forEach((sp) => {
       // 속성 하나씩 검사해 허용되지 않는 것만 뺀다 (남은 style 의 표기는 브라우저 그대로)
       Array.from(sp.style).forEach((name) => {
-        if (!Sanitizer.cleanStyle(`${name}: ${sp.style.getPropertyValue(name)}`, 'span', this.fontFamilies)) sp.style.removeProperty(name);
+        const value = sp.style.getPropertyValue(name);
+        // 글꼴은 허용 목록 이름일 때만 남긴다 (사이트 CSS 글꼴을 브라우저가 옮겨 적은 것은 저장 시 Pretendard 로 바뀌므로 지움)
+        const ok = name === 'font-family' ? fontFamilyName(value, this.fontFamilies) : Sanitizer.cleanStyle(`${name}: ${value}`, 'span', this.fontFamilies);
+        if (!ok) sp.style.removeProperty(name);
       });
       if (sp.style.length) return;
       sp.removeAttribute('style');

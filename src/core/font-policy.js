@@ -1,18 +1,29 @@
 /**
  * font-policy — 글꼴 허용 목록 (style font-family 값 정규화)
- * - 쉼표 목록에서 허용 목록에 있는 첫 이름만 남긴다. 없으면 지운다 (serif 같은 일반 패밀리만 있어도 지워짐).
+ * - 쉼표 목록에서 허용 목록에 있는 첫 이름을 남긴다. 목록 밖 글꼴만 있으면 기본 글꼴(Pretendard)로 바꾸고,
+ *   serif·inherit 같은 일반 패밀리·키워드만 있으면 지운다.
+ * - 저장 값에는 대체 글꼴을 붙인다: 이름 → (비슷한 무료 웹폰트) → Pretendard → serif|sans-serif.
+ *   Windows 글꼴(맑은 고딕·굴림·돋움·바탕·궁서)은 웹으로 배포할 수 없어 설치된 PC 에서만 보이고, 없으면 대체 글꼴로 보인다.
  * - 서버 FontPolicy.java 와 같은 규칙이어야 한다 (application.yml jm-editor.font.families).
  *
- * 설정 (생성 옵션 font > window.JmEditorConfig.font > 기본값): { families: ['맑은 고딕', 'Arial'] }
+ * 설정 (생성 옵션 font > window.JmEditorConfig.font > 기본값): { families: ['Pretendard', '굴림'] }
+ * 글꼴 파일은 선택형 jm-editor.fonts.css 가 불러온다.
  */
+
+/** 기본 글꼴 — 목록 밖 글꼴을 바꿀 글꼴이자 모든 저장 값의 마지막 대체 글꼴 */
+export const DEFAULT_FONT = 'Pretendard';
 
 /** 기본 글꼴 목록 */
 export const FONT_DEFAULTS = Object.freeze({
-  families: Object.freeze(['맑은 고딕', 'Noto Sans KR', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman']),
+  families: Object.freeze([DEFAULT_FONT, '맑은 고딕', 'Noto Sans KR', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서']),
 });
 
 /** 영문 별칭 → 목록 이름 (소문자로 비교) */
-const FONT_ALIASES = Object.freeze({ 'malgun gothic': '맑은 고딕', 'hcr batang': '함초롬바탕', gulim: '굴림', dotum: '돋움', batang: '바탕', helveticaneue: 'Helvetica Neue' });
+const FONT_ALIASES = Object.freeze({ 'malgun gothic': '맑은 고딕', gulim: '굴림', dotum: '돋움', batang: '바탕', gungsuh: '궁서' });
+/** 설치되지 않았을 때 먼저 쓸 비슷한 무료 웹폰트 (jm-editor.fonts.css 가 불러옴) */
+const FONT_SIMILAR = Object.freeze({ 굴림: 'Nanum Gothic', 돋움: 'Nanum Gothic', 바탕: 'Nanum Myeongjo' });
+/** 명조 계열 (마지막 대체가 serif) */
+const SERIF_FONTS = Object.freeze(new Set(['바탕']));
 /** 설정 목록에 쓸 수 있는 이름 형식 (따옴표·세미콜론 등이 style 로 나가지 않게) */
 const FONT_NAME_OK = /^[\p{L}\p{N} _-]{1,64}$/u;
 
@@ -69,6 +80,42 @@ export function fontFamilyName(value, families) {
 
 /** 실제 글꼴이 아니라 브라우저가 고르는 이름 (화면에 무엇이 나올지 이름으로 알 수 없다) */
 const GENERIC_FONTS = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji', 'fangsong', '-apple-system', 'blinkmacsystemfont']);
+/** 글꼴 이름이 아닌 CSS 전역 키워드·예약어 */
+const FONT_KEYWORDS = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer', 'default']);
+
+/**
+ * 실제 글꼴 이름인지: 형식에 맞고, 일반 패밀리·키워드·브라우저 전용 이름(-webkit-standard 등 '-' 로 시작)이 아님
+ * @param {string} n
+ * @returns {boolean}
+ */
+function isFontName(n) {
+  const key = n.toLowerCase();
+  return FONT_NAME_OK.test(n) && !key.startsWith('-') && !GENERIC_FONTS.has(key) && !FONT_KEYWORDS.has(key);
+}
+
+/**
+ * 저장할 글꼴 이름: 허용 목록의 첫 이름. 없고 목록 밖 글꼴 이름이 있으면 기본 글꼴(허용 목록에 있을 때만),
+ * 일반 패밀리·키워드뿐이거나 기본 글꼴을 허용하지 않으면 null (빈 목록 = 글꼴 끔)
+ * @param {string} value 쉼표 목록
+ * @param {string[]} families 허용 목록
+ * @returns {string|null}
+ */
+export function storedFontName(value, families) {
+  const name = fontFamilyName(value, families);
+  if (name) return name;
+  if (!families.some((f) => f.toLowerCase() === DEFAULT_FONT.toLowerCase())) return null;
+  return splitFontNames(String(value ?? '')).some(isFontName) ? DEFAULT_FONT : null;
+}
+
+/**
+ * 저장할 font-family 값: 이름 → 비슷한 무료 웹폰트 → 기본 글꼴 → serif|sans-serif
+ * @param {string} name storedFontName 결과
+ * @returns {string} 예: '"바탕", "Nanum Myeongjo", "Pretendard", serif'
+ */
+export function fontFamilyValue(name) {
+  const chain = [name, FONT_SIMILAR[name], DEFAULT_FONT].filter((n, i, all) => n && all.indexOf(n) === i);
+  return `${chain.map((n) => `"${n}"`).join(', ')}, ${SERIF_FONTS.has(name) ? 'serif' : 'sans-serif'}`;
+}
 
 /**
  * 요소에 실제로 적용되는 글꼴 이름. font-family 목록에서 이 컴퓨터에 있는 첫 글꼴을 찾는다

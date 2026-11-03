@@ -478,7 +478,7 @@ test.describe('9. 접근성 기본 속성', () => {
 test.describe('12. 글꼴·글자 크기·줄 높이·자간 보존', () => {
   test.beforeEach(async ({ page }) => { await open(page); });
 
-  const families = ['Roboto', '한컴바탕', 'Apple SD Gothic Neo', 'Helvetica Neue'];
+  const families = ['Roboto', 'Noto Sans', '궁서'];
   for (const f of families) {
     test(`기본 글꼴 ${f} 가 남는다`, async ({ page }) => {
       await setHTML(page, `<p style="font-family:'${f}'">a</p>`);
@@ -486,9 +486,11 @@ test.describe('12. 글꼴·글자 크기·줄 높이·자간 보존', () => {
     });
   }
 
-  test('HelveticaNeue 는 Helvetica Neue 로, 툴바 목록에도 있다', async ({ page }) => {
-    await setHTML(page, '<p style="font-family:HelveticaNeue,sans-serif">a</p>');
-    expect(await page.locator('.jm-editor p').evaluate((el) => el.style.fontFamily)).toContain('Helvetica Neue');
+  test('목록 밖 글꼴(한컴바탕·Apple SD Gothic Neo·Helvetica Neue)은 Pretendard 로', async ({ page }) => {
+    for (const f of ['한컴바탕', 'Apple SD Gothic Neo', 'HelveticaNeue']) {
+      await setHTML(page, `<p style="font-family:'${f}',sans-serif">a</p>`);
+      expect(await html(page)).toBe('<p style="font-family: &quot;Pretendard&quot;, sans-serif">a</p>');
+    }
     expect(await page.evaluate(() => window.core.fontFamilies)).toEqual(expect.arrayContaining(families));
   });
 
@@ -709,8 +711,9 @@ test.describe('11. 글자 크기·글꼴 버튼 표시', () => {
   });
 
   test('긴 글꼴 이름은 말줄임으로 버튼 폭을 넘지 않는다', async ({ page }) => {
-    await setHTML(page, '<p><span style="font-family:\'Times New Roman\'">글자</span></p>');
-    await caret(page, 'span', 1);
+    await page.evaluate(() => { window.core.root.style.fontFamily = '"Times New Roman"'; }); // 사이트 글꼴 (목록 밖이어도 표시는 함)
+    await setHTML(page, '<p>글자</p>');
+    await caret(page, 'p', 1);
     const el = label(page, 'fontFamily');
     await expect(el).toHaveText('Times New Roman');
     const m = await el.evaluate((n) => ({ w: n.clientWidth, sw: n.scrollWidth, ov: getComputedStyle(n).textOverflow }));

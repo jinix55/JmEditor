@@ -245,8 +245,8 @@ final class LegacyFormat {
     static String[] cleanDecl(String name, String value, String tag, FontPolicy fonts) {
         boolean cell = tag.equals("td") || tag.equals("th");
         if (name.equals("font-family")) {
-            String family = fonts.name(value);
-            return family == null ? null : new String[]{name, "\"" + family + "\""};
+            String family = fonts.storedName(value);
+            return family == null ? null : new String[]{name, FontPolicy.cssValue(family)};
         }
         if (name.equals("font-size")) {
             String size = fontSizePx(value);
@@ -309,8 +309,8 @@ final class LegacyFormat {
             String color = attr(el, "color"), size = attr(el, "size");
             if (SAFE_COLOR.matcher(color).matches()) pairs.add(new String[]{"color", color});
             if (FONT_TAG_SIZE.matcher(size).matches()) pairs.add(new String[]{"font-size", FONT_TAG_SIZES[Integer.parseInt(size) - 1] + "px"});
-            String family = fonts.name(attr(el, "face"));
-            if (family != null) pairs.add(new String[]{"font-family", "\"" + family + "\""});
+            String family = fonts.storedName(attr(el, "face"));
+            if (family != null) pairs.add(new String[]{"font-family", FontPolicy.cssValue(family)});
         } else if (TABLE_TAGS.contains(tag)) {
             String bg = attr(el, "bgcolor"), align = attr(el, "align"), valign = attr(el, "valign");
             if (SAFE_COLOR.matcher(bg).matches()) pairs.add(new String[]{"background-color", bg});

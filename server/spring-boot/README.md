@@ -59,7 +59,7 @@ jm-editor:
   upload-dir: /var/app/uploads/editor   # 이미지 저장 경로
   upload-url-prefix: /uploads/editor    # 정적 리소스로 노출되는 URL 접두사
   font:
-    families: [맑은 고딕, Noto Sans KR, Noto Sans, Roboto, 굴림, 돋움, 바탕, 궁서, 함초롬바탕, 함초롬돋움, 한컴바탕, HY헤드라인M, Apple SD Gothic Neo, Arial, Helvetica Neue, Times New Roman]   # 글꼴 허용 목록 (생략하면 이 기본 목록). 클라이언트 font.families 와 같게
+    families: [Pretendard, 맑은 고딕, Noto Sans KR, Noto Sans, Roboto, 굴림, 돋움, 바탕, 궁서]   # 글꼴 허용 목록 (생략하면 이 기본 목록, 밖의 글꼴은 Pretendard 로). 클라이언트 font.families 와 같게
 spring:
   servlet:
     multipart:
@@ -166,7 +166,7 @@ jm-editor:
 | line-height | 단위 없는 수 0.5~5, 50~500%, `px`·`pt` → `px`(8~200) |
 | letter-spacing | `px`·`pt` → `px`(소수 둘째 자리, -10~20), `em`(-1~2) |
 | list-style-type | disc, circle, square, decimal, decimal-leading-zero, lower-alpha, upper-alpha, lower-roman, upper-roman, hangul, hangul-consonant, none |
-| font-family | `FontPolicy` 허용 목록의 첫 이름만 `"이름"` 으로 (대소문자 무시, 영문 별칭 변환), 없으면 지움 |
+| font-family | `FontPolicy` 허용 목록의 첫 이름에 대체 글꼴을 붙여 저장 (`"굴림", "Nanum Gothic", "Pretendard", sans-serif`, `"바탕", "Nanum Myeongjo", "Pretendard", serif`, 그 밖 `"이름", "Pretendard", sans-serif`). 대소문자 무시, 영문 별칭 변환. 목록 밖 글꼴만 있으면 `"Pretendard", sans-serif`(목록에 Pretendard 가 없으면 지움), 일반 패밀리·키워드·`-webkit-` 이름만 있으면 지움 |
 | width, height (table·tr·td·th·col) | `pt`·`mm`·`cm` → 정수 `px` |
 | background (table·tr·td·th·col·span) | 색만 `background-color` 로, 색이 없으면 지움 |
 | border, border-top·right·bottom·left, border-\*-width·style·color (td·th) | 폭 0~20px·pt·mm·cm·thin·medium·thick, 스타일 none·solid·dashed·dotted·double, 색. 단축값은 토큰 3개 이하로 정규화 |

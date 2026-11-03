@@ -1,0 +1,12 @@
+/*
+ * JmEditor 글꼴 (선택) — 글꼴 도구 목록의 웹폰트를 불러온다. 편집 화면과 조회 화면에 같이 넣는다.
+ *   <link rel="stylesheet" href=".../dist/jm-editor.fonts.css">
+ * - 외부 요청: cdn.jsdelivr.net(Pretendard), fonts.googleapis.com·fonts.gstatic.com(그 밖). CSP 의 style-src·font-src 에 허용할 것.
+ *   글꼴을 자체 서버에 두는 사이트는 이 파일 대신 자기 CSS 로 같은 이름(font-family)을 등록한다.
+ * - 맑은 고딕·굴림·돋움·바탕·궁서는 Windows 글꼴이라 웹으로 배포할 수 없다. 설치된 PC 에서만 보이고,
+ *   없으면 저장 값의 대체 글꼴(굴림·돋움 → Nanum Gothic, 바탕 → Nanum Myeongjo, 그 밖 → Pretendard)로 보인다.
+ * - 라이선스: Pretendard(SIL OFL 1.1, https://github.com/orioncactus/pretendard/blob/main/LICENSE),
+ *   Noto Sans KR·Noto Sans·Nanum Gothic·Nanum Myeongjo(SIL OFL 1.1), Roboto(SIL OFL 1.1) — Google Fonts 각 글꼴 페이지 참고.
+ */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css");
+@import url("https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans:wght@400;700&family=Noto+Sans+KR:wght@400;700&family=Roboto:wght@400;700&display=swap");

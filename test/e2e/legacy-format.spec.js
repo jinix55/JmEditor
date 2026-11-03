@@ -107,9 +107,9 @@ test.describe('옛 형식 변환 (공통 사례)', () => {
       delete window.JmEditorConfig;
       return { own, none, cfg };
     });
-    expect(r.own).toBe('<span style="font-family: &quot;맑은 고딕&quot;">a</span>');
-    expect(r.none).toBe('a');
-    expect(r.cfg).toEqual(['<span style="font-family: &quot;Malgun Gothic&quot;">a</span>', 'a']);
+    expect(r.own).toBe('<span style="font-family: &quot;맑은 고딕&quot;, &quot;Pretendard&quot;, sans-serif">a</span>');
+    expect(r.none).toBe('a'); // 빈 목록 = 글꼴 끔 (Pretendard 를 허용하지 않으면 목록 밖 글꼴은 지움)
+    expect(r.cfg).toEqual(['<span style="font-family: &quot;Malgun Gothic&quot;, &quot;Pretendard&quot;, sans-serif">a</span>', 'a']); // 형식이 틀린 이름은 글꼴로 치지 않음
   });
 });
 
@@ -234,11 +234,11 @@ test.describe('글꼴 도구', () => {
   test('영문 이름 글꼴도 상태가 맞고 왕복해도 정규화된다', async ({ page }) => {
     await setHTML(page, '<p>word</p>');
     await select(page, 'p', 0, 4);
-    await exec(page, 'fontFamily', 'arial');
+    await exec(page, 'fontFamily', 'gulim');
     await caret(page, 'span', 1);
-    await expect.poll(() => page.locator('[data-cmd="fontFamily"] .jm-btn-select-label').textContent()).toBe('Arial');
+    await expect.poll(() => page.locator('[data-cmd="fontFamily"] .jm-btn-select-label').textContent()).toBe('굴림');
     const clean = await page.evaluate(() => window.JM.Sanitizer.clean(window.ed.getHTML()));
-    expect(clean).toBe('<p><span style="font-family: &quot;Arial&quot;">word</span></p>');
+    expect(clean).toBe('<p><span style="font-family: &quot;굴림&quot;, &quot;Nanum Gothic&quot;, &quot;Pretendard&quot;, sans-serif">word</span></p>');
   });
 
   test('허용 목록 밖 값은 적용되지 않는다', async ({ page }) => {
@@ -273,11 +273,11 @@ test.describe('글꼴 도구', () => {
         return new window.JM.JmToolbarEditor(box, { font });
       };
       const a = mk({ families: ['Arial'] });
-      a.editor.setHTML('<p><span style="font-family:Arial">x</span><span style="font-family:굴림">y</span></p>');
+      a.editor.setHTML('<p><span style="font-family:Arial">x</span><span style="font-family:굴림">y</span><span style="font-family:serif">z</span></p>');
       const b = mk({ families: [] });
       return { html: a.editor.getHTML(), list: a.editor.fontFamilies, hidden: b.buttons.fontFamily.hidden };
     });
-    expect(r.html).toBe('<p><span style="font-family: &quot;Arial&quot;">x</span>y</p>');
+    expect(r.html).toBe('<p><span style="font-family: &quot;Arial&quot;, &quot;Pretendard&quot;, sans-serif">x</span>yz</p>'); // 목록에 Pretendard 가 없으면 목록 밖 굴림은 지움
     expect(r.list).toEqual(['Arial']);
     expect(r.hidden).toBe(true);
   });
@@ -442,7 +442,8 @@ test.describe('엑셀·파워포인트·워드 붙여넣기', () => {
     expect(raw).toContain('color: red');
     expect(raw).toContain('font-size: 24px');
     expect(raw).toContain('굴림');
-    expect(raw).toContain('함초롬바탕');
+    expect(raw).toContain('font-family: &quot;Pretendard&quot;, sans-serif'); // 목록 밖 함초롬바탕은 Pretendard 로
+    expect(raw).not.toContain('함초롬바탕');
     expect(raw).toContain('font-size: 13px');
     expect(raw).not.toContain('mso-');
     expect(raw).not.toContain('<font');

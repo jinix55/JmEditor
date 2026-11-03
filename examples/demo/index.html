@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>JmEditor Demo</title>
+<!-- 글꼴 도구 목록의 웹폰트 (dist/jm-editor.fonts.css 와 같음) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans:wght@400;700&family=Noto+Sans+KR:wght@400;700&family=Roboto:wght@400;700&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono&display=swap">
 <style>
 /* @@jm-editor.css 시작 — src/styles/jm-editor.css 그대로 (데모 동기화 때 통째로 바꿈) */
@@ -910,19 +913,30 @@ function toneOf(hex) {
 
 /**
  * font-policy — 글꼴 허용 목록 (style font-family 값 정규화)
- * - 쉼표 목록에서 허용 목록에 있는 첫 이름만 남긴다. 없으면 지운다 (serif 같은 일반 패밀리만 있어도 지워짐).
+ * - 쉼표 목록에서 허용 목록에 있는 첫 이름을 남긴다. 목록 밖 글꼴만 있으면 기본 글꼴(Pretendard)로 바꾸고,
+ *   serif·inherit 같은 일반 패밀리·키워드만 있으면 지운다.
+ * - 저장 값에는 대체 글꼴을 붙인다: 이름 → (비슷한 무료 웹폰트) → Pretendard → serif|sans-serif.
+ *   Windows 글꼴(맑은 고딕·굴림·돋움·바탕·궁서)은 웹으로 배포할 수 없어 설치된 PC 에서만 보이고, 없으면 대체 글꼴로 보인다.
  * - 서버 FontPolicy.java 와 같은 규칙이어야 한다 (application.yml jm-editor.font.families).
  *
- * 설정 (생성 옵션 font > window.JmEditorConfig.font > 기본값): { families: ['맑은 고딕', 'Arial'] }
+ * 설정 (생성 옵션 font > window.JmEditorConfig.font > 기본값): { families: ['Pretendard', '굴림'] }
+ * 글꼴 파일은 선택형 jm-editor.fonts.css 가 불러온다.
  */
+
+/** 기본 글꼴 — 목록 밖 글꼴을 바꿀 글꼴이자 모든 저장 값의 마지막 대체 글꼴 */
+const DEFAULT_FONT = 'Pretendard';
 
 /** 기본 글꼴 목록 */
 const FONT_DEFAULTS = Object.freeze({
-  families: Object.freeze(['맑은 고딕', 'Noto Sans KR', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman']),
+  families: Object.freeze([DEFAULT_FONT, '맑은 고딕', 'Noto Sans KR', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서']),
 });
 
 /** 영문 별칭 → 목록 이름 (소문자로 비교) */
-const FONT_ALIASES = Object.freeze({ 'malgun gothic': '맑은 고딕', 'hcr batang': '함초롬바탕', gulim: '굴림', dotum: '돋움', batang: '바탕', helveticaneue: 'Helvetica Neue' });
+const FONT_ALIASES = Object.freeze({ 'malgun gothic': '맑은 고딕', gulim: '굴림', dotum: '돋움', batang: '바탕', gungsuh: '궁서' });
+/** 설치되지 않았을 때 먼저 쓸 비슷한 무료 웹폰트 (jm-editor.fonts.css 가 불러옴) */
+const FONT_SIMILAR = Object.freeze({ 굴림: 'Nanum Gothic', 돋움: 'Nanum Gothic', 바탕: 'Nanum Myeongjo' });
+/** 명조 계열 (마지막 대체가 serif) */
+const SERIF_FONTS = Object.freeze(new Set(['바탕']));
 /** 설정 목록에 쓸 수 있는 이름 형식 (따옴표·세미콜론 등이 style 로 나가지 않게) */
 const FONT_NAME_OK = /^[\p{L}\p{N} _-]{1,64}$/u;
 
@@ -979,6 +993,42 @@ function fontFamilyName(value, families) {
 
 /** 실제 글꼴이 아니라 브라우저가 고르는 이름 (화면에 무엇이 나올지 이름으로 알 수 없다) */
 const GENERIC_FONTS = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji', 'fangsong', '-apple-system', 'blinkmacsystemfont']);
+/** 글꼴 이름이 아닌 CSS 전역 키워드·예약어 */
+const FONT_KEYWORDS = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer', 'default']);
+
+/**
+ * 실제 글꼴 이름인지: 형식에 맞고, 일반 패밀리·키워드·브라우저 전용 이름(-webkit-standard 등 '-' 로 시작)이 아님
+ * @param {string} n
+ * @returns {boolean}
+ */
+function isFontName(n) {
+  const key = n.toLowerCase();
+  return FONT_NAME_OK.test(n) && !key.startsWith('-') && !GENERIC_FONTS.has(key) && !FONT_KEYWORDS.has(key);
+}
+
+/**
+ * 저장할 글꼴 이름: 허용 목록의 첫 이름. 없고 목록 밖 글꼴 이름이 있으면 기본 글꼴(허용 목록에 있을 때만),
+ * 일반 패밀리·키워드뿐이거나 기본 글꼴을 허용하지 않으면 null (빈 목록 = 글꼴 끔)
+ * @param {string} value 쉼표 목록
+ * @param {string[]} families 허용 목록
+ * @returns {string|null}
+ */
+function storedFontName(value, families) {
+  const name = fontFamilyName(value, families);
+  if (name) return name;
+  if (!families.some((f) => f.toLowerCase() === DEFAULT_FONT.toLowerCase())) return null;
+  return splitFontNames(String(value ?? '')).some(isFontName) ? DEFAULT_FONT : null;
+}
+
+/**
+ * 저장할 font-family 값: 이름 → 비슷한 무료 웹폰트 → 기본 글꼴 → serif|sans-serif
+ * @param {string} name storedFontName 결과
+ * @returns {string} 예: '"바탕", "Nanum Myeongjo", "Pretendard", serif'
+ */
+function fontFamilyValue(name) {
+  const chain = [name, FONT_SIMILAR[name], DEFAULT_FONT].filter((n, i, all) => n && all.indexOf(n) === i);
+  return `${chain.map((n) => `"${n}"`).join(', ')}, ${SERIF_FONTS.has(name) ? 'serif' : 'sans-serif'}`;
+}
 
 /**
  * 요소에 실제로 적용되는 글꼴 이름. font-family 목록에서 이 컴퓨터에 있는 첫 글꼴을 찾는다
@@ -1299,8 +1349,8 @@ function backgroundColor(value) {
 function cleanLegacyDecl(name, value, tag, families) {
   const cell = tag === 'td' || tag === 'th';
   if (name === 'font-family') {
-    const family = fontFamilyName(value, families);
-    return family ? [name, `"${family}"`] : null;
+    const family = storedFontName(value, families);
+    return family ? [name, fontFamilyValue(family)] : null;
   }
   if (name === 'font-size') {
     const size = fontSizePx(value);
@@ -1359,8 +1409,8 @@ function moveLegacyAttrs(el, tag, families) {
   if (tag === 'font') {
     if (SAFE_COLOR.test(attr('color'))) pairs.push(['color', attr('color')]);
     if (/^[1-7]$/.test(attr('size'))) pairs.push(['font-size', `${FONT_TAG_SIZES[+attr('size') - 1]}px`]);
-    const family = fontFamilyName(attr('face'), families);
-    if (family) pairs.push(['font-family', `"${family}"`]);
+    const family = storedFontName(attr('face'), families);
+    if (family) pairs.push(['font-family', fontFamilyValue(family)]);
   } else if (LEGACY_TABLE_TAGS.has(tag)) {
     if (SAFE_COLOR.test(attr('bgcolor'))) pairs.push(['background-color', attr('bgcolor')]);
     if (tag === 'table') {
@@ -5765,8 +5815,8 @@ class TableCommands {
 /**
  * ContextMenu
  * - 에디터 안에서 쓰는 우클릭 메뉴. 프레임워크 독립.
- * - 항목: { label, action, divider, disabled, children: [...], className, checked }  children 이 있으면 하위 메뉴(마우스 오버로 펼침).
- *   className: 항목 모양용 추가 클래스, checked: 현재 선택된 항목 표시(is-checked·aria-checked)
+ * - 항목: { label, action, divider, disabled, children: [...], className, checked, fontFamily }  children 이 있으면 하위 메뉴(마우스 오버로 펼침).
+ *   className: 항목 모양용 추가 클래스, checked: 현재 선택된 항목 표시(is-checked·aria-checked), fontFamily: 항목 글자를 그릴 글꼴(글꼴 목록)
  * - 바깥 클릭 / Escape / 바깥 스크롤 시 닫힌다 (메뉴 자체 스크롤에는 닫히지 않음).
  */
 /**
@@ -5873,6 +5923,7 @@ class ContextMenu {
       b.setAttribute('role', it.checked == null ? 'menuitem' : 'menuitemradio');
       if (it.checked != null) b.setAttribute('aria-checked', String(!!it.checked));
       b.textContent = it.label;
+      if (it.fontFamily) b.style.fontFamily = it.fontFamily; // 글꼴 목록: 항목을 그 글꼴로
       b.disabled = !!it.disabled;
       b.addEventListener('mousedown', (e) => e.preventDefault()); // 에디터 선택 유지
       if (it.children) {
@@ -9800,7 +9851,7 @@ class JmEditor {
       fontSize: () => c.setStyle('font-size', value ?? null),
       fontFamily: () => {
         const name = value ? fontFamilyName(value, this.fontFamilies) : null;
-        if (!value || name) c.setStyle('font-family', name ? `"${name}"` : null);
+        if (!value || name) c.setStyle('font-family', name ? fontFamilyValue(name) : null);
       },
       // 정렬: 표 셀 범위 선택이 있으면 선택한 셀 전체에, 아니면 커서 블록(셀 포함)에
       alignLeft: () => (this.table.selection ? this.table.setAlign('left') : c.setAlign('left')),
@@ -10804,7 +10855,10 @@ class JmEditor {
     block.querySelectorAll('span[style]').forEach((sp) => {
       // 속성 하나씩 검사해 허용되지 않는 것만 뺀다 (남은 style 의 표기는 브라우저 그대로)
       Array.from(sp.style).forEach((name) => {
-        if (!Sanitizer.cleanStyle(`${name}: ${sp.style.getPropertyValue(name)}`, 'span', this.fontFamilies)) sp.style.removeProperty(name);
+        const value = sp.style.getPropertyValue(name);
+        // 글꼴은 허용 목록 이름일 때만 남긴다 (사이트 CSS 글꼴을 브라우저가 옮겨 적은 것은 저장 시 Pretendard 로 바뀌므로 지움)
+        const ok = name === 'font-family' ? fontFamilyName(value, this.fontFamilies) : Sanitizer.cleanStyle(`${name}: ${value}`, 'span', this.fontFamilies);
+        if (!ok) sp.style.removeProperty(name);
       });
       if (sp.style.length) return;
       sp.removeAttribute('style');
@@ -11849,7 +11903,7 @@ const BUTTONS = [
   ['modeHtml','HTML',s=>mode==='html',false,{icon:CODE_ICON,group:'mode',row:'top'}],
   ['modePreview','미리보기',s=>mode==='preview',false,{icon:PREVIEW_ICON,group:'mode',segLast:true,row:'top'}],
   ['format','서식',()=>false,false,{icon:FORMAT_ICON,right:true,row:'top'}],
-  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['sub','아래 첨자',s=>s.sub,false,{tip:'아래 첨자',icon:SUB_ICON,iconOnly:true}],['sup','위 첨자',s=>s.sup,false,{tip:'위 첨자',icon:SUP_ICON,iconOnly:true}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),inherited:n=>inheritedFontSize(n,editor.root),sorted:true}],['fontFamily','글꼴',()=>false,false,{tip:'글꼴',select:()=>editor.fontFamilies.map(n=>[n,n]),inherited:n=>inheritedFontName(n,editor.root,editor.fontFamilies),unknownLabel:'브라우저 글꼴'}],['clearFormat','서식 지우기',()=>false,false,{tip:'서식 지우기',icon:CLEAR_FORMAT_ICON,iconOnly:true}],null,
+  ['bold','B',s=>s.strong,false,{tip:'굵게 (Ctrl+B)'}],['italic','I',s=>s.em,false,{tip:'기울임 (Ctrl+I)'}],['underline','U',s=>s.u,false,{tip:'밑줄 (Ctrl+U)'}],['strike','S',s=>s.s,false,{tip:'취소선'}],['sub','아래 첨자',s=>s.sub,false,{tip:'아래 첨자',icon:SUB_ICON,iconOnly:true}],['sup','위 첨자',s=>s.sup,false,{tip:'위 첨자',icon:SUP_ICON,iconOnly:true}],['color','A',s=>!!s.color,false,{tip:'글자색'}],['bgColor','A',s=>!!s.bg,false,{tip:'글자 배경색'}],['fontSize','크기',()=>false,false,{tip:'글자 크기',select:FONT_SIZES.map(n=>[n+'px',n+'px']),inherited:n=>inheritedFontSize(n,editor.root),sorted:true}],['fontFamily','글꼴',()=>false,false,{tip:'글꼴',select:()=>editor.fontFamilies.map(n=>[n,n]),inherited:n=>inheritedFontName(n,editor.root,editor.fontFamilies),unknownLabel:'브라우저 글꼴',itemFont:v=>v&&fontFamilyValue(v)}],['clearFormat','서식 지우기',()=>false,false,{tip:'서식 지우기',icon:CLEAR_FORMAT_ICON,iconOnly:true}],null,
   ['heading','제목',()=>false,false,{tip:'제목 단계',select:[['h1','제목 1'],['h2','제목 2'],['h3','제목 3'],['h4','제목 4'],['h5','제목 5'],['h6','제목 6']],selectDefault:['p','본문'],defaultLast:true,itemClass:v=>'jm-heading-item jm-heading-item-'+v}],['quote','인용',s=>s.block==='blockquote',false,{tip:'인용 (스타일 선택)',icon:QUOTE_ICON,iconOnly:true,dropdown:true}],null,
   ['alignMenu','가로 정렬',()=>false,false,{tip:'가로 정렬',icon:ALIGN_LEFT_ICON,iconOnly:true,dropdown:true}],['valignMenu','세로 정렬',()=>false,false,{tip:'세로 정렬 (표 셀)',icon:VALIGN_TOP_ICON,iconOnly:true,dropdown:true,tableEnabled:true}],['lineHeight','줄 간격',()=>false,false,{tip:'줄 간격',select:['1','1.2','1.5','1.8','2'].map(v=>[v,v]),inherited:node=>inheritedLineHeight(node,editor.root),sorted:true}],['outdent','내어쓰기',()=>false,false,{tip:'내어쓰기 (목록은 Shift+Tab)',icon:OUTDENT_ICON,iconOnly:true,noCell:true}],['indent','들여쓰기',()=>false,false,{tip:'들여쓰기 (목록은 Tab)',icon:INDENT_ICON,iconOnly:true,noCell:true}],null,
   ['ul','비순서 목록',s=>s.list==='ul',false,{tip:'비순서 목록',icon:UL_ICON,iconOnly:true,splitMain:true}],['ulType','비순서 목록 유형',()=>false,false,{tip:'비순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],['ol','순서 목록',s=>s.list==='ol',false,{tip:'순서 목록',icon:OL_ICON,iconOnly:true,splitMain:true}],['olType','순서 목록 유형',()=>false,false,{tip:'순서 목록 유형',icon:CHEVRON_ICON,iconOnly:true,splitArrow:true}],null,
@@ -11965,7 +12019,7 @@ BUTTONS.forEach(def=>{
   btns[cmd]=b;
 });
 /** 값 고르기 버튼(글자 크기·제목)의 목록 열기. 현재 값은 강조 */
-function openSelectMenu(cmd,opts){refresh();const b=btns[cmd];editor.sel.save();const inh=opts.inherited?.(editor.sel.getRange()?.startContainer)??null;const items=opts.inherited?valueItems(opts,b.dataset.value,inh):(opts.defaultLast?[...selectItems(opts),opts.selectDefault]:[opts.selectDefault,...selectItems(opts)]).filter(Boolean);listMenu.toggleAt(b,items.map(([v,tx])=>({label:tx,className:opts.itemClass?.(v),checked:v===b.dataset.value,action:()=>editor.exec(cmd,(v&&v!==inh)?v:null)})));}
+function openSelectMenu(cmd,opts){refresh();const b=btns[cmd];editor.sel.save();const inh=opts.inherited?.(editor.sel.getRange()?.startContainer)??null;const items=opts.inherited?valueItems(opts,b.dataset.value,inh):(opts.defaultLast?[...selectItems(opts),opts.selectDefault]:[opts.selectDefault,...selectItems(opts)]).filter(Boolean);listMenu.toggleAt(b,items.map(([v,tx])=>({label:tx,className:opts.itemClass?.(v),fontFamily:opts.itemFont?.(v),checked:v===b.dataset.value,action:()=>editor.exec(cmd,(v&&v!==inh)?v:null)})));}
 /** 값 고르기 목록 (설정에 따라 달라지는 목록은 함수) */
 function selectItems(opts){return typeof opts.select==='function'?opts.select():opts.select;}
 /** 값 고르기 버튼에 현재 값 표시 (목록에 없으면 기본 값) */

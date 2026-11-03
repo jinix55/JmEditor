@@ -3,13 +3,13 @@
 
 # ── font 태그
 < <font color="red" size="5" face="굴림">a</font>
-> <span style='color: red; font-size: 24px; font-family: "굴림"'>a</span>
+> <span style="color: red; font-size: 24px; font-family: &quot;굴림&quot;, &quot;Nanum Gothic&quot;, &quot;Pretendard&quot;, sans-serif">a</span>
 < <font size="1">a</font><font size="2">b</font><font size="3">c</font><font size="4">d</font><font size="6">e</font><font size="7">f</font>
 > <span style="font-size: 10px">a</span><span style="font-size: 13px">b</span><span style="font-size: 16px">c</span><span style="font-size: 18px">d</span><span style="font-size: 32px">e</span><span style="font-size: 48px">f</span>
 < <font>a</font>
 > a
 < <font size="8" face="Comic Sans MS" color="url(x)">a</font>
-> a
+> <span style="font-family: &quot;Pretendard&quot;, sans-serif">a</span>
 < <font size="+1" color="red;background:url(x)">a</font>
 > a
 < <font color="red" size="2" style="color:blue;font-weight:bold">a</font>
@@ -93,9 +93,9 @@
 
 # ── 스타일 파서
 < <span style="font-family:'맑은 고딕',serif;color:red">a</span>
-> <span style='font-family: "맑은 고딕"; color: red'>a</span>
+> <span style="font-family: &quot;맑은 고딕&quot;, &quot;Pretendard&quot;, sans-serif; color: red">a</span>
 < <span style="font-family:'a;b:c','굴림';color:red">a</span>
-> <span style='font-family: "굴림"; color: red'>a</span>
+> <span style="font-family: &quot;굴림&quot;, &quot;Nanum Gothic&quot;, &quot;Pretendard&quot;, sans-serif; color: red">a</span>
 < <span style="mso-font-charset:129;mso-fareast-font-family:굴림;color:red;mso-bidi-font-size:10pt">a</span>
 > <span style="color: red">a</span>
 < <span style="color:url(x);color:expression(alert(1));background-color:url(javascript:x)">a</span>
@@ -125,23 +125,25 @@
 
 # ── 글꼴
 < <span style="font-family:Arial,sans-serif">a</span>
-> <span style='font-family: "Arial"'>a</span>
+> <span style="font-family: &quot;Pretendard&quot;, sans-serif">a</span>
 < <span style='font-family:"Times New Roman"'>a</span>
-> <span style='font-family: "Times New Roman"'>a</span>
+> <span style="font-family: &quot;Pretendard&quot;, sans-serif">a</span>
 < <span style="font-family:'없는 글꼴',ARIAL,'맑은 고딕'">a</span>
-> <span style='font-family: "Arial"'>a</span>
+> <span style="font-family: &quot;맑은 고딕&quot;, &quot;Pretendard&quot;, sans-serif">a</span>
 < <span style="font-family:Malgun Gothic">a</span><span style="font-family:'hcr batang'">b</span><span style="font-family:GULIM">c</span><span style="font-family:Dotum">d</span><span style="font-family:Batang">e</span>
-> <span style='font-family: "맑은 고딕"'>a</span><span style='font-family: "함초롬바탕"'>b</span><span style='font-family: "굴림"'>c</span><span style='font-family: "돋움"'>d</span><span style='font-family: "바탕"'>e</span>
+> <span style="font-family: &quot;맑은 고딕&quot;, &quot;Pretendard&quot;, sans-serif">a</span><span style="font-family: &quot;Pretendard&quot;, sans-serif">b</span><span style="font-family: &quot;굴림&quot;, &quot;Nanum Gothic&quot;, &quot;Pretendard&quot;, sans-serif">c</span><span style="font-family: &quot;돋움&quot;, &quot;Nanum Gothic&quot;, &quot;Pretendard&quot;, sans-serif">d</span><span style="font-family: &quot;바탕&quot;, &quot;Nanum Myeongjo&quot;, &quot;Pretendard&quot;, serif">e</span>
 < <span style="font-family:serif">a</span><span style="font-family:sans-serif,monospace">b</span><span style="font-family:Comic Sans MS">c</span>
+> ab<span style="font-family: &quot;Pretendard&quot;, sans-serif">c</span>
+< <span style="font-family:-webkit-standard">a</span><span style="font-family:default">b</span><span style="font-family:'-webkit-body',inherit">c</span>
 > abc
 < <h2 style="font-family:궁서">a</h2>
-> <h2 style='font-family: "궁서"'>a</h2>
+> <h2 style="font-family: &quot;궁서&quot;, &quot;Pretendard&quot;, sans-serif">a</h2>
 
 # ── 붙여넣기 형식 샘플
 < <table class="MsoNormalTable"><tr><td style="border:.5pt solid windowtext;background:#FFFF00;width:48pt;font-size:11.0pt;font-weight:700">글</td></tr></table>
 > @CLASS <table class="MsoNormalTable"><tbody><tr><td style="border: 0.67px solid windowtext; background-color: #FFFF00; width: 64px; font-size: 15px"><strong>글</strong></td></tr></tbody></table>
 < <p style="margin:0cm;line-height:160%"><span style="font-family:함초롬바탕;font-size:10.0pt;mso-hansi-font-family:함초롬바탕;color:#000000;letter-spacing:0pt">한글</span></p>
-> <p style="line-height: 160%"><span style='font-family: "함초롬바탕"; font-size: 13px; color: #000000'>한글</span></p>
+> <p style="line-height: 160%"><span style="font-family: &quot;Pretendard&quot;, sans-serif; font-size: 13px; color: #000000">한글</span></p>
 
 # ── 블록을 감싼 font·span: 인라인 묶음만 span 으로, 블록·표 칸에 내려줌
 < <font color="red"><p>a</p><p>b</p></font>
@@ -207,15 +209,15 @@
 
 # ── 글꼴 기본 목록 추가
 < <span style="font-family:Roboto">a</span>
-> <span style='font-family: "Roboto"'>a</span>
+> <span style="font-family: &quot;Roboto&quot;, &quot;Pretendard&quot;, sans-serif">a</span>
 < <span style="font-family:한컴바탕">a</span>
-> <span style='font-family: "한컴바탕"'>a</span>
+> <span style="font-family: &quot;Pretendard&quot;, sans-serif">a</span>
 < <span style="font-family:'Apple SD Gothic Neo',sans-serif">a</span>
-> <span style='font-family: "Apple SD Gothic Neo"'>a</span>
+> <span style="font-family: &quot;Pretendard&quot;, sans-serif">a</span>
 < <span style="font-family:HelveticaNeue">a</span>
-> <span style='font-family: "Helvetica Neue"'>a</span>
+> <span style="font-family: &quot;Pretendard&quot;, sans-serif">a</span>
 < <span style="font-family:'Helvetica Neue'">a</span>
-> <span style='font-family: "Helvetica Neue"'>a</span>
+> <span style="font-family: &quot;Pretendard&quot;, sans-serif">a</span>
 
 # ── font-size rem
 < <span style="font-size:1.25rem">a</span>

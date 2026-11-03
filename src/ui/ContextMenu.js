@@ -1,8 +1,8 @@
 /**
  * ContextMenu
  * - 에디터 안에서 쓰는 우클릭 메뉴. 프레임워크 독립.
- * - 항목: { label, action, divider, disabled, children: [...], className, checked }  children 이 있으면 하위 메뉴(마우스 오버로 펼침).
- *   className: 항목 모양용 추가 클래스, checked: 현재 선택된 항목 표시(is-checked·aria-checked)
+ * - 항목: { label, action, divider, disabled, children: [...], className, checked, fontFamily }  children 이 있으면 하위 메뉴(마우스 오버로 펼침).
+ *   className: 항목 모양용 추가 클래스, checked: 현재 선택된 항목 표시(is-checked·aria-checked), fontFamily: 항목 글자를 그릴 글꼴(글꼴 목록)
  * - 바깥 클릭 / Escape / 바깥 스크롤 시 닫힌다 (메뉴 자체 스크롤에는 닫히지 않음).
  */
 /**
@@ -109,6 +109,7 @@ export class ContextMenu {
       b.setAttribute('role', it.checked == null ? 'menuitem' : 'menuitemradio');
       if (it.checked != null) b.setAttribute('aria-checked', String(!!it.checked));
       b.textContent = it.label;
+      if (it.fontFamily) b.style.fontFamily = it.fontFamily; // 글꼴 목록: 항목을 그 글꼴로
       b.disabled = !!it.disabled;
       b.addEventListener('mousedown', (e) => e.preventDefault()); // 에디터 선택 유지
       if (it.children) {

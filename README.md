@@ -153,7 +153,7 @@ window.JmEditorConfig = {
     mobileMedia: '(max-width: 767px)', // 이미지 도구 막대「모바일 추가」가 source 에 쓰는 media (200자 이하)
   },
   font: {
-    families: ['맑은 고딕', 'Noto Sans KR', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서', '함초롬바탕', '함초롬돋움', '한컴바탕', 'HY헤드라인M', 'Apple SD Gothic Neo', 'Arial', 'Helvetica Neue', 'Times New Roman'], // 글꼴 도구 목록이자 허용 목록
+    families: ['Pretendard', '맑은 고딕', 'Noto Sans KR', 'Noto Sans', 'Roboto', '굴림', '돋움', '바탕', '궁서'], // 글꼴 도구 목록이자 허용 목록 (밖의 글꼴은 Pretendard 로)
   },
   structure: {
     enabled: true,
@@ -350,20 +350,29 @@ initSliders(document.querySelector('.jm-content'));
 
 엑셀·파워포인트는 표·글과 함께 그림 미리보기도 클립보드에 넣으므로, `text/html`·`text/plain` 이 있으면 그림은 무시하고 파일만 있을 때 이미지로 넣습니다. 오피스 문서를 붙여 넣으면 문서 머리 `<style>` 의 class 규칙(`.xl65{…}`)을 표 칸·`font` 의 `style` 로 옮겨 테두리·배경·정렬을 살립니다 (붙여넣기 전용, 칸에 직접 쓴 값 우선, 값 검사는 정제가 그대로 함). `td{…}` 같은 태그 규칙과 표 밖 문단 규칙은 옮기지 않습니다.
 
-**글꼴** — 허용 목록은 `font.families` 입니다 (생성 옵션 `font` > `window.JmEditorConfig.font` > 기본값). 툴바 글꼴 목록과 정제가 같이 씁니다. 서버는 `jm-editor.font.families` 로 같은 값을 주세요. 대소문자는 무시하고 `Malgun Gothic`·`HCR Batang`·`Gulim`·`Dotum`·`Batang` 은 한글 이름으로 바꿉니다.
+**글꼴** — 허용 목록은 `font.families` 입니다 (생성 옵션 `font` > `window.JmEditorConfig.font` > 기본값). 툴바 글꼴 목록과 정제가 같이 씁니다. 서버는 `jm-editor.font.families` 로 같은 값을 주세요. 대소문자는 무시하고 `Malgun Gothic`·`Gulim`·`Dotum`·`Batang`·`Gungsuh` 는 한글 이름으로 바꿉니다. 글꼴 목록 메뉴는 항목마다 그 글꼴로 그려 보여 줍니다.
 
-툴바의 크기·글꼴 도구에는 "기본" 항목이 없고 지금 실제로 적용되는 값(예: `16px`, `맑은 고딕`)이 선택되어 보입니다. 편집 영역은 페이지의 값을 물려받으므로 사이트 CSS 에 따라 달라지고, 이 컴퓨터에 없는 글꼴은 건너뜁니다(알 수 없으면 `브라우저 글꼴`). **지정 안 했을 때의 값을 고르면 지정을 해제**하므로 기본값은 저장 내용에 들어가지 않습니다.
+| 글꼴 | 웹폰트 | 저장 값 (글꼴이 없을 때 차례로 대체) |
+|---|---|---|
+| Pretendard | O (기본 글꼴) | `"Pretendard", sans-serif` |
+| 맑은 고딕 | X (Windows 글꼴) | `"맑은 고딕", "Pretendard", sans-serif` |
+| Noto Sans KR | O | `"Noto Sans KR", "Pretendard", sans-serif` |
+| Noto Sans, Roboto | O (한글 없음 → 한글은 Pretendard) | `"Roboto", "Pretendard", sans-serif` |
+| 굴림, 돋움 | X (Windows 글꼴) | `"굴림", "Nanum Gothic", "Pretendard", sans-serif` |
+| 바탕 | X (Windows 글꼴) | `"바탕", "Nanum Myeongjo", "Pretendard", serif` |
+| 궁서 | X (Windows 글꼴) | `"궁서", "Pretendard", sans-serif` |
 
-웹폰트는 번들에 넣지 않습니다. 없는 글꼴은 사이트 CSS 에서 대체할 수 있습니다. 라이선스는 사이트에서 확인하세요.
+- **목록 밖 글꼴**(옛 글·붙여넣은 글의 함초롬바탕·Arial 등)은 `"Pretendard", sans-serif` 로 바뀝니다. `serif`·`inherit`·`-webkit-standard` 같은 일반 패밀리·키워드만 있으면 지웁니다. 목록에 `Pretendard` 가 없으면(빈 목록 포함) 목록 밖 글꼴은 바꾸지 않고 지웁니다. 불러오기(`setHTML`)도 정제하므로, 다시 저장하면 원래 글꼴 이름은 남지 않습니다.
+- **Windows 글꼴**(맑은 고딕·굴림·돋움·바탕·궁서)은 글꼴 파일을 웹으로 배포할 수 없어(Microsoft 글꼴 FAQ) 설치된 PC 에서만 보입니다. 없으면 비슷한 무료 글꼴(나눔고딕·나눔명조) 또는 Pretendard 로 보입니다.
+- **웹폰트 불러오기** — `dist/jm-editor.fonts.css` 를 편집 화면과 조회 화면에 같이 넣으세요. 기본 CSS(`jm-editor.css`)는 외부 요청을 하지 않습니다.
 
-```css
-/* 함초롬바탕 → Noto Serif KR (글꼴 파일은 사이트에 둠) */
-@font-face { font-family: "함초롬바탕"; src: local("함초롬바탕"), local("HCR Batang"), url("/fonts/NotoSerifKR-Regular.woff2") format("woff2"); }
-/* 한컴바탕 → Noto Serif KR */
-@font-face { font-family: "한컴바탕"; src: local("한컴바탕"), url("/fonts/NotoSerifKR-Regular.woff2") format("woff2"); }
-/* HY헤드라인M → Noto Sans KR 700 (보통 굵기로 등록해 제목처럼 보이게) */
-@font-face { font-family: "HY헤드라인M"; font-weight: 400; src: local("HY헤드라인M"), url("/fonts/NotoSansKR-Bold.woff2") format("woff2"); }
+```html
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jinix55/JmEditor@v0.0.8/dist/jm-editor.fonts.css">
 ```
+
+이 파일은 `cdn.jsdelivr.net`(Pretendard)과 `fonts.googleapis.com`·`fonts.gstatic.com`(Noto Sans KR·Noto Sans·Roboto·Nanum Gothic·Nanum Myeongjo)에서 글꼴을 받습니다. CSP 를 쓰면 `style-src`·`font-src` 에 허용하세요. 글꼴을 자체 서버에 두려면 이 파일 대신 같은 `font-family` 이름으로 `@font-face` 를 등록하세요. 라이선스는 모두 SIL OFL 1.1 입니다 ([Pretendard](https://github.com/orioncactus/pretendard/blob/main/LICENSE), 그 밖은 Google Fonts 각 글꼴 페이지).
+
+툴바의 크기·글꼴 도구에는 "기본" 항목이 없고 지금 실제로 적용되는 값(예: `16px`, `Pretendard`)이 선택되어 보입니다. 편집 영역은 페이지의 값을 물려받으므로 사이트 CSS 에 따라 달라지고, 이 컴퓨터에 없는 글꼴은 건너뜁니다(알 수 없으면 `브라우저 글꼴`). **지정 안 했을 때의 값을 고르면 지정을 해제**하므로 기본값은 저장 내용에 들어가지 않습니다.
 
 ### 색 테마
 

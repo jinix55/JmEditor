@@ -5,7 +5,7 @@
  */
 import { JmEditor } from '../core/JmEditor.js';
 import { Sanitizer } from '../core/Sanitizer.js';
-import { inheritedFontSize, inheritedFontName, inheritedLineHeight } from '../core/font-policy.js';
+import { inheritedFontSize, inheritedFontName, inheritedLineHeight, fontFamilyValue } from '../core/font-policy.js';
 import { FindBar } from './FindBar.js';
 import { TableGridPicker } from './TableGridPicker.js';
 import { ColorPicker } from './ColorPicker.js';
@@ -112,7 +112,7 @@ const BUTTONS = [
   ['bgColor', 'A', (s) => !!s.bg, false, { tip: '글자 배경색' }],
   ['fontSize', '크기', () => false, false, { tip: '글자 크기', select: FONT_SIZES.map((n) => [`${n}px`, `${n}px`]), inherited: (editor, node) => inheritedFontSize(node, editor.root), sorted: true }],
   // 글꼴: 목록은 에디터 설정(font.families)에서
-  ['fontFamily', '글꼴', () => false, false, { tip: '글꼴', select: (editor) => editor.fontFamilies.map((n) => [n, n]), inherited: (editor, node) => inheritedFontName(node, editor.root, editor.fontFamilies), unknownLabel: '브라우저 글꼴' }],
+  ['fontFamily', '글꼴', () => false, false, { tip: '글꼴', select: (editor) => editor.fontFamilies.map((n) => [n, n]), inherited: (editor, node) => inheritedFontName(node, editor.root, editor.fontFamilies), unknownLabel: '브라우저 글꼴', itemFont: (v) => v && fontFamilyValue(v) }],
   ['clearFormat', '서식 지우기', () => false, false, { tip: '서식 지우기', icon: CLEAR_FORMAT_ICON, iconOnly: true }],
   null, // 구분선
   // 제목: 셀렉트 (제목 1~6 / 본문). 값 선택 시 exec('heading', 'p'|'h1'~'h6')
@@ -463,7 +463,7 @@ export class JmToolbarEditor {
    * 값 고르기 버튼(글자 크기·제목)의 목록 열기. 현재 값은 강조, 고르면 exec(cmd, 값)
    * @param {string} cmd
    * inherited 가 있는 도구(크기·글꼴)는 기본 항목 없이 실제 값을 표시하고, 지정 안 했을 때의 값을 고르면 지정을 해제한다 (기본값이 저장되지 않게)
-   * @param {{select: Array<[string,string]>|((editor: JmEditor) => Array<[string,string]>), selectDefault?: [string,string], inherited?: (editor: JmEditor, node: Node) => string|null}} opts
+   * @param {{select: Array<[string,string]>|((editor: JmEditor) => Array<[string,string]>), selectDefault?: [string,string], inherited?: (editor: JmEditor, node: Node) => string|null, itemFont?: (value: string) => string}} opts itemFont: 항목을 그 글꼴로 그릴 font-family 값
    */
   #openSelectMenu(cmd, opts) {
     this.#refreshState(); // 사이트 CSS 가 바뀌었어도 표시 값과 목록의 선택 표시가 어긋나지 않게
@@ -472,7 +472,7 @@ export class JmToolbarEditor {
     const inherited = opts.inherited?.(this.editor, this.editor.sel.getRange()?.startContainer) ?? null;
     const items = opts.inherited ? this.#valueItems(opts, btn.dataset.value, inherited) : (opts.defaultLast ? [...this.#selectItems(opts), opts.selectDefault] : [opts.selectDefault, ...this.#selectItems(opts)]).filter(Boolean); // 제목은 큰 글자부터 본문까지
     this.listMenu.toggleAt(btn, items.map(([v, text]) => ({
-      label: text, className: opts.itemClass?.(v), checked: v === btn.dataset.value, action: () => this.editor.exec(cmd, (v && v !== inherited) ? v : null),
+      label: text, className: opts.itemClass?.(v), fontFamily: opts.itemFont?.(v), checked: v === btn.dataset.value, action: () => this.editor.exec(cmd, (v && v !== inherited) ? v : null),
     })));
   }
 

@@ -4,7 +4,7 @@
  * - parseStyle·cleanLegacyDecl: style 선언 파싱과 값 변환(pt→px, background→색, 테두리·글꼴 정규화)
  * 서버 LegacyFormat.java 와 같은 규칙이어야 한다 (사례 파일 test/fixtures/legacy/cases.txt). 정규식은 모두 앵커가 있어 선형이고, 값 길이는 STYLE_VALUE_MAX 로 묶인다.
  */
-import { fontFamilyName } from './font-policy.js';
+import { storedFontName, fontFamilyValue } from './font-policy.js';
 
 /** 색상 값 형식: #hex, rgb(a)(), 색 이름 */
 export const SAFE_COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d \t\n\f\r.,%]+\)|[a-z]+)$/i;
@@ -236,8 +236,8 @@ function backgroundColor(value) {
 export function cleanLegacyDecl(name, value, tag, families) {
   const cell = tag === 'td' || tag === 'th';
   if (name === 'font-family') {
-    const family = fontFamilyName(value, families);
-    return family ? [name, `"${family}"`] : null;
+    const family = storedFontName(value, families);
+    return family ? [name, fontFamilyValue(family)] : null;
   }
   if (name === 'font-size') {
     const size = fontSizePx(value);
@@ -296,8 +296,8 @@ function moveLegacyAttrs(el, tag, families) {
   if (tag === 'font') {
     if (SAFE_COLOR.test(attr('color'))) pairs.push(['color', attr('color')]);
     if (/^[1-7]$/.test(attr('size'))) pairs.push(['font-size', `${FONT_TAG_SIZES[+attr('size') - 1]}px`]);
-    const family = fontFamilyName(attr('face'), families);
-    if (family) pairs.push(['font-family', `"${family}"`]);
+    const family = storedFontName(attr('face'), families);
+    if (family) pairs.push(['font-family', fontFamilyValue(family)]);
   } else if (LEGACY_TABLE_TAGS.has(tag)) {
     if (SAFE_COLOR.test(attr('bgcolor'))) pairs.push(['background-color', attr('bgcolor')]);
     if (tag === 'table') {
